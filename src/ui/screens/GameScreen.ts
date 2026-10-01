@@ -7,7 +7,8 @@ import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
 import { Game, type GameMode, type GameResult } from '../../game/Game';
 import { MAX_LEVEL } from '../../game/levels';
-import { BOOST_DURATION, FREEZE_DURATION, JUMP_COOLDOWN } from '../../game/systems/SkillSystem';
+import { getPlane, isPlaneUnlocked } from '../../game/planes';
+import { BOOST_DURATION, FREEZE_DURATION } from '../../game/systems/SkillSystem';
 import { Icons, button, h, icon } from '../dom';
 import { Modal } from '../Modal';
 import { Screen } from '../Screen';
@@ -33,6 +34,9 @@ export class GameScreen extends Screen {
   private hudCenter!: HTMLElement;
   private slots!: Record<'freeze' | 'boost' | 'jump', SkillSlot>;
   private shieldSlot!: HTMLElement;
+  private featSlot!: HTMLElement;
+  private featIcon!: HTMLElement;
+  private featText!: HTMLElement;
   private pauseBtn!: HTMLButtonElement;
   private cache = new Map<HTMLElement, string>();
 
@@ -66,6 +70,9 @@ export class GameScreen extends Screen {
       boost: slot('boost', Icons.bolt, '2'),
       jump: slot('jump', Icons.dash, 'SPC'),
     };
+    this.featIcon = h('span', { class: 'ico' });
+    this.featText = h('span', { class: 'sk-label' });
+    this.featSlot = h('div', { class: 'skill sk-feat', hidden: true }, h('span', { class: 'sk-inner' }, this.featIcon, this.featText));
     this.shieldSlot = h('div', { class: 'skill sk-shield' }, h('span', { class: 'sk-inner' }, icon(Icons.shield), h('span', { class: 'sk-label' }, t('hud.shield'))));
 
     this.pauseBtn = button(icon(Icons.pause), () => this.action('pause'), 'icon-btn', { 'aria-label': t('game.paused'), tabindex: -1 });
@@ -81,7 +88,7 @@ export class GameScreen extends Screen {
       h('div', { class: 'hud-tl' }, h('div', { class: 'hud-label' }, label), this.hudTime, campaign ? h('div', { class: 'hud-bar' }, this.hudProgress) : null),
       this.hudCenter,
       h('div', { class: 'hud-tr' }, fsBtn, this.pauseBtn),
-      h('div', { class: 'hud-skills' }, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el),
+      h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el),
       isTouch() ? this.buildJoystick() : null,
     );
     return el;
@@ -132,13 +139,27 @@ export class GameScreen extends Screen {
 
   onShow(): void {
     const app = this.app;
-    this.game = new Game(this.mode, this.levelId, Save.data.plane, app.input);
+    // якщо прогрес скинули, а обраний літак тепер закритий — летимо на стартовому
+    const plane = isPlaneUnlocked(getPlane(Save.data.plane), Save.totalStars) ? Save.data.plane : 'falcon';
+    this.game = new Game(this.mode, this.levelId, plane, app.input);
     this.game.resize(app.worldW, app.worldH);
     this.game.onEnd = (r) => setTimeout(() => this.showResult(r), 150);
     app.game = this.game;
     this.game.start();
 
     this.cleanup.push(app.input.onAction((a) => this.action(a)));
+
+    // кнопки HUD не забирають фокус: інакше пробіл/Enter "натискали" б сфокусовану кнопку (напр. паузу)
+    const keepFocus = (e: MouseEvent): void => {
+      if ((e.target as HTMLElement).closest('button')) e.preventDefault();
+    };
+    this.el.addEventListener('mousedown', keepFocus);
+    // ігрові клавіші не скролять сторінку й не активують елементи
+    const blockDefaults = (e: KeyboardEvent): void => {
+      if (!Modal.top() && ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
+    };
+    window.addEventListener('keydown', blockDefaults);
+    this.cleanup.push(() => window.removeEventListener('keydown', blockDefaults));
     const onHidden = (): void => {
       if (document.hidden) this.pause();
     };
@@ -222,9 +243,20 @@ export class GameScreen extends Screen {
     bs.el.style.setProperty('--p', String(sk.isBoosted ? sk.boostLeft / BOOST_DURATION : 0));
 
     const jp = this.slots.jump;
-    this.set(jp.count, sk.jumpCooldown > 0 ? sk.jumpCooldown.toFixed(1) : t('hud.ready'));
-    jp.el.classList.toggle('empty', sk.jumpCooldown > 0);
-    jp.el.style.setProperty('--p', String(sk.jumpCooldown / JUMP_COOLDOWN));
+    const multi = sk.jumpChargesMax > 1;
+    this.set(jp.count, multi ? `${sk.jumpCharges}/${sk.jumpChargesMax}` : sk.jumpCharges > 0 ? t('hud.ready') : sk.jumpCooldown.toFixed(1));
+    jp.el.classList.toggle('empty', sk.jumpCharges === 0);
+    jp.el.style.setProperty('--p', String(sk.jumpCharges < sk.jumpChargesMax ? sk.jumpCooldown / sk.jumpCooldownMax : 0));
+
+    const fs = g.featureStatus();
+    this.featSlot.hidden = !fs;
+    if (fs) {
+      if (this.featIcon.dataset.kind !== fs.icon) {
+        this.featIcon.dataset.kind = fs.icon;
+        this.featIcon.innerHTML = fs.icon === 'heart' ? Icons.heart : Icons.shield;
+      }
+      this.set(this.featText, fs.text);
+    }
 
     this.shieldSlot.classList.toggle('on', g.player.shield);
   }
@@ -291,7 +323,7 @@ export class GameScreen extends Screen {
           h('div', { class: 'res-label' }, `${t('levels.level')} ${r.level} · ${levelName(r.level)}`),
           stars,
           h('div', { class: 'res-crystals' }, icon(Icons.crystal), `${t('game.crystals')}: ${r.crystals} / ${r.crystalTarget}`),
-          last ? h('p', { class: 'res-final' }, t('game.allDone')) : '',
+          last ? h('p', { class: 'res-final' }, t('game.allDone', { n: MAX_LEVEL })) : '',
         ],
         actions: [
           !last ? button(t('game.nextLevel'), () => this.app.show(new GameScreen(this.app, 'campaign', r.level + 1)), 'btn primary', { 'data-autofocus': true }) : null,

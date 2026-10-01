@@ -12,14 +12,22 @@ export class InputState {
 
   constructor() {
     window.addEventListener('keydown', (e) => {
-      if (e.repeat) return;
+      // повтори теж додають клавішу: якщо стан очистили (blur, контекстне меню),
+      // затиснута клавіша має знову запрацювати без повторного натискання
       this.keys.add(e.code);
+      if (e.repeat) return;
       const action = InputState.actionFor(e.code);
       if (action) this.emit(action);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     // Баг оригіналу: при втраті фокусу клавіші "залипали"
     window.addEventListener('blur', () => this.clear());
+    document.addEventListener('visibilitychange', () => this.clear());
+    // ПКМ відкривав контекстне меню, яке "з'їдало" keyup — літак летів сам, а WASD не слухались
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      this.clear();
+    });
   }
 
   private static actionFor(code: string): Action | null {

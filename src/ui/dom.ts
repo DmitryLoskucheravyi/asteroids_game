@@ -67,5 +67,13 @@ export const Icons = {
   comet: svg('<circle cx="16" cy="8" r="4" fill="currentColor" fill-opacity=".35"/><path d="M13 11 3 21M10 8 4 14M16 14l-6 6"/>'),
   homing: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>'),
   bouncer: svg('<path d="M3 20 10 6l5 9 6-11"/><path d="M2 21h20" opacity=".5"/>'),
+  blackhole: svg('<circle cx="12" cy="12" r="4" fill="currentColor"/><path d="M12 4a8 8 0 0 1 8 8M12 20a8 8 0 0 1-8-8M17 6.5a8 8 0 0 0-10 0M7 17.5a8 8 0 0 0 10 0"/>'),
+  meteor: svg('<circle cx="6" cy="18" r="2.5" fill="currentColor"/><circle cx="13" cy="15" r="2" fill="currentColor"/><circle cx="18" cy="20" r="1.8" fill="currentColor"/><path d="M8 16 14 6M15 13l5-8M20 18l3-5"/>'),
+  fog: svg('<path d="M3 9h13M6 13h15M3 17h12M17 17h4"/>'),
+  mine: svg('<circle cx="12" cy="12" r="5" fill="currentColor" fill-opacity=".3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/>'),
+  wind: svg('<path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/>'),
+  boss: svg('<path d="M4 8l4 3 4-6 4 6 4-3-2 11H6z" fill="currentColor" fill-opacity=".3"/>'),
+  laser: svg('<path d="M2 12h20" stroke-width="3"/><circle cx="3" cy="12" r="2" fill="currentColor"/><circle cx="21" cy="12" r="2" fill="currentColor"/><path d="M7 7v2M12 6v3M17 7v2M7 15v2M12 15v3M17 15v2" opacity=".6"/>'),
+  heart: svg('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" fill="currentColor" fill-opacity=".35"/>'),
   wall: svg('<rect x="2" y="5" width="7" height="5" rx="1"/><rect x="15" y="5" width="7" height="5" rx="1"/><rect x="2" y="14" width="4" height="5" rx="1"/><rect x="11" y="14" width="11" height="5" rx="1"/>'),
 };

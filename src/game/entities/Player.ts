@@ -52,8 +52,10 @@ export class Player {
     this.pos.add(this.vel, dt);
     this.clampTo(w, h);
 
-    // плавний поворот носа за напрямом руху
-    if (this.vel.length() > 40) {
+    // плавний поворот носа за напрямом руху (тарілка просто повільно обертається)
+    if (this.spec.feature.noRotate) {
+      this.angle += dt * 1.5;
+    } else if (this.vel.length() > 40) {
       const want = this.vel.angle();
       this.angle += angleDiff(this.angle, want) * Math.min(1, dt * 12);
     }
@@ -72,16 +74,24 @@ export class Player {
   jump(w: number, h: number): Vec2 {
     const from = this.pos.clone();
     const dir = this.vel.length() > 40 ? this.vel.clone().normalize() : Vec2.fromAngle(this.angle);
-    this.pos.add(dir, JUMP_DISTANCE);
+    this.pos.add(dir, JUMP_DISTANCE * (this.spec.feature.jumpDistanceMul ?? 1));
     this.clampTo(w, h);
     this.vel.copy(dir).scale(this.spec.maxSpeed * 0.8);
     this.invulnerable = Math.max(this.invulnerable, JUMP_INVULN);
     return from;
   }
 
+  /** Напрям "назад" для вихлопу: у тарілки — протилежно руху. */
+  get exhaustAngle(): number {
+    if (this.spec.feature.noRotate) return this.vel.length() > 20 ? this.vel.angle() + Math.PI : Math.PI / 2;
+    return this.angle + Math.PI;
+  }
+
   /** Точка за хвостом — звідти летить вихлоп. */
   exhaust(): Vec2 {
-    return new Vec2(this.pos.x - Math.cos(this.angle) * 26, this.pos.y - Math.sin(this.angle) * 26);
+    const a = this.exhaustAngle;
+    const r = this.spec.feature.noRotate ? 18 : 26;
+    return new Vec2(this.pos.x + Math.cos(a) * r, this.pos.y + Math.sin(a) * r);
   }
 
   render(ctx: CanvasRenderingContext2D, boosted: boolean): void {

@@ -1,4 +1,5 @@
 import { t, type TKey } from '../../core/i18n';
+import { MAX_LEVEL, type Hazard } from '../../game/levels';
 import { Icons, button, h, icon } from '../dom';
 import { Screen } from '../Screen';
 import { screenHeader } from './LevelSelectScreen';
@@ -21,7 +22,7 @@ export class HowToScreen extends Screen {
 
     let body: HTMLElement;
     if (this.tab === 'goal') {
-      body = h('ul', { class: 'howto-list' }, ...(['howto.goal1', 'howto.goal2', 'howto.goal3', 'howto.goal4', 'howto.goal5'] as TKey[]).map((k) => h('li', {}, t(k))));
+      body = h('ul', { class: 'howto-list' }, ...(['howto.goal1', 'howto.goal2', 'howto.goal3', 'howto.goal4', 'howto.goal5'] as TKey[]).map((k) => h('li', {}, t(k, { n: MAX_LEVEL }))));
     } else if (this.tab === 'controls') {
       body = h(
         'div',
@@ -36,9 +37,10 @@ export class HowToScreen extends Screen {
         h('p', { class: 'muted' }, t('howto.touch')),
       );
     } else {
-      const hz = (k: 'comet' | 'homing' | 'bouncer' | 'wall') =>
+      const all: Hazard[] = ['comet', 'homing', 'wall', 'bouncer', 'fog', 'meteor', 'mine', 'wind', 'boss', 'blackhole', 'laser'];
+      const hz = (k: Hazard) =>
         h('div', { class: `hz-row hz-${k}` }, icon(Icons[k], 'ico big'), h('div', {}, h('strong', {}, t(`hazard.${k}` as TKey)), h('p', {}, t(`howto.${k}` as TKey))));
-      body = h('div', { class: 'hz-list' }, hz('comet'), hz('homing'), hz('bouncer'), hz('wall'));
+      body = h('div', { class: 'hz-list' }, ...all.map(hz));
     }
 
     return h(

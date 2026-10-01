@@ -98,6 +98,18 @@ class SoundFx {
     this.noise(1.1, 0.6, 2400, 60);
     this.tone(110, 0.8, 'sawtooth', 0.2, 30);
   }
+  laser(): void {
+    this.tone(1400, 0.35, 'sawtooth', 0.1, 300);
+    this.tone(90, 0.4, 'square', 0.08);
+  }
+  mine(): void {
+    this.noise(0.6, 0.45, 3000, 80);
+    this.tone(140, 0.4, 'sawtooth', 0.15, 40);
+  }
+  bossShot(): void {
+    this.tone(70, 0.5, 'sawtooth', 0.2, 35);
+    this.noise(0.35, 0.3, 1200, 100);
+  }
   warning(): void {
     this.tone(660, 0.12, 'square', 0.08);
     this.tone(660, 0.12, 'square', 0.08, undefined, 0.18);

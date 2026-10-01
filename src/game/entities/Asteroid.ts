@@ -26,7 +26,7 @@ const HITBOX_FACTOR = 0.8;
 export class Asteroid extends Entity {
   protected rotation = rand(0, Math.PI * 2);
   protected readonly spin = rand(-1.2, 1.2);
-  readonly visual: number;
+  visual: number;
   /** Чи заморожений (для відмальовки) */
   frozen = false;
 
@@ -192,5 +192,73 @@ export class Comet extends Asteroid {
     ctx.lineCap = 'butt';
     drawGlow(ctx, this.pos.x, this.pos.y, 'rgba(255,170,60,1)', 40, 0.9);
     super.render(ctx, time);
+  }
+}
+
+export const BLACK_HOLE_PULL_RADIUS = 420;
+
+/**
+ * Чорна діра: повільно перетинає екран і притягує літак та астероїди.
+ * Зіткнення з ядром — смерть (щит рятує). Заморозка зупиняє й притягання.
+ */
+export class BlackHole extends Asteroid {
+  /** Сила притягання в центрі, px/s² */
+  readonly strength: number;
+  private readonly ringSpin = rand(1.5, 2.5) * (Math.random() < 0.5 ? -1 : 1);
+
+  constructor(pos: Vec2, vel: Vec2, strength: number) {
+    super('large', pos, vel);
+    this.visual = 34;
+    this.radius = 24;
+    this.strength = strength;
+  }
+
+  /** Прискорення, яке діра дає об'єкту в точці p. */
+  pullAt(p: Vec2, out: Vec2): Vec2 {
+    const dx = this.pos.x - p.x;
+    const dy = this.pos.y - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d >= BLACK_HOLE_PULL_RADIUS || d < 1) return out.set(0, 0);
+    const k = this.strength * (1 - d / BLACK_HOLE_PULL_RADIUS);
+    return out.set((dx / d) * k, (dy / d) * k);
+  }
+
+  render(ctx: CanvasRenderingContext2D, time: number): void {
+    const { x, y } = this.pos;
+    // зона притягання
+    const zone = ctx.createRadialGradient(x, y, this.visual, x, y, BLACK_HOLE_PULL_RADIUS);
+    zone.addColorStop(0, 'rgba(150,80,255,0.22)');
+    zone.addColorStop(1, 'rgba(150,80,255,0)');
+    ctx.fillStyle = zone;
+    ctx.beginPath();
+    ctx.arc(x, y, BLACK_HOLE_PULL_RADIUS, 0, Math.PI * 2);
+    ctx.fill();
+
+    drawGlow(ctx, x, y, 'rgba(255,140,60,1)', this.visual * 2.6, 0.55);
+
+    // акреційний диск: дуги, що закручуються
+    const spin = this.frozen ? 0 : time * this.ringSpin;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const r = this.visual * (1.25 + i * 0.32);
+      ctx.strokeStyle = i === 0 ? 'rgba(255,200,120,0.9)' : i === 1 ? 'rgba(255,120,60,0.7)' : 'rgba(180,90,255,0.55)';
+      ctx.lineWidth = 4 - i;
+      for (let j = 0; j < 2; j++) {
+        const a = spin * (1 + i * 0.3) + j * Math.PI + i;
+        ctx.beginPath();
+        ctx.arc(x, y, r, a, a + Math.PI * 0.7);
+        ctx.stroke();
+      }
+    }
+    ctx.lineCap = 'butt';
+
+    // горизонт подій
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(x, y, this.visual, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = this.frozen ? 'rgba(200,235,255,0.9)' : 'rgba(255,190,110,0.85)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 }

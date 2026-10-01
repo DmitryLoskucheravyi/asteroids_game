@@ -1,7 +1,7 @@
 import { levelName, t, type TKey } from '../../core/i18n';
 import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
-import { LEVELS, MAX_LEVEL, hazardsOf } from '../../game/levels';
+import { LEVELS, MAX_LEVEL, SECTORS, hazardsOf } from '../../game/levels';
 import { Icons, button, h, icon } from '../dom';
 import { Screen } from '../Screen';
 import { GameScreen } from './GameScreen';
@@ -42,12 +42,8 @@ export class LevelSelectScreen extends Screen {
         { class: 'lv-inner' },
         h('span', { class: 'lv-num' }, String(cfg.id).padStart(2, '0')),
         h('span', { class: 'lv-name' }, levelName(cfg.id)),
-        h(
-          'span',
-          { class: 'lv-meta' },
-          h('span', { class: 'lv-time' }, icon(Icons.clock), formatTime(cfg.duration)),
-          h('span', { class: 'lv-haz' }, ...hazardsOf(cfg).map((hz) => icon(Icons[hz], `ico hz-${hz}`))),
-        ),
+        h('span', { class: 'lv-haz' }, ...hazardsOf(cfg).map((hz) => icon(Icons[hz], `ico hz-${hz}`))),
+        h('span', { class: 'lv-meta' }, h('span', { class: 'lv-time' }, icon(Icons.clock), formatTime(cfg.duration))),
         locked ? h('span', { class: 'lv-lock' }, icon(Icons.lock), t('levels.locked')) : starsRow(stars),
       );
       const b = button(content, () => {
@@ -65,7 +61,14 @@ export class LevelSelectScreen extends Screen {
       { class: 'page levels' },
       screenHeader(t('levels.title'), () => this.onBack(), h('div', { class: 'head-stat' }, icon(Icons.star, 'ico gold'), `${Save.totalStars}/${MAX_LEVEL * 3}`)),
       h('p', { class: 'page-sub' }, t('levels.subtitle')),
-      h('div', { class: 'lv-grid' }, ...cards),
+      h(
+        'div',
+        { class: 'lv-grid' },
+        ...cards.flatMap((card, i) => {
+          const sector = SECTORS.indexOf(i + 1 as (typeof SECTORS)[number]);
+          return sector >= 0 ? [h('h3', { class: 'sector' }, t(`levels.sector${sector + 1}` as TKey)), card] : [card];
+        }),
+      ),
     );
   }
 

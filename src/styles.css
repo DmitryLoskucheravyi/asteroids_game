@@ -557,8 +557,14 @@ button {
 
 .lv-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 14px;
+}
+
+@media (max-width: 1150px) {
+  .lv-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 @media (max-width: 1000px) {
@@ -638,6 +644,9 @@ button {
 .hz-wall {
   color: #c9a7ff;
 }
+.hz-blackhole {
+  color: #ff9a3c;
+}
 
 .lv-card:hover,
 .lv-card:focus-visible {
@@ -689,7 +698,7 @@ button {
 
 .plane-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 18px;
 }
 
@@ -1613,4 +1622,148 @@ input[type='range'] {
   .menu-btn::after {
     animation: none !important;
   }
+}
+
+/* ---------- ангар: закриті літаки і переваги ---------- */
+
+.plane-card.locked .plane-pic img {
+  filter: brightness(0) drop-shadow(0 0 1px rgba(255, 255, 255, 0.5));
+  opacity: 0.6;
+}
+
+.plane-card.locked h3,
+.plane-card.locked .plane-desc {
+  opacity: 0.6;
+}
+
+.perks {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  min-height: 3.2em;
+}
+
+.perks li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: #b5ffd9;
+}
+
+.perks li.none {
+  color: var(--muted);
+}
+
+.lock-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .plane-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------- сектори рівнів і фічі літаків ---------- */
+
+.sector {
+  grid-column: 1 / -1;
+  margin: 14px 0 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sector::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 210, 74, 0.4), transparent);
+}
+
+.sector:first-child {
+  margin-top: 0;
+}
+
+.lv-haz {
+  flex-wrap: wrap;
+  min-height: 1.2em;
+}
+
+.hz-meteor {
+  color: #ffa24a;
+}
+.hz-fog {
+  color: #a9b4d6;
+}
+.hz-mine {
+  color: #ff6a5a;
+}
+.hz-wind {
+  color: #bfe6ff;
+}
+.hz-boss {
+  color: #ff4a3a;
+}
+.hz-laser {
+  color: #ff5a9a;
+}
+
+.feature {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #c8f5e4;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(80, 240, 160, 0.07);
+  border: 1px solid rgba(80, 240, 160, 0.2);
+  min-height: 4.2em;
+}
+
+.feature-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: rgba(80, 240, 160, 0.2);
+  color: #7dffc0;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.plane-card.locked .feature {
+  opacity: 0.6;
+}
+
+.sk-feat {
+  width: 54px;
+  height: 54px;
+  cursor: default;
+}
+
+.sk-feat .ico {
+  color: #ffb020;
 }

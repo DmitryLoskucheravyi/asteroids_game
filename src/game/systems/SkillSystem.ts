@@ -1,22 +1,37 @@
+import type { PlaneFeature } from '../planes';
+
 export const FREEZE_DURATION = 2;
 export const BOOST_DURATION = 2.5;
 export const BOOST_MULTIPLIER = 1.6;
 export const JUMP_COOLDOWN = 4;
 export const MAX_CHARGES = 5;
 
-/** Навички гравця: заморозка, форсаж, ривок. */
+/** Навички гравця: заморозка, форсаж, ривок. Параметри залежать від літака. */
 export class SkillSystem {
   freezeCharges = 0;
   boostCharges = 0;
   freezeLeft = 0;
   boostLeft = 0;
+  /** Таймер відновлення наступного заряду ривка */
   jumpCooldown = 0;
+  jumpCharges = 1;
   /** Скільки разів гравець використав навички (для статистики) */
   used = 0;
 
-  reset(freeze: number, boost: number): void {
-    this.freezeCharges = freeze;
-    this.boostCharges = boost;
+  freezeDuration = FREEZE_DURATION;
+  boostDuration = BOOST_DURATION;
+  jumpCooldownMax = JUMP_COOLDOWN;
+  jumpChargesMax = 1;
+
+  /** Налаштовує навички під літак і видає стартові заряди. */
+  reset(feature: PlaneFeature): void {
+    this.freezeDuration = FREEZE_DURATION * (feature.freezeDurationMul ?? 1);
+    this.boostDuration = BOOST_DURATION * (feature.boostDurationMul ?? 1);
+    this.jumpCooldownMax = JUMP_COOLDOWN * (feature.jumpCooldownMul ?? 1);
+    this.jumpChargesMax = feature.jumpCharges ?? 1;
+    this.freezeCharges = 1 + (feature.extraFreeze ?? 0);
+    this.boostCharges = 2 + (feature.extraBoost ?? 0);
+    this.jumpCharges = this.jumpChargesMax;
     this.freezeLeft = 0;
     this.boostLeft = 0;
     this.jumpCooldown = 0;
@@ -26,7 +41,13 @@ export class SkillSystem {
   update(dt: number): void {
     this.freezeLeft = Math.max(0, this.freezeLeft - dt);
     this.boostLeft = Math.max(0, this.boostLeft - dt);
-    this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
+    if (this.jumpCharges < this.jumpChargesMax) {
+      this.jumpCooldown -= dt;
+      if (this.jumpCooldown <= 0) {
+        this.jumpCharges++;
+        this.jumpCooldown = this.jumpCharges < this.jumpChargesMax ? this.jumpCooldownMax : 0;
+      }
+    }
   }
 
   addFreeze(n = 1): void {
@@ -40,7 +61,7 @@ export class SkillSystem {
   tryFreeze(): boolean {
     if (this.freezeCharges <= 0 || this.freezeLeft > 0) return false;
     this.freezeCharges--;
-    this.freezeLeft = FREEZE_DURATION;
+    this.freezeLeft = this.freezeDuration;
     this.used++;
     return true;
   }
@@ -48,14 +69,15 @@ export class SkillSystem {
   tryBoost(): boolean {
     if (this.boostCharges <= 0 || this.boostLeft > 0) return false;
     this.boostCharges--;
-    this.boostLeft = BOOST_DURATION;
+    this.boostLeft = this.boostDuration;
     this.used++;
     return true;
   }
 
   tryJump(): boolean {
-    if (this.jumpCooldown > 0) return false;
-    this.jumpCooldown = JUMP_COOLDOWN;
+    if (this.jumpCharges <= 0) return false;
+    if (this.jumpCharges === this.jumpChargesMax) this.jumpCooldown = this.jumpCooldownMax;
+    this.jumpCharges--;
     this.used++;
     return true;
   }

@@ -2,14 +2,15 @@ import { Assets } from '../core/assets';
 import { Sfx } from '../core/audio';
 import { levelName, t, type TKey } from '../core/i18n';
 import type { InputState } from '../core/input';
-import { Vec2, chance, clamp, circlesOverlap, formatTime, pick, rand, randInt } from '../core/math';
+import { Vec2, angleDiff, chance, clamp, circlesOverlap, formatTime, pick, rand, randInt } from '../core/math';
 import { Save } from '../core/storage';
-import { ASTEROID_SIZES, Asteroid, BouncingAsteroid, Comet, HomingAsteroid, type AsteroidSize } from './entities/Asteroid';
+import { ASTEROID_SIZES, Asteroid, BlackHole, BouncingAsteroid, Comet, HomingAsteroid, type AsteroidSize } from './entities/Asteroid';
 import type { WorldView } from './entities/Entity';
+import { BossAsteroid, LaserGate, MINE_BLAST_RADIUS, Mine } from './entities/Hazards';
 import { Pickup, type PickupKind } from './entities/Pickup';
 import { Player } from './entities/Player';
 import { CRYSTAL_INTERVAL, SURVIVAL_BASE, getLevel, introducedHazard, type LevelConfig } from './levels';
-import { getPlane, type PlaneId } from './planes';
+import { getPlane, type PlaneFeature, type PlaneId } from './planes';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
 import { Starfield } from './systems/Starfield';
@@ -62,6 +63,12 @@ interface FloatText {
   dur: number;
   color: string;
 }
+interface Shower {
+  side: number;
+  warn: number;
+  left: number;
+  acc: number;
+}
 interface WallWarning {
   side: number;
   timer: number;
@@ -89,6 +96,9 @@ export class Game {
   private rings: Ring[] = [];
   private texts: FloatText[] = [];
   private walls: WallWarning[] = [];
+  private mines: Mine[] = [];
+  private lasers: LaserGate[] = [];
+  private shower: Shower | null = null;
 
   width = 1600;
   height = 900;
@@ -106,6 +116,19 @@ export class Game {
   private nextSpawn = 1;
   private cometTimer = 0;
   private wallTimer = 0;
+  private blackHoleTimer = 0;
+  private meteorTimer = 0;
+  private mineTimer = 0;
+  private laserTimer = 0;
+  private windAngle = 0;
+  private windTarget = 0;
+  private windTimer = 0;
+  private readonly wind = new Vec2();
+  /** Додаткові життя (фенікс) */
+  lives = 0;
+  /** Відлік до відновлення щита (титан) */
+  shieldRegenTimer = 0;
+  private readonly pull = new Vec2();
   private crystalTimer = 0;
   private bonusTimer = 0;
   private rewardTimer = 0;
@@ -133,6 +156,10 @@ export class Game {
     return Math.max(0, this.level.duration - this.elapsed);
   }
 
+  get feature(): PlaneFeature {
+    return this.player.spec.feature;
+  }
+
   get frozen(): boolean {
     return this.skills.isFrozen;
   }
@@ -150,10 +177,17 @@ export class Game {
     this.rings = [];
     this.texts = [];
     this.walls = [];
+    this.mines = [];
+    this.lasers = [];
+    this.shower = null;
     this.particles.clear();
     this.player.reset(this.width / 2, this.height * 0.62);
     this.player.invulnerable = 0;
-    this.skills.reset(1, 2);
+    const feat = this.feature;
+    this.skills.reset(feat);
+    this.player.shield = !!feat.startShield;
+    this.lives = feat.extraLives ?? 0;
+    this.shieldRegenTimer = 0;
     this.elapsed = 0;
     this.crystals = 0;
     this.difficultyStep = 0;
@@ -165,6 +199,12 @@ export class Game {
     this.nextSpawn = rand(cfg.spawnMin, cfg.spawnMax);
     this.cometTimer = cfg.cometEvery * 0.6;
     this.wallTimer = cfg.wallEvery * 0.7;
+    this.blackHoleTimer = cfg.blackHoleEvery * 0.5;
+    this.meteorTimer = cfg.meteorEvery * 0.5;
+    this.mineTimer = 0;
+    this.laserTimer = cfg.laserEvery * 0.4;
+    this.windAngle = this.windTarget = rand(0, Math.PI * 2);
+    this.windTimer = 0;
     this.crystalTimer = 1.5;
     this.bonusTimer = rand(8, 12);
     this.rewardTimer = 0;
@@ -211,6 +251,7 @@ export class Game {
     const from = this.player.jump(this.width, this.height);
     Sfx.jump();
     const to = this.player.pos;
+    if (this.feature.dashShockwave) this.shockwave(to, this.feature.dashShockwave, '120,190,255');
     const [inner, outer] = this.player.spec.flame;
     for (let i = 0; i <= 10; i++) {
       const k = i / 10;
@@ -270,6 +311,7 @@ export class Game {
     if (this.stateTimer <= 0) {
       Sfx.countdown(true);
       this.setState('running');
+      if (this.level.boss > 0) this.spawnBoss(this.level.boss);
       this.texts.push({ x: this.width / 2, y: this.height / 2, text: t('game.go'), t: 0, dur: 0.9, color: '#ffd24a' });
     }
   }
@@ -280,7 +322,7 @@ export class Game {
 
     const ex = this.player.exhaust();
     const [inner, outer] = this.player.spec.flame;
-    const back = this.player.angle + Math.PI;
+    const back = this.player.exhaustAngle;
     const boosted = this.skills.isBoosted;
     this.particles.emit(ex.x, ex.y, {
       count: boosted ? 3 : 1,
@@ -306,6 +348,11 @@ export class Game {
     if (this.mode === 'survival') this.updateSurvivalProgress(dt);
 
     this.updatePlayer(dt);
+    if (!this.frozen) {
+      this.applyGravity(dt);
+      this.applyWind(dt);
+    }
+    this.updateShieldRegen(dt);
     this.updateHazards(dt, true);
     this.updatePickups(dt);
     if (!this.frozen) this.updateSpawning(dt);
@@ -321,6 +368,49 @@ export class Game {
       this.skills.addBoost();
       Sfx.powerup();
       this.floatText(this.player.pos.x, this.player.pos.y - 40, t('game.newSkill'), '#9fe3ff');
+    }
+  }
+
+  private updateShieldRegen(dt: number): void {
+    const regen = this.feature.shieldRegen;
+    if (!regen || this.player.shield) return;
+    this.shieldRegenTimer += dt;
+    if (this.shieldRegenTimer >= regen) {
+      this.shieldRegenTimer = 0;
+      this.player.shield = true;
+      Sfx.powerup();
+      this.floatText(this.player.pos.x, this.player.pos.y - 40, t('hud.shield'), '#9fe3ff');
+    }
+  }
+
+  /** Сонячний вітер: плавно змінює напрям і зносить літак. */
+  private applyWind(dt: number): void {
+    const strength = this.tuning().wind;
+    if (strength <= 0) return;
+    this.windTimer -= dt;
+    if (this.windTimer <= 0) {
+      this.windTimer = rand(7, 11);
+      this.windTarget = rand(0, Math.PI * 2);
+    }
+    this.windAngle += angleDiff(this.windAngle, this.windTarget) * Math.min(1, dt * 0.8);
+    this.wind.copy(Vec2.fromAngle(this.windAngle, strength));
+    const p = this.player;
+    if (!this.feature.gravityImmune) {
+      p.pos.add(this.wind, dt);
+      p.pos.set(clamp(p.pos.x, p.radius, this.width - p.radius), clamp(p.pos.y, p.radius, this.height - p.radius));
+    }
+    if (Math.random() < 0.6) {
+      this.particles.emit(rand(0, this.width), rand(0, this.height), {
+        count: 1,
+        speed: [strength * 4, strength * 6],
+        angle: this.windAngle,
+        spread: 0.05,
+        life: [0.3, 0.6],
+        size: [1, 1.6],
+        colors: ['rgba(200,230,255,0.5)', 'rgba(255,255,255,0.35)'],
+        drag: 0,
+        additive: false,
+      });
     }
   }
 
@@ -345,6 +435,42 @@ export class Game {
     }
     this.asteroids = this.asteroids.filter((a) => a.alive);
 
+    for (const boss of this.asteroids) {
+      if (boss instanceof BossAsteroid && boss.pendingBurst) {
+        boss.pendingBurst = false;
+        this.bossBurst(boss);
+      }
+    }
+
+    if (!frozen) {
+      for (const m of this.mines) {
+        m.update(dt, world);
+        if (m.detonate) this.detonate(m, collide);
+      }
+      this.mines = this.mines.filter((m) => m.alive);
+      for (const l of this.lasers) {
+        l.update(dt, world);
+        if (l.justFired()) {
+          Sfx.laser();
+          this.addShake(4);
+        }
+      }
+      this.lasers = this.lasers.filter((l) => l.alive);
+    }
+    for (const l of this.lasers) {
+      if (!l.active) continue;
+      // промінь спалює дрібні астероїди
+      for (const a of this.asteroids) {
+        if (a.alive && a.size !== 'large' && this.destructible(a) && l.distanceTo(a.pos) < a.radius) {
+          a.kill();
+          this.burst(a.pos.x, a.pos.y, a.visual, true);
+        }
+      }
+      if (collide && this.state === 'running' && l.distanceTo(this.player.pos) < this.player.radius + 4) this.onPlayerHit(null);
+    }
+
+    if (!frozen && this.shower) this.updateShower(dt);
+
     if (!frozen) {
       for (const w of this.walls) {
         const before = w.timer;
@@ -355,17 +481,68 @@ export class Game {
     }
   }
 
-  private onPlayerHit(a: Asteroid): void {
+  /** Чорні діри тягнуть літак і астероїди; астероїди, що впали в ядро, зникають. */
+  private applyGravity(dt: number): void {
+    const holes = this.asteroids.filter((a): a is BlackHole => a instanceof BlackHole);
+    if (!holes.length) return;
+    const p = this.player;
+    for (const hole of holes) {
+      if (!this.feature.gravityImmune) {
+        // тягнемо напряму позицію: інакше обмеження максимальної швидкості "з'їдало" б притягання
+        hole.pullAt(p.pos, this.pull);
+        p.pos.add(this.pull, dt * 0.3);
+        p.pos.set(clamp(p.pos.x, p.radius, this.width - p.radius), clamp(p.pos.y, p.radius, this.height - p.radius));
+      }
+      for (const a of this.asteroids) {
+        if (a === hole || a instanceof BlackHole || a instanceof Comet || a instanceof BossAsteroid || !a.alive) continue;
+        a.vel.add(hole.pullAt(a.pos, this.pull), dt * 0.6);
+        if (circlesOverlap(a.pos, a.radius * 0.5, hole.pos, hole.radius)) {
+          a.kill();
+          this.particles.emit(a.pos.x, a.pos.y, { count: 10, speed: [20, 90], life: [0.3, 0.6], size: [2, 4], colors: ['#ffb36b', '#b06bff'] });
+        }
+      }
+    }
+  }
+
+  /** Чи може цей астероїд бути знищений тараном/вибухом/хвилею. */
+  private destructible(a: Asteroid): boolean {
+    return !(a instanceof BlackHole) && !(a instanceof BossAsteroid);
+  }
+
+  /** Удар по гравцю. a — астероїд, що влучив (null — лазер чи вибух міни). */
+  private onPlayerHit(a: Asteroid | null): void {
     const p = this.player;
     if (p.invulnerable > 0) return;
+    // таран під форсажем
+    if (a && this.feature.ramOnBoost && this.skills.isBoosted && a.size !== 'large' && this.destructible(a)) {
+      a.kill();
+      this.burst(a.pos.x, a.pos.y, a.visual, false);
+      this.addShake(6);
+      Sfx.shieldHit();
+      return;
+    }
     if (p.shield) {
       p.shield = false;
       p.invulnerable = 1.2;
-      a.kill();
-      this.burst(a.pos.x, a.pos.y, a.visual, false);
+      this.shieldRegenTimer = 0;
+      if (a && this.destructible(a)) {
+        a.kill();
+        this.burst(a.pos.x, a.pos.y, a.visual, false);
+      }
       this.rings.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.5, r0: 30, r1: 140, color: '120,210,255' });
       this.addShake(10);
       Sfx.shieldHit();
+      return;
+    }
+    if (this.lives > 0) {
+      // друге життя: вибух розчищає простір навколо
+      this.lives--;
+      p.invulnerable = 2.5;
+      this.explosions.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.7, size: 120 });
+      this.shockwave(p.pos, 230, '255,170,80');
+      this.floatText(p.pos.x, p.pos.y - 50, t('game.revive'), '#ffb020');
+      this.addShake(18);
+      Sfx.explode();
       return;
     }
     // смерть
@@ -381,8 +558,13 @@ export class Game {
   private updatePickups(dt: number): void {
     const world = this.worldView();
     const p = this.player;
+    const magnet = this.feature.magnetRadius ?? 0;
     for (const pk of this.pickups) {
       pk.update(dt, world);
+      if (magnet && Vec2.dist(pk.pos, p.pos) < magnet) {
+        const dir = new Vec2(p.pos.x - pk.pos.x, p.pos.y - pk.pos.y).normalize();
+        pk.pos.add(dir, 520 * dt);
+      }
       if (pk.alive && circlesOverlap(p.pos, p.radius + 6, pk.pos, pk.radius)) {
         pk.kill();
         this.collect(pk.kind, pk.pos);
@@ -427,6 +609,10 @@ export class Game {
   private win(): void {
     this.setState('won', 1.8);
     this.walls = [];
+    this.lasers = [];
+    this.shower = null;
+    this.mines.forEach((m) => this.burst(m.pos.x, m.pos.y, 16, true));
+    this.mines = [];
     // всі астероїди розлітаються на шматки — винагорода для гравця
     this.asteroids.forEach((a, i) => {
       if (i < 40) this.burst(a.pos.x, a.pos.y, a.visual, true);
@@ -474,6 +660,11 @@ export class Game {
       bouncer: tm >= 90 ? Math.min(0.25, 0.08 + (s - 9) * 0.01) : 0,
       wallEvery: tm >= 120 ? Math.max(7, 16 - (s - 12) * 0.4) : 0,
       wallGap: Math.max(170, 240 - s * 2),
+      blackHoleEvery: tm >= 150 ? Math.max(9, 20 - (s - 15) * 0.4) : 0,
+      meteorEvery: tm >= 180 ? Math.max(10, 22 - (s - 18) * 0.4) : 0,
+      mineEvery: tm >= 210 ? Math.max(3, 7 - (s - 21) * 0.15) : 0,
+      laserEvery: tm >= 240 ? Math.max(4, 9 - (s - 24) * 0.2) : 0,
+      wind: tm >= 300 ? 90 : 0,
     };
   }
 
@@ -484,7 +675,7 @@ export class Game {
     if (this.spawnTimer >= this.nextSpawn / cfg.spawnMul) {
       this.spawnTimer = 0;
       this.nextSpawn = Math.max(0.1, rand(cfg.spawnMin, cfg.spawnMax));
-      const regular = this.asteroids.filter((a) => !(a instanceof Comet)).length;
+      const regular = this.asteroids.filter((a) => !(a instanceof Comet) && !(a instanceof BlackHole) && !(a instanceof BossAsteroid)).length;
       if (regular < cfg.maxAsteroids) this.asteroids.push(this.spawnAsteroid(cfg));
     }
 
@@ -501,6 +692,40 @@ export class Game {
       if (this.wallTimer >= cfg.wallEvery && this.walls.length === 0) {
         this.wallTimer = 0;
         this.queueWall(cfg);
+      }
+    }
+
+    if (cfg.blackHoleEvery > 0) {
+      this.blackHoleTimer += dt;
+      const holes = this.asteroids.filter((a) => a instanceof BlackHole).length;
+      if (this.blackHoleTimer >= cfg.blackHoleEvery && holes < 2) {
+        this.blackHoleTimer = 0;
+        this.spawnBlackHole(cfg);
+      }
+    }
+
+    if (cfg.meteorEvery > 0 && !this.shower) {
+      this.meteorTimer += dt;
+      if (this.meteorTimer >= cfg.meteorEvery) {
+        this.meteorTimer = 0;
+        this.shower = { side: chance(0.6) ? 0 : randInt(1, 3), warn: 1.6, left: 3.5, acc: 0 };
+        Sfx.warning();
+      }
+    }
+
+    if (cfg.mineEvery > 0) {
+      this.mineTimer += dt;
+      if (this.mineTimer >= cfg.mineEvery && this.mines.length < 7) {
+        this.mineTimer = 0;
+        this.spawnMine();
+      }
+    }
+
+    if (cfg.laserEvery > 0) {
+      this.laserTimer += dt;
+      if (this.laserTimer >= cfg.laserEvery && this.lasers.length < 2) {
+        this.laserTimer = rand(-0.5, 0.5);
+        this.spawnLaser();
       }
     }
 
@@ -574,6 +799,109 @@ export class Game {
     const target = this.player.pos.clone().add(new Vec2(rand(-60, 60), rand(-60, 60)));
     const dir = new Vec2(target.x - pos.x, target.y - pos.y);
     this.asteroids.push(new Comet(pos, dir, 850 * Math.min(1.45, Math.sqrt(cfg.speedMul))));
+    Sfx.warning();
+  }
+
+  private spawnBoss(burstEvery: number): void {
+    const pos = new Vec2(this.width / 2, -140);
+    const vel = Vec2.fromAngle(rand(Math.PI * 0.3, Math.PI * 0.7), 95);
+    this.asteroids.push(new BossAsteroid(pos, vel, burstEvery));
+    Sfx.warning();
+    this.floatText(this.width / 2, 120, t('game.bossWarn'), '#ff6a4a');
+  }
+
+  /** Бос випускає кільце уламків з проміжком у бік гравця, щоб було куди втекти. */
+  private bossBurst(boss: BossAsteroid): void {
+    const n = 12;
+    const toPlayer = Math.atan2(this.player.pos.y - boss.pos.y, this.player.pos.x - boss.pos.x);
+    const offset = rand(0, Math.PI * 2);
+    const speed = 210 * Math.sqrt(this.level.speedMul);
+    for (let i = 0; i < n; i++) {
+      const a = offset + (i / n) * Math.PI * 2;
+      if (Math.abs(angleDiff(a, toPlayer)) < 0.32) continue;
+      const pos = boss.pos.clone().add(Vec2.fromAngle(a, boss.visual * 0.8));
+      this.asteroids.push(new Asteroid(chance(0.5) ? 'small' : 'medium', pos, Vec2.fromAngle(a, speed)));
+    }
+    this.rings.push({ x: boss.pos.x, y: boss.pos.y, t: 0, dur: 0.5, r0: boss.visual, r1: boss.visual * 1.8, color: '255,120,60' });
+    this.addShake(8);
+    Sfx.bossShot();
+  }
+
+  private spawnMine(): void {
+    const m = 110;
+    let pos = new Vec2(rand(m, this.width - m), rand(m, this.height - m));
+    for (let i = 0; i < 8 && Vec2.dist(pos, this.player.pos) < 260; i++) pos = new Vec2(rand(m, this.width - m), rand(m, this.height - m));
+    this.mines.push(new Mine(pos));
+  }
+
+  private detonate(m: Mine, hurtPlayer: boolean): void {
+    m.kill();
+    m.detonate = false;
+    this.explosions.push({ x: m.pos.x, y: m.pos.y, t: 0, dur: 0.6, size: MINE_BLAST_RADIUS * 1.6 });
+    this.rings.push({ x: m.pos.x, y: m.pos.y, t: 0, dur: 0.45, r0: 20, r1: MINE_BLAST_RADIUS, color: '255,120,60' });
+    this.particles.emit(m.pos.x, m.pos.y, { count: 30, speed: [80, 320], life: [0.3, 0.8], size: [2, 5], colors: ['#fff1a8', '#ffb020', '#ff5a1f'] });
+    this.addShake(10);
+    Sfx.mine();
+    for (const a of this.asteroids) {
+      if (a.alive && this.destructible(a) && Vec2.dist(a.pos, m.pos) < MINE_BLAST_RADIUS + a.radius) {
+        a.kill();
+        this.burst(a.pos.x, a.pos.y, a.visual, true);
+      }
+    }
+    // ланцюгова реакція
+    for (const other of this.mines) if (other !== m && other.alive && Vec2.dist(other.pos, m.pos) < MINE_BLAST_RADIUS) other.trigger();
+    if (hurtPlayer && this.state === 'running' && Vec2.dist(this.player.pos, m.pos) < MINE_BLAST_RADIUS + this.player.radius) this.onPlayerHit(null);
+  }
+
+  private spawnLaser(): void {
+    const center = new Vec2(rand(this.width * 0.15, this.width * 0.85), rand(this.height * 0.15, this.height * 0.85));
+    const angle = pick([0, Math.PI / 2, rand(0, Math.PI)]);
+    this.lasers.push(new LaserGate(center, angle));
+    Sfx.warning();
+  }
+
+  private updateShower(dt: number): void {
+    const sh = this.shower!;
+    if (sh.warn > 0) {
+      sh.warn -= dt;
+      return;
+    }
+    sh.left -= dt;
+    sh.acc += dt;
+    const speed = 380 * Math.sqrt(this.level.speedMul);
+    while (sh.acc >= 0.12) {
+      sh.acc -= 0.12;
+      const inward = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][sh.side] + rand(-0.25, 0.25);
+      const pos = this.edgePoint(sh.side, 30);
+      this.asteroids.push(new Asteroid('small', pos, Vec2.fromAngle(inward, speed * rand(0.9, 1.15))));
+    }
+    if (sh.left <= 0) this.shower = null;
+  }
+
+  /** Ударна хвиля: знищує руйнівні астероїди в радіусі. */
+  private shockwave(at: Vec2, radius: number, color: string): void {
+    this.rings.push({ x: at.x, y: at.y, t: 0, dur: 0.45, r0: 20, r1: radius, color });
+    for (const a of this.asteroids) {
+      if (a.alive && this.destructible(a) && Vec2.dist(a.pos, at) < radius + a.radius) {
+        a.kill();
+        this.burst(a.pos.x, a.pos.y, a.visual, true);
+      }
+    }
+    this.addShake(8);
+  }
+
+  /** Стан унікальної фічі літака для HUD (null — нічого не показувати). */
+  featureStatus(): { icon: 'shield' | 'heart'; text: string } | null {
+    if (this.feature.shieldRegen && !this.player.shield) return { icon: 'shield', text: `${Math.ceil(this.feature.shieldRegen - this.shieldRegenTimer)}s` };
+    if (this.feature.extraLives) return { icon: 'heart', text: `×${this.lives}` };
+    return null;
+  }
+
+  private spawnBlackHole(cfg: LevelConfig): void {
+    const pos = this.edgePoint(randInt(0, 3), 60);
+    const target = new Vec2(rand(this.width * 0.3, this.width * 0.7), rand(this.height * 0.3, this.height * 0.7));
+    const vel = new Vec2(target.x - pos.x, target.y - pos.y).normalize().scale(rand(45, 65));
+    this.asteroids.push(new BlackHole(pos, vel, 900 + (cfg.speedMul - 1) * 250));
     Sfx.warning();
   }
 
@@ -664,11 +992,13 @@ export class Game {
     const sy = this.shake > 0 ? rand(-this.shake, this.shake) : 0;
     ctx.setTransform(vp.scale, 0, 0, vp.scale, vp.ox + sx * vp.scale, vp.oy + sy * vp.scale);
 
-    this.renderWalls(ctx);
+    for (const a of this.asteroids) if (a instanceof BlackHole) a.render(ctx, this.clock);
+    for (const m of this.mines) m.render(ctx, this.clock);
     for (const pk of this.pickups) pk.render(ctx, this.clock);
     this.particles.render(ctx);
     if (this.state !== 'dying' && this.state !== 'lost') this.player.render(ctx, boosted);
-    for (const a of this.asteroids) a.render(ctx, this.clock);
+    for (const a of this.asteroids) if (!(a instanceof BlackHole)) a.render(ctx, this.clock);
+    for (const l of this.lasers) l.render(ctx, this.clock);
     this.renderEffects(ctx);
 
     if (this.frozen && this.state === 'running') {
@@ -676,6 +1006,18 @@ export class Game {
       ctx.fillStyle = `rgba(80,160,255,${0.12 * k})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
+
+    const fog = this.tuning().fog;
+    if (fog > 0 && (this.state === 'running' || this.state === 'countdown')) {
+      this.renderFog(ctx, fog);
+      // попередження мають бути видні крізь туман — інакше це нечесно
+      for (const a of this.asteroids) if (a instanceof Comet && a.warning) a.render(ctx, this.clock);
+      for (const l of this.lasers) l.render(ctx, this.clock);
+      for (const m of this.mines) m.renderSignal(ctx, this.clock);
+    }
+    this.renderWalls(ctx);
+    this.renderShowerWarning(ctx);
+    this.renderWindIndicator(ctx);
 
     if (this.state === 'countdown') this.renderCountdown(ctx);
 
@@ -722,6 +1064,74 @@ export class Game {
       ctx.restore();
       ctx.globalAlpha = 1;
     }
+  }
+
+  private renderFog(ctx: CanvasRenderingContext2D, radius: number): void {
+    const { x, y } = this.player.pos;
+    const g = ctx.createRadialGradient(x, y, radius * 0.55, x, y, radius);
+    g.addColorStop(0, 'rgba(6,4,16,0)');
+    g.addColorStop(1, 'rgba(6,4,16,0.95)');
+    ctx.fillStyle = g;
+    ctx.fillRect(-50, -50, this.width + 100, this.height + 100);
+  }
+
+  /** Червона смуга вздовж краю, звідки посиплеться метеоритний дощ. */
+  private renderShowerWarning(ctx: CanvasRenderingContext2D): void {
+    const sh = this.shower;
+    if (!sh) return;
+    const a = sh.warn > 0 ? 0.35 + 0.35 * Math.abs(Math.sin(this.clock * 10)) : 0.25;
+    const horizontal = sh.side % 2 === 0;
+    const depth = 90;
+    let g: CanvasGradient;
+    switch (sh.side) {
+      case 0:
+        g = ctx.createLinearGradient(0, 0, 0, depth);
+        break;
+      case 1:
+        g = ctx.createLinearGradient(this.width, 0, this.width - depth, 0);
+        break;
+      case 2:
+        g = ctx.createLinearGradient(0, this.height, 0, this.height - depth);
+        break;
+      default:
+        g = ctx.createLinearGradient(0, 0, depth, 0);
+    }
+    g.addColorStop(0, `rgba(255,120,40,${a})`);
+    g.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle = g;
+    if (horizontal) ctx.fillRect(0, sh.side === 0 ? 0 : this.height - depth, this.width, depth);
+    else ctx.fillRect(sh.side === 3 ? 0 : this.width - depth, 0, depth, this.height);
+    if (sh.warn > 0) {
+      ctx.font = `800 30px ${UNI}`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = `rgba(255,190,120,${a + 0.3})`;
+      ctx.fillText(t('game.meteorWarn'), this.width / 2, this.height / 2 - 160);
+    }
+  }
+
+  /** Стрілка напряму вітру під HUD. */
+  private renderWindIndicator(ctx: CanvasRenderingContext2D): void {
+    if (this.tuning().wind <= 0 || this.state !== 'running') return;
+    const x = this.width / 2;
+    const y = 96;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = 'rgba(10,9,24,0.6)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.rotate(this.windAngle);
+    ctx.strokeStyle = '#bfe6ff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-11, 0);
+    ctx.lineTo(11, 0);
+    ctx.moveTo(4, -6);
+    ctx.lineTo(11, 0);
+    ctx.lineTo(4, 6);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private renderEffects(ctx: CanvasRenderingContext2D): void {
