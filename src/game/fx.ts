@@ -20,6 +20,8 @@ export function glowSprite(color: string, radius: number, strength = 1): HTMLCan
 }
 
 export function drawGlow(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, radius: number, alpha = 1): void {
+  // canvas нульового розміру змушує drawImage кинути InvalidStateError
+  if (radius < 1 || alpha <= 0) return;
   const s = glowSprite(color, Math.round(radius));
   ctx.globalAlpha = alpha;
   ctx.globalCompositeOperation = 'lighter';

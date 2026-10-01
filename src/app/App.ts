@@ -142,14 +142,21 @@ export class App {
     const frame = (now: number): void => {
       const dt = Math.min(0.25, (now - this.last) / 1000);
       this.last = now;
-      this.tick(dt);
+      // плануємо наступний кадр до рендеру — помилка в одному кадрі не зупинить гру назавжди
       requestAnimationFrame(frame);
+      try {
+        this.tick(dt);
+      } catch (err) {
+        console.error(err);
+      }
     };
     requestAnimationFrame(frame);
   }
 
   private tick(dt: number): void {
     const ctx = this.ctx;
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
     if (!Assets.ready) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = '#04030a';
