@@ -1,7 +1,7 @@
-import { Assets } from '../../core/assets';
 import { Sfx } from '../../core/audio';
 import { t, type TKey } from '../../core/i18n';
 import { Save } from '../../core/storage';
+import { planeIconUrl } from '../../game/PlaneArt';
 import { PLANES, planeStats, type PlaneSpec } from '../../game/planes';
 import { Icons, button, coinBadge, h, icon } from '../dom';
 import { toast } from '../Modal';
@@ -62,7 +62,7 @@ export class HangarScreen extends Screen {
       return h(
         'div',
         { class: `plane-card${selected ? ' selected' : ''}${owned ? '' : ' locked'}` },
-        h('div', { class: 'plane-pic' }, h('img', { src: Assets.get(p.sprite).src, alt: '' }), owned ? null : h('span', { class: 'price-tag' }, icon(Icons.lock))),
+        h('div', { class: 'plane-pic' }, h('img', { src: planeIconUrl(p.id), alt: '' }), owned ? null : h('span', { class: 'price-tag' }, icon(Icons.lock))),
         h('h3', {}, t(`plane.${p.id}` as TKey)),
         h('p', { class: 'plane-desc' }, t(`planeDesc.${p.id}` as TKey)),
         h('div', { class: 'feature' }, h('span', { class: 'feature-tag' }, t('planes.feature')), t(`feat.${p.id}` as TKey)),

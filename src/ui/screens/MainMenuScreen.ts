@@ -1,10 +1,10 @@
-import { Assets } from '../../core/assets';
 import { Sfx } from '../../core/audio';
 import { t } from '../../core/i18n';
 import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
 import { dailyState } from '../../game/economy';
 import { MAX_LEVEL } from '../../game/levels';
+import { planeIconUrl } from '../../game/PlaneArt';
 import { getPlane } from '../../game/planes';
 import { toggleFullscreen } from '../../app/App';
 import { openDailyModal } from '../DailyModal';
@@ -42,7 +42,7 @@ export class MainMenuScreen extends Screen {
       'aria-label': t('menu.daily'),
       title: t('menu.daily'),
     });
-    const planeImg = h('img', { class: 'menu-plane', src: Assets.get(plane.sprite).src, alt: '' });
+    const planeImg = h('img', { class: 'menu-plane', src: planeIconUrl(plane.id), alt: '' });
 
     const items: [string, () => void, boolean?][] = [
       [t('menu.play'), go(new LevelSelectScreen(this.app)), true],

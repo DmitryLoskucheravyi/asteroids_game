@@ -88,6 +88,6 @@ src/
   app/       App: canvas, ігровий цикл, перемикання екранів
 ```
 
-Спрайти 8 нових літаків генеруються скриптом `tools/gen_planes.py` (Python + Pillow).
+Усі 11 літаків намальовані кодом на Canvas (`src/game/PlaneArt.ts`): металеві градієнти, кабіни, сопла, навігаційні вогні й анімовані деталі. Статичний корпус кешується в offscreen-canvas.
 
 Шрифт логотипа — [Bungee](https://github.com/djrrb/Bungee) (SIL OFL 1.1).

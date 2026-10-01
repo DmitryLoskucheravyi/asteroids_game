@@ -1,4 +1,4 @@
-import { Assets } from '../../core/assets';
+import { drawPlane } from '../PlaneArt';
 import { Vec2, angleDiff, clamp } from '../../core/math';
 import type { PlaneSpec } from '../planes';
 import { drawGlow } from '../fx';
@@ -103,11 +103,10 @@ export class Player {
     drawGlow(ctx, ex.x, ex.y, boosted ? 'rgba(255,200,80,1)' : hexToRgba(outer), boosted ? 34 : 22, 0.8);
     drawGlow(ctx, ex.x, ex.y, hexToRgba(inner), 10, 0.9);
 
-    const img = Assets.get(this.spec.sprite);
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
     ctx.rotate(this.angle + Math.PI / 2);
-    ctx.drawImage(img, -SPRITE_SIZE / 2, -SPRITE_SIZE / 2, SPRITE_SIZE, SPRITE_SIZE);
+    drawPlane(ctx, this.spec.id, SPRITE_SIZE, this.time);
     ctx.restore();
 
     if (this.shield) {
