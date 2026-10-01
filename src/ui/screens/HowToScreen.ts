@@ -22,7 +22,7 @@ export class HowToScreen extends Screen {
 
     let body: HTMLElement;
     if (this.tab === 'goal') {
-      body = h('ul', { class: 'howto-list' }, ...(['howto.goal1', 'howto.goal2', 'howto.goal3', 'howto.goal4', 'howto.goal5'] as TKey[]).map((k) => h('li', {}, t(k, { n: MAX_LEVEL }))));
+      body = h('ul', { class: 'howto-list' }, ...(['howto.goal1', 'howto.goal2', 'howto.goal3', 'howto.goal4', 'howto.goal5', 'howto.goal6'] as TKey[]).map((k) => h('li', {}, t(k, { n: MAX_LEVEL }))));
     } else if (this.tab === 'controls') {
       body = h(
         'div',

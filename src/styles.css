@@ -1767,3 +1767,302 @@ input[type='range'] {
 .sk-feat .ico {
   color: #ffb020;
 }
+
+/* ---------- коінс, щоденна нагорода, магазин ---------- */
+
+.ico.coin {
+  color: var(--gold);
+}
+
+.coin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #ffe9a8;
+}
+
+.coin-badge.small {
+  gap: 4px;
+  font-size: 13px;
+}
+
+.coin-badge.big {
+  font-size: 18px;
+}
+
+.coin-badge.big .ico {
+  width: 22px;
+  height: 22px;
+}
+
+.wallet {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.wallet > .coin-badge {
+  height: 44px;
+  padding: 0 16px 0 12px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 210, 74, 0.35);
+  backdrop-filter: blur(8px);
+}
+
+.gift-btn {
+  position: relative;
+  color: var(--muted);
+}
+
+.gift-btn.ready {
+  color: var(--gold);
+  border-color: rgba(255, 210, 74, 0.6);
+  animation: gift-wiggle 2.4s ease-in-out infinite;
+}
+
+.gift-btn.ready::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+}
+
+@keyframes gift-wiggle {
+  0%,
+  80%,
+  100% {
+    transform: none;
+  }
+  85% {
+    transform: rotate(-12deg);
+  }
+  90% {
+    transform: rotate(10deg);
+  }
+  95% {
+    transform: rotate(-6deg);
+  }
+}
+
+.daily-modal .modal-panel {
+  width: min(620px, 100%);
+}
+
+.daily-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+
+.daily-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  transition:
+    transform 0.25s,
+    border-color 0.25s;
+}
+
+.daily-card.big {
+  grid-column: span 2;
+  background: linear-gradient(160deg, rgba(255, 200, 60, 0.14), rgba(255, 255, 255, 0.03));
+}
+
+.daily-day {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.daily-ico {
+  width: 30px;
+  height: 30px;
+  color: #c9a7ff;
+}
+
+.daily-card.done {
+  opacity: 0.55;
+}
+
+.daily-card.done .daily-ico {
+  color: var(--gold);
+}
+
+.daily-card.today {
+  opacity: 1;
+  border-color: rgba(255, 210, 74, 0.8);
+  box-shadow: 0 0 0 1px rgba(255, 210, 74, 0.35), 0 10px 30px -12px rgba(255, 170, 40, 0.8);
+  transform: translateY(-3px);
+}
+
+.daily-card.claimed {
+  animation: star-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.6);
+}
+
+.daily-status {
+  min-height: 1.5em;
+  color: var(--gold) !important;
+  font-weight: 700;
+}
+
+.claim-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plane-pic {
+  position: relative;
+}
+
+.plane-card.locked .plane-pic img {
+  filter: grayscale(0.55) brightness(0.7);
+  opacity: 1;
+}
+
+.price-tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--muted);
+}
+
+.buy-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.btn.buy {
+  display: flex;
+  justify-content: center;
+}
+
+.buy-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn.buy.affordable {
+  border-color: rgba(255, 210, 74, 0.7);
+  background: rgba(255, 200, 60, 0.12);
+}
+
+.btn.buy.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.need {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.reward {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 200, 60, 0.07);
+  border: 1px solid rgba(255, 210, 74, 0.25);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reward-line,
+.reward-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.reward-line small {
+  color: var(--gold);
+}
+
+.reward-num {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  color: #ffe9a8;
+}
+
+.reward-total {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 210, 74, 0.2);
+  color: #fff;
+  font-weight: 700;
+}
+
+.hud-coins {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px 0 10px;
+  border-radius: 12px;
+  background: rgba(10, 9, 24, 0.6);
+  border: 1px solid rgba(255, 210, 74, 0.3);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-ui);
+  font-weight: 800;
+  color: #ffe9a8;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-coins.bump {
+  animation: coin-bump 0.35s ease;
+}
+
+@keyframes coin-bump {
+  40% {
+    transform: scale(1.15);
+    border-color: var(--gold);
+  }
+}
+
+@media (max-width: 760px) {
+  .wallet > .coin-badge {
+    height: 40px;
+    font-size: 15px;
+  }
+  .daily-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .daily-card.big {
+    grid-column: span 3;
+  }
+}

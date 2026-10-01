@@ -10,6 +10,7 @@ import { BossAsteroid, LaserGate, MINE_BLAST_RADIUS, Mine } from './entities/Haz
 import { Pickup, type PickupKind } from './entities/Pickup';
 import { Player } from './entities/Player';
 import { CRYSTAL_INTERVAL, SURVIVAL_BASE, getLevel, introducedHazard, type LevelConfig } from './levels';
+import { CRYSTAL_COINS } from './economy';
 import { getPlane, type PlaneFeature, type PlaneId } from './planes';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
@@ -27,6 +28,8 @@ export interface GameResult {
   crystals: number;
   crystalTarget: number;
   stars: number;
+  /** Коінс, зібрані кристалами за цей забіг */
+  coins: number;
 }
 
 export interface Viewport {
@@ -134,6 +137,8 @@ export class Game {
   private rewardTimer = 0;
 
   crystals = 0;
+  /** Коінс, зібрані за цей забіг (зараховуються в кінці) */
+  coins = 0;
   difficultyStep = 0;
   private ended = false;
 
@@ -190,6 +195,7 @@ export class Game {
     this.shieldRegenTimer = 0;
     this.elapsed = 0;
     this.crystals = 0;
+    this.coins = 0;
     this.difficultyStep = 0;
     this.ended = false;
     this.shake = 0;
@@ -585,8 +591,9 @@ export class Game {
     switch (kind) {
       case 'crystal':
         this.crystals++;
+        this.coins += CRYSTAL_COINS;
         Sfx.pickup();
-        this.floatText(at.x, at.y - 24, `+1`, '#ff9cf0');
+        this.floatText(at.x, at.y - 24, `+${CRYSTAL_COINS}`, '#ffd24a');
         return;
       case 'shield':
         this.player.shield = true;
@@ -638,6 +645,7 @@ export class Game {
       crystals: this.crystals,
       crystalTarget: cfg.crystalTarget,
       stars,
+      coins: this.coins,
     });
   }
 
@@ -729,12 +737,11 @@ export class Game {
       }
     }
 
-    if (this.mode === 'campaign') {
-      this.crystalTimer -= dt;
-      if (this.crystalTimer <= 0) {
-        this.crystalTimer = rand(CRYSTAL_INTERVAL - 1, CRYSTAL_INTERVAL + 1);
-        this.spawnPickup('crystal');
-      }
+    // кристали є в обох режимах: у кампанії дають зірки, а скрізь — коінс
+    this.crystalTimer -= dt;
+    if (this.crystalTimer <= 0) {
+      this.crystalTimer = rand(CRYSTAL_INTERVAL - 1, CRYSTAL_INTERVAL + 1);
+      this.spawnPickup('crystal');
     }
 
     this.bonusTimer -= dt;

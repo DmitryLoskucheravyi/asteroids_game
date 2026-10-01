@@ -1,50 +1,82 @@
 import { Assets } from '../../core/assets';
+import { Sfx } from '../../core/audio';
 import { t, type TKey } from '../../core/i18n';
 import { Save } from '../../core/storage';
-import { PLANES, isPlaneUnlocked, planeStats } from '../../game/planes';
-import { Icons, button, h, icon } from '../dom';
+import { PLANES, planeStats, type PlaneSpec } from '../../game/planes';
+import { Icons, button, coinBadge, h, icon } from '../dom';
+import { toast } from '../Modal';
 import { Screen } from '../Screen';
 import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
-/** Вибір літака (аналог PlaneSelectForm): характеристики, унікальна фіча, відкриття за зірки. */
+/** Ангар-магазин (аналог PlaneSelectForm): літаки купуються за коінс, у кожного своя фіча. */
 export class HangarScreen extends Screen {
+  private refocus(i: number): void {
+    this.el.querySelectorAll<HTMLElement>('.plane-card')[i]?.querySelector<HTMLElement>('.btn')?.focus();
+  }
+
+  private actionFor(p: PlaneSpec, i: number): HTMLElement {
+    const coins = Save.data.coins;
+    if (Save.owns(p.id)) {
+      const selected = Save.data.plane === p.id;
+      return button(selected ? t('planes.selected') : t('planes.select'), () => {
+        Save.data.plane = p.id;
+        Save.save();
+        this.render();
+        this.refocus(i);
+      }, `btn${selected ? ' btn-on' : ''}`, selected ? { 'data-autofocus': true } : {});
+    }
+    const affordable = coins >= p.price;
+    return h(
+      'div',
+      { class: 'buy-row' },
+      button(
+        h('span', { class: 'buy-label' }, t('planes.buy'), coinBadge(p.price, 'coin-badge small')),
+        () => {
+          if (!Save.buy(p.id, p.price)) {
+            Sfx.warning();
+            return;
+          }
+          Save.data.plane = p.id;
+          Save.save();
+          Sfx.powerup();
+          toast(t('planes.bought'));
+          this.render();
+          this.refocus(i);
+        },
+        `btn buy${affordable ? ' affordable' : ' locked'}`,
+        affordable ? {} : { 'aria-disabled': 'true' },
+      ),
+      affordable ? null : h('span', { class: 'need' }, t('planes.notEnough', { n: p.price - coins })),
+    );
+  }
+
   protected build(): HTMLElement {
-    const stars = Save.totalStars;
     const bar = (label: string, v: number) =>
       h('div', { class: 'stat-bar' }, h('span', {}, label), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(Math.max(0.1, Math.min(1, v)) * 100)}%` })));
 
     const cards = PLANES.map((p, i) => {
-      const unlocked = isPlaneUnlocked(p, stars);
-      const selected = unlocked && Save.data.plane === p.id;
+      const owned = Save.owns(p.id);
+      const selected = owned && Save.data.plane === p.id;
       const st = planeStats(p);
-      const action = unlocked
-        ? button(selected ? t('planes.selected') : t('planes.select'), () => {
-            Save.data.plane = p.id;
-            Save.save();
-            this.render();
-            this.el.querySelectorAll<HTMLElement>('.plane-card')[i]?.querySelector<HTMLElement>('.btn')?.focus();
-          }, `btn${selected ? ' btn-on' : ''}`, selected ? { 'data-autofocus': true } : {})
-        : h('div', { class: 'lock-note' }, icon(Icons.lock), t('planes.locked', { n: p.unlockStars }), h('span', { class: 'muted' }, `(${stars})`));
-
       return h(
         'div',
-        { class: `plane-card${selected ? ' selected' : ''}${unlocked ? '' : ' locked'}` },
-        h('div', { class: 'plane-pic' }, h('img', { src: Assets.get(p.sprite).src, alt: '' })),
+        { class: `plane-card${selected ? ' selected' : ''}${owned ? '' : ' locked'}` },
+        h('div', { class: 'plane-pic' }, h('img', { src: Assets.get(p.sprite).src, alt: '' }), owned ? null : h('span', { class: 'price-tag' }, icon(Icons.lock))),
         h('h3', {}, t(`plane.${p.id}` as TKey)),
         h('p', { class: 'plane-desc' }, t(`planeDesc.${p.id}` as TKey)),
         h('div', { class: 'feature' }, h('span', { class: 'feature-tag' }, t('planes.feature')), t(`feat.${p.id}` as TKey)),
         bar(t('planes.speed'), st.speed),
         bar(t('planes.agility'), st.agility),
         bar(t('planes.size'), st.size),
-        action,
+        this.actionFor(p, i),
       );
     });
 
     return h(
       'div',
       { class: 'page hangar' },
-      screenHeader(t('planes.title'), () => this.onBack(), h('div', { class: 'head-stat' }, icon(Icons.star, 'ico gold'), String(stars))),
+      screenHeader(t('planes.title'), () => this.onBack(), coinBadge(Save.data.coins, 'coin-badge big')),
       h('p', { class: 'page-sub' }, t('planes.subtitle')),
       h('div', { class: 'plane-grid' }, ...cards),
     );

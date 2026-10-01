@@ -51,27 +51,25 @@ export interface PlaneSpec {
   /** Колір вихлопу двигуна */
   flame: [string, string];
   feature: PlaneFeature;
-  /** Скільки зірок кампанії потрібно, щоб відкрити */
-  unlockStars: number;
+  /** Ціна в коінс (0 — є з самого початку) */
+  price: number;
 }
 
 export const PLANES: readonly PlaneSpec[] = [
-  { id: 'falcon', sprite: 'planeFalcon', accel: 2600, maxSpeed: 420, drag: 5.5, radius: 15, flame: ['#9fe3ff', '#2f7bff'], feature: { extraBoost: 1, boostDurationMul: 1.5 }, unlockStars: 0 },
-  { id: 'phantom', sprite: 'planePhantom', accel: 3300, maxSpeed: 370, drag: 7.5, radius: 13, flame: ['#ffc2ef', '#ff3fa4'], feature: { jumpDistanceMul: 1.5, jumpCooldownMul: 0.75 }, unlockStars: 0 },
-  { id: 'blaze', sprite: 'planeBlaze', accel: 2300, maxSpeed: 500, drag: 4.2, radius: 16, flame: ['#ffe39a', '#ff5a1f'], feature: { ramOnBoost: true }, unlockStars: 0 },
-  { id: 'wasp', sprite: 'planeWasp', accel: 3100, maxSpeed: 380, drag: 7, radius: 10, flame: ['#fff3a0', '#ffb000'], feature: { extraFreeze: 1 }, unlockStars: 4 },
-  { id: 'collector', sprite: 'planeCollector', accel: 2500, maxSpeed: 400, drag: 5.5, radius: 16, flame: ['#a8fff0', '#18c8b0'], feature: { magnetRadius: 260 }, unlockStars: 8 },
-  { id: 'swift', sprite: 'planeSwift', accel: 2900, maxSpeed: 450, drag: 6, radius: 14, flame: ['#d8f6ff', '#28c8f0'], feature: { jumpCharges: 2 }, unlockStars: 13 },
-  { id: 'titan', sprite: 'planeTitan', accel: 2100, maxSpeed: 390, drag: 5, radius: 17, flame: ['#fff1a8', '#ffb020'], feature: { startShield: true, shieldRegen: 22 }, unlockStars: 19 },
-  { id: 'chronos', sprite: 'planeChronos', accel: 2700, maxSpeed: 420, drag: 6, radius: 14, flame: ['#e2c2ff', '#8a3cff'], feature: { freezeDurationMul: 2, extraFreeze: 1 }, unlockStars: 26 },
-  { id: 'thunder', sprite: 'planeThunder', accel: 2800, maxSpeed: 440, drag: 5.5, radius: 15, flame: ['#c8e8ff', '#3a7bff'], feature: { dashShockwave: 150, jumpCooldownMul: 0.85 }, unlockStars: 34 },
-  { id: 'ufo', sprite: 'planeUfo', accel: 7000, maxSpeed: 380, drag: 16, radius: 15, flame: ['#c8ffd8', '#3adc78'], feature: { gravityImmune: true, noRotate: true }, unlockStars: 43 },
-  { id: 'phoenix', sprite: 'planePhoenix', accel: 3000, maxSpeed: 460, drag: 6, radius: 14, flame: ['#fff1a8', '#ff5a1f'], feature: { extraLives: 1, extraBoost: 1 }, unlockStars: 55 },
+  { id: 'falcon', sprite: 'planeFalcon', accel: 2600, maxSpeed: 420, drag: 5.5, radius: 15, flame: ['#9fe3ff', '#2f7bff'], feature: { extraBoost: 1, boostDurationMul: 1.5 }, price: 0 },
+  { id: 'phantom', sprite: 'planePhantom', accel: 3300, maxSpeed: 370, drag: 7.5, radius: 13, flame: ['#ffc2ef', '#ff3fa4'], feature: { jumpDistanceMul: 1.5, jumpCooldownMul: 0.75 }, price: 150 },
+  { id: 'blaze', sprite: 'planeBlaze', accel: 2300, maxSpeed: 500, drag: 4.2, radius: 16, flame: ['#ffe39a', '#ff5a1f'], feature: { ramOnBoost: true }, price: 250 },
+  { id: 'wasp', sprite: 'planeWasp', accel: 3100, maxSpeed: 380, drag: 7, radius: 10, flame: ['#fff3a0', '#ffb000'], feature: { extraFreeze: 1 }, price: 400 },
+  { id: 'collector', sprite: 'planeCollector', accel: 2500, maxSpeed: 400, drag: 5.5, radius: 16, flame: ['#a8fff0', '#18c8b0'], feature: { magnetRadius: 260 }, price: 600 },
+  { id: 'swift', sprite: 'planeSwift', accel: 2900, maxSpeed: 450, drag: 6, radius: 14, flame: ['#d8f6ff', '#28c8f0'], feature: { jumpCharges: 2 }, price: 800 },
+  { id: 'titan', sprite: 'planeTitan', accel: 2100, maxSpeed: 390, drag: 5, radius: 17, flame: ['#fff1a8', '#ffb020'], feature: { startShield: true, shieldRegen: 22 }, price: 1100 },
+  { id: 'chronos', sprite: 'planeChronos', accel: 2700, maxSpeed: 420, drag: 6, radius: 14, flame: ['#e2c2ff', '#8a3cff'], feature: { freezeDurationMul: 2, extraFreeze: 1 }, price: 1400 },
+  { id: 'thunder', sprite: 'planeThunder', accel: 2800, maxSpeed: 440, drag: 5.5, radius: 15, flame: ['#c8e8ff', '#3a7bff'], feature: { dashShockwave: 150, jumpCooldownMul: 0.85 }, price: 1800 },
+  { id: 'ufo', sprite: 'planeUfo', accel: 7000, maxSpeed: 380, drag: 16, radius: 15, flame: ['#c8ffd8', '#3adc78'], feature: { gravityImmune: true, noRotate: true }, price: 2300 },
+  { id: 'phoenix', sprite: 'planePhoenix', accel: 3000, maxSpeed: 460, drag: 6, radius: 14, flame: ['#fff1a8', '#ff5a1f'], feature: { extraLives: 1, extraBoost: 1 }, price: 3000 },
 ];
 
 export const getPlane = (id: PlaneId): PlaneSpec => PLANES.find((p) => p.id === id) ?? PLANES[0];
-
-export const isPlaneUnlocked = (p: PlaneSpec, totalStars: number): boolean => totalStars >= p.unlockStars;
 
 /** Нормовані показники 0..1 для смужок на екрані вибору. */
 export function planeStats(p: PlaneSpec): { speed: number; agility: number; size: number } {

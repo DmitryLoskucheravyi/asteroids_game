@@ -13,6 +13,12 @@ export interface SaveData {
   stars: number[];
   survivalTop: SurvivalRecord[];
   plane: PlaneId;
+  /** Внутрішньоігрова валюта */
+  coins: number;
+  /** Куплені літаки */
+  owned: PlaneId[];
+  /** Щоденна нагорода: дата останнього отримання (YYYY-MM-DD) і довжина серії */
+  daily: { last: string; streak: number };
   settings: {
     lang: Lang;
     volume: number;
@@ -28,6 +34,9 @@ const defaults = (): SaveData => ({
   stars: [],
   survivalTop: [],
   plane: 'falcon',
+  coins: 0,
+  owned: ['falcon'],
+  daily: { last: '', streak: 0 },
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
@@ -51,6 +60,9 @@ class SaveStore {
         settings: { ...base.settings, ...(parsed.settings ?? {}) },
         stars: Array.isArray(parsed.stars) ? parsed.stars : [],
         survivalTop: Array.isArray(parsed.survivalTop) ? parsed.survivalTop : [],
+        coins: Math.max(0, Math.floor(Number(parsed.coins) || 0)),
+        owned: Array.isArray(parsed.owned) && parsed.owned.length ? parsed.owned : ['falcon'],
+        daily: { ...base.daily, ...(parsed.daily ?? {}) },
       };
     } catch {
       return base;
@@ -63,6 +75,24 @@ class SaveStore {
     } catch {
       // приватний режим / заблоковане сховище — гра працює й без збереження
     }
+  }
+
+  owns(id: PlaneId): boolean {
+    return this.data.owned.includes(id);
+  }
+
+  addCoins(n: number): void {
+    this.data.coins += Math.max(0, Math.floor(n));
+    this.save();
+  }
+
+  /** Купівля літака: true, якщо вистачило коінс. */
+  buy(id: PlaneId, price: number): boolean {
+    if (this.owns(id) || this.data.coins < price) return false;
+    this.data.coins -= price;
+    this.data.owned.push(id);
+    this.save();
+    return true;
   }
 
   get bestSurvival(): number {
@@ -96,9 +126,9 @@ class SaveStore {
   }
 
   resetProgress(): void {
+    // коінс і куплені літаки теж скидаються, тож обраний літак повертається на стартовий
     const settings = this.data.settings;
-    const plane = this.data.plane;
-    this.data = { ...defaults(), settings, plane };
+    this.data = { ...defaults(), settings };
     this.save();
   }
 }

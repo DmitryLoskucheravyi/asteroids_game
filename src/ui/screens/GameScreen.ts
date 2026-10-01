@@ -6,8 +6,8 @@ import type { Action } from '../../core/input';
 import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
 import { Game, type GameMode, type GameResult } from '../../game/Game';
+import { levelReward, survivalReward } from '../../game/economy';
 import { MAX_LEVEL } from '../../game/levels';
-import { getPlane, isPlaneUnlocked } from '../../game/planes';
 import { BOOST_DURATION, FREEZE_DURATION } from '../../game/systems/SkillSystem';
 import { Icons, button, h, icon } from '../dom';
 import { Modal } from '../Modal';
@@ -32,6 +32,8 @@ export class GameScreen extends Screen {
   private hudTime!: HTMLElement;
   private hudProgress!: HTMLElement;
   private hudCenter!: HTMLElement;
+  private hudCoins!: HTMLElement;
+  private hudCoinsText!: HTMLElement;
   private slots!: Record<'freeze' | 'boost' | 'jump', SkillSlot>;
   private shieldSlot!: HTMLElement;
   private featSlot!: HTMLElement;
@@ -53,6 +55,8 @@ export class GameScreen extends Screen {
     this.hudTime = h('div', { class: 'hud-time' }, '00:00');
     this.hudProgress = h('i');
     this.hudCenter = h('div', { class: 'hud-center' });
+    this.hudCoinsText = h('span', {}, String(Save.data.coins));
+    this.hudCoins = h('div', { class: 'hud-coins' }, icon(Icons.coin, 'ico coin'), this.hudCoinsText);
 
     const slot = (key: 'freeze' | 'boost' | 'jump', ic: string, hint: string): SkillSlot => {
       const count = h('span', { class: 'sk-count' });
@@ -87,7 +91,7 @@ export class GameScreen extends Screen {
       { class: `game${isTouch() ? ' touch' : ''}` },
       h('div', { class: 'hud-tl' }, h('div', { class: 'hud-label' }, label), this.hudTime, campaign ? h('div', { class: 'hud-bar' }, this.hudProgress) : null),
       this.hudCenter,
-      h('div', { class: 'hud-tr' }, fsBtn, this.pauseBtn),
+      h('div', { class: 'hud-tr' }, this.hudCoins, fsBtn, this.pauseBtn),
       h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el),
       isTouch() ? this.buildJoystick() : null,
     );
@@ -139,8 +143,8 @@ export class GameScreen extends Screen {
 
   onShow(): void {
     const app = this.app;
-    // якщо прогрес скинули, а обраний літак тепер закритий — летимо на стартовому
-    const plane = isPlaneUnlocked(getPlane(Save.data.plane), Save.totalStars) ? Save.data.plane : 'falcon';
+    // якщо прогрес скинули і обраний літак більше не куплений — летимо на стартовому
+    const plane = Save.owns(Save.data.plane) ? Save.data.plane : 'falcon';
     this.game = new Game(this.mode, this.levelId, plane, app.input);
     this.game.resize(app.worldW, app.worldH);
     this.game.onEnd = (r) => setTimeout(() => this.showResult(r), 150);
@@ -230,6 +234,15 @@ export class GameScreen extends Screen {
       this.set(this.hudCenter, `${t('hud.difficulty')} ${g.difficultyStep + 1}  ·  ${t('hud.best')} ${formatTime(Math.max(Save.bestSurvival, g.elapsed))}`);
     }
 
+    const coinsNow = String(Save.data.coins + g.coins);
+    if (this.cache.get(this.hudCoinsText) !== coinsNow && this.cache.has(this.hudCoinsText)) {
+      // коротка анімація при отриманні коінс
+      this.hudCoins.classList.remove('bump');
+      void this.hudCoins.offsetWidth;
+      this.hudCoins.classList.add('bump');
+    }
+    this.set(this.hudCoinsText, coinsNow);
+
     const fz = this.slots.freeze;
     this.set(fz.count, String(sk.freezeCharges));
     fz.el.classList.toggle('empty', sk.freezeCharges === 0 && !sk.isFrozen);
@@ -290,6 +303,30 @@ export class GameScreen extends Screen {
     this.game.start();
   }
 
+  /** Зараховує коінс і повертає блок із розбивкою нагороди та анімованим підсумком. */
+  private rewardBlock(lines: [string, number, string?][]): HTMLElement {
+    const total = lines.reduce((sum, [, n]) => sum + n, 0);
+    Save.addCoins(total);
+    const totalEl = h('span', { class: 'coin-amount' }, '0');
+    const block = h(
+      'div',
+      { class: 'reward' },
+      ...lines
+        .filter(([, n]) => n > 0)
+        .map(([label, n, note]) => h('div', { class: 'reward-line' }, h('span', {}, label, note ? h('small', {}, ` · ${note}`) : null), h('span', { class: 'reward-num' }, `+${n}`))),
+      h('div', { class: 'reward-total' }, h('span', {}, t('reward.total')), h('span', { class: 'coin-badge big' }, icon(Icons.coin, 'ico coin'), totalEl)),
+    );
+    // відлік від 0 до суми
+    const started = performance.now();
+    const tick = (): void => {
+      const k = Math.min(1, (performance.now() - started) / 900);
+      totalEl.textContent = `+${Math.round(total * (1 - Math.pow(1 - k, 3)))}`;
+      if (k < 1 && block.isConnected) requestAnimationFrame(tick);
+    };
+    setTimeout(() => requestAnimationFrame(tick), 300);
+    return block;
+  }
+
   private showResult(r: GameResult): void {
     if (Modal.top()) Modal.closeAll();
     const toLevels = (): void => this.app.show(new LevelSelectScreen(this.app, r.won && r.level < MAX_LEVEL ? r.level + 1 : r.level));
@@ -297,6 +334,10 @@ export class GameScreen extends Screen {
 
     if (r.mode === 'survival') {
       const place = Save.addSurvival(r.time);
+      const reward = this.rewardBlock([
+        [t('reward.survival'), survivalReward(r.time)],
+        [t('reward.crystals'), r.coins],
+      ]);
       new Modal({
         title: t('game.survivalOver'),
         cls: 'result',
@@ -305,6 +346,7 @@ export class GameScreen extends Screen {
           h('div', { class: 'res-big' }, formatTime(r.time)),
           place === 0 ? h('div', { class: 'res-badge' }, icon(Icons.trophy), t('game.newRecord')) : '',
           place > 0 ? h('div', { class: 'muted' }, t('game.place', { n: place + 1 })) : '',
+          reward,
         ],
         actions: [button(t('game.retry'), () => this.restart(), 'btn primary', { 'data-autofocus': true }), button(t('game.toMenu'), toMenu, 'btn')],
       }).open();
@@ -312,7 +354,12 @@ export class GameScreen extends Screen {
     }
 
     if (r.won) {
+      const firstClear = Save.starsFor(r.level) === 0;
       Save.completeLevel(r.level, r.stars, MAX_LEVEL);
+      const reward = this.rewardBlock([
+        [t('reward.level'), levelReward(r.level, r.stars, firstClear), firstClear ? t('reward.first') : undefined],
+        [t('reward.crystals'), r.coins],
+      ]);
       const stars = starsRow(0);
       stars.classList.add('res-stars');
       const last = r.level >= MAX_LEVEL;
@@ -324,6 +371,7 @@ export class GameScreen extends Screen {
           stars,
           h('div', { class: 'res-crystals' }, icon(Icons.crystal), `${t('game.crystals')}: ${r.crystals} / ${r.crystalTarget}`),
           last ? h('p', { class: 'res-final' }, t('game.allDone', { n: MAX_LEVEL })) : '',
+          reward,
         ],
         actions: [
           !last ? button(t('game.nextLevel'), () => this.app.show(new GameScreen(this.app, 'campaign', r.level + 1)), 'btn primary', { 'data-autofocus': true }) : null,
@@ -349,6 +397,8 @@ export class GameScreen extends Screen {
         h('div', { class: 'res-label' }, `${t('levels.level')} ${r.level} · ${levelName(r.level)}`),
         h('div', { class: 'res-sub' }, t('game.lostSub', { t: formatTime(r.time), total: formatTime(r.duration) })),
         h('div', { class: 'res-bar' }, h('i', { style: `width:${pct}%` })),
+        // кристали, зібрані до загибелі, все одно зараховуються
+        r.coins > 0 ? this.rewardBlock([[t('reward.crystals'), r.coins]]) : '',
       ],
       actions: [button(t('game.retry'), () => this.restart(), 'btn primary', { 'data-autofocus': true }), button(t('game.toLevels'), toLevels, 'btn'), button(t('game.toMenu'), toMenu, 'btn')],
     }).open();

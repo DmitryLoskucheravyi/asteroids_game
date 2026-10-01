@@ -3,10 +3,12 @@ import { Sfx } from '../../core/audio';
 import { t } from '../../core/i18n';
 import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
+import { dailyState } from '../../game/economy';
 import { MAX_LEVEL } from '../../game/levels';
 import { getPlane } from '../../game/planes';
 import { toggleFullscreen } from '../../app/App';
-import { Icons, button, h, icon } from '../dom';
+import { openDailyModal } from '../DailyModal';
+import { Icons, button, coinBadge, h, icon } from '../dom';
 import { Screen } from '../Screen';
 import { GameScreen } from './GameScreen';
 import { HangarScreen } from './HangarScreen';
@@ -15,11 +17,31 @@ import { LevelSelectScreen } from './LevelSelectScreen';
 import { RecordsScreen } from './RecordsScreen';
 import { SettingsScreen } from './SettingsScreen';
 
+/** Щоденну нагороду пропонуємо автоматично лише раз за сесію. */
+let dailyOffered = false;
+
 /** Головне меню. */
 export class MainMenuScreen extends Screen {
+  onShow(): void {
+    super.onShow();
+    if (!dailyOffered && dailyState().available) {
+      dailyOffered = true;
+      setTimeout(() => this.openDaily(), 450);
+    }
+  }
+
+  private openDaily(): void {
+    openDailyModal(() => this.render());
+  }
+
   protected build(): HTMLElement {
     const go = (s: Screen) => () => this.app.show(s);
-    const plane = getPlane(Save.data.plane);
+    const plane = getPlane(Save.owns(Save.data.plane) ? Save.data.plane : 'falcon');
+    const daily = dailyState();
+    const dailyBtn = button(icon(Icons.gift), () => this.openDaily(), `icon-btn gift-btn${daily.available ? ' ready' : ''}`, {
+      'aria-label': t('menu.daily'),
+      title: t('menu.daily'),
+    });
     const planeImg = h('img', { class: 'menu-plane', src: Assets.get(plane.sprite).src, alt: '' });
 
     const items: [string, () => void, boolean?][] = [
@@ -43,6 +65,7 @@ export class MainMenuScreen extends Screen {
     return h(
       'div',
       { class: 'menu' },
+      h('div', { class: 'wallet' }, coinBadge(Save.data.coins, 'coin-badge big'), dailyBtn),
       h('div', { class: 'corner-actions' }, soundBtn, button(icon(Icons.fullscreen), toggleFullscreen, 'icon-btn', { 'aria-label': 'fullscreen' })),
       h('div', { class: 'menu-head' }, h('h1', { class: 'logo' }, 'ASTEROIDS'), h('p', { class: 'menu-sub' }, t('menu.subtitle'))),
       h(

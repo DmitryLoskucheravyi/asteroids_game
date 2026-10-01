@@ -75,5 +75,12 @@ export const Icons = {
   boss: svg('<path d="M4 8l4 3 4-6 4 6 4-3-2 11H6z" fill="currentColor" fill-opacity=".3"/>'),
   laser: svg('<path d="M2 12h20" stroke-width="3"/><circle cx="3" cy="12" r="2" fill="currentColor"/><circle cx="21" cy="12" r="2" fill="currentColor"/><path d="M7 7v2M12 6v3M17 7v2M7 15v2M12 15v3M17 15v2" opacity=".6"/>'),
   heart: svg('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" fill="currentColor" fill-opacity=".35"/>'),
+  coin: svg('<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".3"/><circle cx="12" cy="12" r="6"/><path d="M12 9v6"/>'),
+  gift: svg('<rect x="3" y="9" width="18" height="12" rx="2"/><path d="M3 13h18M12 9v12M12 9c-2-4-7-4-6-1 .5 1.5 3 1 6 1zM12 9c2-4 7-4 6-1-.5 1.5-3 1-6 1z"/>'),
   wall: svg('<rect x="2" y="5" width="7" height="5" rx="1"/><rect x="15" y="5" width="7" height="5" rx="1"/><rect x="2" y="14" width="4" height="5" rx="1"/><rect x="11" y="14" width="11" height="5" rx="1"/>'),
 };
+
+/** Бейдж з кількістю коінс. */
+export function coinBadge(amount: number, cls = 'coin-badge'): HTMLElement {
+  return h('span', { class: cls }, icon(Icons.coin, 'ico coin'), h('span', { class: 'coin-amount' }, amount.toLocaleString('uk-UA')));
+}
