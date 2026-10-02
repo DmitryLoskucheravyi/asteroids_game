@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/jwt.js';
+import { touch } from '../presence.js';
 
 export interface AuthedRequest extends Request {
   userId?: string;
@@ -14,5 +15,6 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
     return;
   }
   req.userId = uid;
+  touch(uid);
   next();
 }

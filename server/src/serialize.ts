@@ -10,6 +10,8 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
   return {
     id: user._id.toString(),
     nickname: user.nickname,
+    publicId: user.publicId ?? null,
+    friendRequests: user.friendRequestsIn?.length ?? 0,
     email: user.email,
     coins: user.coins,
     crystals: user.crystals,

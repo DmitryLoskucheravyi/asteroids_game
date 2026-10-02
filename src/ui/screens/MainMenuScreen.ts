@@ -23,6 +23,7 @@ import { GameScreen } from './GameScreen';
 import { HangarScreen } from './HangarScreen';
 import { HowToScreen } from './HowToScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { FriendsScreen } from './FriendsScreen';
 import { ItemsScreen } from './ItemsScreen';
 import { LevelSelectScreen, starsRow } from './LevelSelectScreen';
 import { OnlineScreen } from './OnlineScreen';
@@ -207,6 +208,7 @@ export class MainMenuScreen extends Screen {
         this.railBtn(Icons.trophy, t('menu.quests'), Save.data.quests.length ? `${questsDone} / ${Save.data.quests.length}` : null, go(() => new QuestsScreen(this.app)), questsReady),
         this.railBtn(Icons.star, t('menu.pass'), passReady ? t('menu.passReady', { n: passReady }) : `${Save.data.pass.bpPoints} BP`, go(() => new BattlePassScreen(this.app)), passReady, passReady ? 'ready' : ''),
         this.railBtn(Icons.coin, t('menu.daily'), daily.available ? t('menu.dailyReady') : t('menu.dailyDay', { n: daily.day }), () => this.openDaily(), daily.available ? 1 : 0, daily.available ? 'ready' : ''),
+        this.railBtn(Icons.heart, t('friends.title'), Save.data.friendRequests ? t('friends.requestsN', { n: Save.data.friendRequests }) : Save.data.publicId, go(() => new FriendsScreen(this.app)), Save.data.friendRequests, Save.data.friendRequests ? 'ready' : ''),
         this.railBtn(Icons.gear, t('menu.profile'), t('menu.settings'), go(() => new ProfileScreen(this.app))),
       ),
       h(

@@ -5,6 +5,7 @@ import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/we
 import { getItemDef, type ItemMeta } from '../content/items.js';
 import { PLANE_IDS, planeCombat } from '../content/planes.js';
 import { updateBot } from './bot.js';
+import { setInMatch } from '../presence.js';
 import {
   ROOM_SIZE,
   WORLD_W,
@@ -178,6 +179,7 @@ export class Room {
       this.participants.set(p.id, p);
       this.sockets.set(e.socket.id, e.socket);
       e.socket.join(id);
+      setInMatch(e.userId, true);
     }
 
     while (this.participants.size < roomSize) {
@@ -734,6 +736,7 @@ export class Room {
   removeSocket(socketId: string): void {
     const p = this.participants.get(socketId);
     if (p && this.mode !== 'casual' && !this.ended && p.alive && !p.isBot) void this.penalizeLeaver(p);
+    if (p?.userId) setInMatch(p.userId, false);
     if (p) {
       if (p.alive) p.diedAt = Date.now();
       p.alive = false;
@@ -749,6 +752,7 @@ export class Room {
 
   destroy(): void {
     this.ended = true;
+    for (const p of this.participants.values()) if (p.userId) setInMatch(p.userId, false);
     if (this.tickHandle) clearInterval(this.tickHandle);
     this.participants.clear();
     this.sockets.clear();

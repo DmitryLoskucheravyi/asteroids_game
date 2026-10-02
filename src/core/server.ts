@@ -74,10 +74,30 @@ export interface ServerProfile {
   ownedWeapons: string[];
   ranked?: RankedView;
   stats?: PlayerStats;
+  publicId?: string | null;
+  friendRequests?: number;
   rankedModes?: Record<'solo' | 'duo' | 'trio' | 'squad', RankedView>;
 }
 
 export type PlayerStats = Record<'pvpMatches' | 'pvpWins' | 'pvpTop3' | 'pvpKills' | 'pvpDeaths' | 'pvpDamage' | 'bestKills' | 'cratesOpened' | 'coinsEarned' | 'levelsCompleted' | 'stars' | 'survivalBest', number>;
+
+export interface FriendCard {
+  publicId: string;
+  nickname: string;
+  level: number;
+  plane: string;
+  rankPoints: number;
+  stats: { matches: number; wins: number; kills: number };
+  status: 'match' | 'online' | 'offline';
+  lastLoginAt?: string;
+}
+
+export interface FriendsView {
+  me: { publicId: string };
+  friends: FriendCard[];
+  incoming: FriendCard[];
+  outgoing: FriendCard[];
+}
 
 export interface LeaderboardView {
   by: string;
@@ -168,6 +188,10 @@ export const Server = {
   claimAllPass: () => api.post<{ profile: ServerProfile; total: { coins: number; xp: number; crystals: number; crates: number; tiers: number } }>('/pass/claim-all'),
   buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
 
+  friends: () => api.get<FriendsView>('/friends'),
+  friendsPing: () => api.get<{ ok: boolean }>('/friends/ping'),
+  findPlayer: (publicId: string) => api.get<{ player: FriendCard; relation: 'self' | 'friend' | 'outgoing' | 'incoming' | 'none' }>(`/friends/search/${encodeURIComponent(publicId.replace(/^#/, ''))}`),
+  friendAction: (action: 'request' | 'accept' | 'decline' | 'cancel' | 'remove', publicId: string) => api.post<FriendsView>(`/friends/${action}`, { publicId }),
   leaderboard: (by: string) => api.get<LeaderboardView>(`/leaderboard/${by}`),
   openAllCrates: () => api.post<{ profile: ServerProfile; results: { crateId: string; crateType: CrateType; rewards: CrateReward[] }[] }>('/crates/open-all'),
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; rewards: CrateReward[] }>(`/crates/${crateId}/open`),

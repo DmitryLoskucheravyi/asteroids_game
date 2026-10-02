@@ -226,7 +226,7 @@ export class ProfileScreen extends Screen {
     const pilotCard = h(
       'section',
       { class: 'card profile-head' },
-      h('div', { class: 'profile-id' }, h('span', { class: 'pilot-nick big' }, Save.data.nickname), h('span', { class: 'level-badge' }, t('menu.level', { n: Save.data.level }))),
+      h('div', { class: 'profile-id' }, h('span', { class: 'pilot-nick big' }, Save.data.nickname), h('span', { class: 'level-badge' }, t('menu.level', { n: Save.data.level })), Save.data.publicId ? h('span', { class: 'profile-pid', title: t('friends.myId') }, Save.data.publicId) : null),
       h('div', { class: 'xp-bar' }, h('i', { style: `width:${xpPct}%` })),
       h('small', { class: 'xp-label' }, Save.data.level >= MAX_PILOT_LEVEL ? t('profile.maxLevel') : `${Save.data.xp} / ${xpNeed} XP`),
       this.levelRewards(),

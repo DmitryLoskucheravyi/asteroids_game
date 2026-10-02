@@ -54,6 +54,8 @@ export interface SaveData {
   /** Рейтинг кожного режиму (соло, дуо, тріо, сквад) */
   rankedModes: Partial<Record<'solo' | 'duo' | 'trio' | 'squad', RankedView>>;
   stats: PlayerStats | null;
+  publicId: string | null;
+  friendRequests: number;
   settings: {
     lang: Lang;
     volume: number;
@@ -93,6 +95,8 @@ const defaults = (): SaveData => ({
   ranked: { points: 0, best: 0, matches: 0, wins: 0 },
   rankedModes: {},
   stats: null,
+  publicId: null,
+  friendRequests: 0,
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
@@ -170,6 +174,8 @@ class SaveStore {
       ownedWeapons: p.ownedWeapons,
       ranked: p.ranked ?? { points: 0, best: 0, matches: 0, wins: 0 },
       stats: p.stats ?? null,
+      publicId: p.publicId ?? null,
+      friendRequests: p.friendRequests ?? 0,
       rankedModes: p.rankedModes ?? { solo: p.ranked ?? { points: 0, best: 0, matches: 0, wins: 0 } },
     };
     this.save();

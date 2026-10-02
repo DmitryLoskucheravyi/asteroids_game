@@ -82,6 +82,11 @@ const StatsSchema = new Schema(
 
 const UserSchema = new Schema({
   nickname: { type: String, required: true, unique: true, minlength: 3, maxlength: 20, trim: true },
+  /** Публічний ID гравця для пошуку й друзів: #XXXXXXXXXX */
+  publicId: { type: String, unique: true, sparse: true },
+  friends: { type: [Schema.Types.ObjectId], default: [] },
+  friendRequestsIn: { type: [Schema.Types.ObjectId], default: [] },
+  friendRequestsOut: { type: [Schema.Types.ObjectId], default: [] },
   nicknameLower: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   passwordHash: { type: String, required: true },

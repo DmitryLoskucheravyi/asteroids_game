@@ -4,6 +4,7 @@ import { User } from '../models/User.js';
 import { signToken } from '../utils/jwt.js';
 import { serializeProfile } from '../serialize.js';
 import { ensureQuestSlots } from '../progress.js';
+import { ensurePublicId } from '../publicId.js';
 
 export const authRouter = Router();
 
@@ -35,6 +36,7 @@ authRouter.post('/register', async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await User.create({ nickname, nicknameLower, email: emailLower, passwordHash });
+  await ensurePublicId(user);
   ensureQuestSlots(user);
   await user.save();
 

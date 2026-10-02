@@ -3,6 +3,7 @@ import type { HydratedDocument } from 'mongoose';
 import { User, type UserDoc } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
+import { ensurePublicId } from '../publicId.js';
 import { ensureQuestSlots, incrementQuestProgress, ensureRankSeason, ensureSeason, applyBalanceCompensation, backfillStats } from '../progress.js';
 import { isPlaneId, PLANE_PRICES, MAX_TIER, MAX_LEVEL_IN_TIER, levelUpCost, tierUpCost } from '../content/planes.js';
 
@@ -20,6 +21,7 @@ profileRouter.get('/', async (req: AuthedRequest, res) => {
   ensureRankSeason(user);
   applyBalanceCompensation(user);
   backfillStats(user);
+  await ensurePublicId(user);
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });
