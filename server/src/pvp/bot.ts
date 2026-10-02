@@ -150,7 +150,9 @@ export function updateBot(bot: Participant, others: readonly Participant[], obst
   if (now - bot.lastFlareAt > FLARE_COOLDOWN_MS) {
     const recentlyHit = now - (bot.botLastHitAt ?? 0) < 350;
     const rocketIncoming = projectiles.some((p) => p.ownerId !== bot.id && p.kind === 'rocket' && Math.hypot(p.x - bot.pos.x, p.y - bot.pos.y) < 260);
-    if ((recentlyHit && Math.random() < 0.08) || (rocketIncoming && Math.random() < 0.35)) out.flare = true;
+    // шанси задані на тік 20 Гц — перераховуємо під поточний крок, щоб частота тіків не змінювала поведінку
+    const perTick = (p20: number) => 1 - Math.pow(1 - p20, dt / 0.05);
+    if ((recentlyHit && Math.random() < perTick(0.08)) || (rocketIncoming && Math.random() < perTick(0.35))) out.flare = true;
   }
 
   // ---- стрільба: лише коли ціль у секторі перед носом ----

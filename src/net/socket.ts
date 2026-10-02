@@ -7,6 +7,8 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   if (socket) return socket;
   socket = io({ auth: { token: getToken() }, autoConnect: true, transports: ['websocket', 'polling'] });
+  // для автотестів і діагностики мережі в dev-режимі
+  if (import.meta.env.DEV) (window as unknown as { __sock?: Socket }).__sock = socket;
   return socket;
 }
 

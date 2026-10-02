@@ -123,7 +123,7 @@ export class Room {
   private pickupSeq = 0;
   private lastPickupSpawn = 0;
   private startedAt = Date.now();
-  private tickHandle: ReturnType<typeof setInterval> | null = null;
+  private tickHandle: ReturnType<typeof setTimeout> | null = null;
   private ended = false;
   onClose: () => void = () => {};
   private readonly teamSize: number;
@@ -286,7 +286,27 @@ export class Room {
     this.state = 'active';
     this.startedAt = Date.now();
     this.io.to(this.id).emit('match:start', { startedAt: this.startedAt });
-    this.tickHandle = setInterval(() => this.tick(), TICK_MS);
+    this.nextTickAt = Date.now() + TICK_MS;
+    this.schedule();
+  }
+
+  /**
+   * Рівний такт: setInterval у Node "пливе" (особливо на Windows з точністю таймера ~15 мс),
+   * тому плануємо кожен тік до абсолютного часу й наздоганяємо пропущені (не більше 3 за раз).
+   */
+  private nextTickAt = 0;
+  private schedule(): void {
+    if (this.ended) return;
+    this.tickHandle = setTimeout(() => {
+      let n = 0;
+      while (Date.now() >= this.nextTickAt && n < 3 && !this.ended) {
+        this.tick();
+        this.nextTickAt += TICK_MS;
+        n++;
+      }
+      if (Date.now() > this.nextTickAt + TICK_MS * 3) this.nextTickAt = Date.now() + TICK_MS;
+      this.schedule();
+    }, Math.max(0, this.nextTickAt - Date.now()));
   }
 
   private publicList(now: number): PublicParticipant[] {
@@ -620,7 +640,7 @@ export class Room {
     if (!force && aliveTeams.size > 1 && (realAlive || !this.hasRealPlayers())) return;
     this.ended = true;
     this.state = 'ended';
-    if (this.tickHandle) clearInterval(this.tickHandle);
+    if (this.tickHandle) clearTimeout(this.tickHandle);
 
     // команди: живі — вище (за фрагами й HP), вибулі — за часом вибування (пізніше = краще)
     const teamIds = [...new Set(all.map((p) => p.team))];
@@ -772,7 +792,7 @@ export class Room {
   destroy(): void {
     this.ended = true;
     for (const p of this.participants.values()) if (p.userId) setInMatch(p.userId, false);
-    if (this.tickHandle) clearInterval(this.tickHandle);
+    if (this.tickHandle) clearTimeout(this.tickHandle);
     this.participants.clear();
     this.sockets.clear();
     this.onClose();

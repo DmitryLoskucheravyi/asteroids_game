@@ -8,6 +8,7 @@ import { drawGlow } from './fx';
 import { drawPlane } from './PlaneArt';
 import { PVP_PROGRESS_SCALE, effectivePlaneSpec, getPlane, planeCombat, type PlaneId } from './planes';
 import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from './items';
+import { INTERP_DELAY_MS, ServerClock, SnapshotBuffer } from '../net/interp';
 import { getWeaponDef, DEFAULT_WEAPON_ID, WeaponState, type WeaponDef } from './weapons';
 import { Player } from './entities/Player';
 import { Projectile } from './entities/Projectile';
@@ -17,7 +18,8 @@ import type { Viewport } from './Game';
 import type { HitEvent, MatchInit, MatchResultEntry, Obstacle, PickupTaken, PickupView, PublicParticipant, ShotEvent, SkillEvent, SkillKind } from '../net/pvpProtocol';
 
 const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
-const SEND_EVERY = 0.05;
+/** Свій стан шлемо з частотою тіку сервера (30 Гц) */
+const SEND_EVERY = 1 / 30;
 const HIT_RADIUS = 20;
 const JUMP_DISTANCE = 210;
 const SLOW_MUL = 0.6;
@@ -120,6 +122,10 @@ export class PvpGame {
   private texts: FloatText[] = [];
   private readonly particles = new ParticleSystem();
   private readonly smooth = new Map<string, Smooth>();
+  /** Буфери знімків сервера для чужих літаків + оцінка годинника сервера */
+  private readonly buffers = new Map<string, SnapshotBuffer>();
+  private readonly serverClock = new ServerClock();
+  private delayed: { at: number; fn: () => void }[] = [];
   private readonly listeners: [string, (...a: any[]) => void][] = [];
   private speed = 0;
   private aim = 0;
@@ -165,11 +171,19 @@ export class PvpGame {
       Sfx.countdown(true);
     });
     this.on('match:state', (data: { participants: PublicParticipant[]; t: number }) => {
-      for (const p of data.participants) this.participants.set(p.id, p);
+      this.serverClock.sample(data.t);
+      for (const p of data.participants) {
+        this.participants.set(p.id, p);
+        if (p.id === this.selfId) continue;
+        let buf = this.buffers.get(p.id);
+        if (!buf) this.buffers.set(p.id, (buf = new SnapshotBuffer()));
+        buf.push({ t: data.t, x: p.pos.x, y: p.pos.y, a: p.angle });
+      }
       this.matchTime = data.t / 1000;
     });
-    this.on('match:shot', (s: ShotEvent) => this.onRemoteShot(s));
-    this.on('match:skill', (s: SkillEvent) => this.onRemoteSkill(s));
+    // чужі постріли й навички показуємо з тією ж затримкою, що й самі літаки, — інакше куля вилітає попереду носа
+    this.on('match:shot', (s: ShotEvent) => this.later(() => this.onRemoteShot(s), s.ownerId));
+    this.on('match:skill', (s: SkillEvent) => this.later(() => this.onRemoteSkill(s), s.id));
     this.on('match:hit', (h: HitEvent) => this.onHit(h));
     this.on('match:pickup-spawn', (pk: PickupView) => {
       this.pickups.set(pk.id, pk);
@@ -181,6 +195,19 @@ export class PvpGame {
       this.results = data.results;
       this.onMatchEnd(data.results);
     });
+  }
+
+  /** Подія чужого літака — відкладаємо до моменту, коли він сам буде показаний у цій точці. */
+  private later(fn: () => void, ownerId: string): void {
+    if (ownerId === this.selfId) fn();
+    else this.delayed.push({ at: this.clock + INTERP_DELAY_MS / 1000, fn });
+  }
+
+  private flushDelayed(): void {
+    if (!this.delayed.length || this.delayed[0].at > this.clock) return;
+    const due = this.delayed.filter((d) => d.at <= this.clock);
+    this.delayed = this.delayed.filter((d) => d.at > this.clock);
+    for (const d of due) d.fn();
   }
 
   private on<T>(event: string, fn: (data: T) => void): void {
@@ -495,6 +522,7 @@ export class PvpGame {
       }
     }
 
+    this.flushDelayed();
     this.updateSmooth(dt);
     this.updateProjectiles(dt);
     this.updateMissiles(dt);
@@ -610,8 +638,9 @@ export class PvpGame {
     }
   }
 
+  /** Чужі літаки — інтерполяція між знімками сервера на момент "зараз − INTERP_DELAY_MS". */
   private updateSmooth(dt: number): void {
-    const k = Math.min(1, dt * 14);
+    const renderT = this.serverClock.now() - INTERP_DELAY_MS;
     for (const [id, p] of this.participants) {
       if (id === this.selfId) continue;
       let s = this.smooth.get(id);
@@ -619,15 +648,16 @@ export class PvpGame {
         s = { x: p.pos.x, y: p.pos.y, a: p.angle };
         this.smooth.set(id, s);
       }
-      // далекий стрибок (ривок) — одразу, без "ковзання"
-      if (Math.hypot(p.pos.x - s.x, p.pos.y - s.y) > 300) {
+      const at = this.serverClock.ready ? this.buffers.get(id)?.at(renderT) : null;
+      if (at) {
+        s.x = at.x;
+        s.y = at.y;
+        s.a = at.a;
+      } else {
         s.x = p.pos.x;
         s.y = p.pos.y;
-      } else {
-        s.x += (p.pos.x - s.x) * k;
-        s.y += (p.pos.y - s.y) * k;
+        s.a = p.angle;
       }
-      s.a += angleDiff(s.a, p.angle) * k;
       if (p.alive && this.clock % 0.03 < dt) {
         const spec = getPlane(p.planeId as PlaneId);
         this.particles.emit(s.x - Math.cos(s.a) * 24, s.y - Math.sin(s.a) * 24, { count: 1, speed: [80, 140], angle: s.a + Math.PI, spread: 0.25, life: [0.15, 0.28], size: [3, 5], colors: spec.flame, drag: 3 });

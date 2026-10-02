@@ -25,7 +25,9 @@ export function scaledPlace(teamPlace: number, teams: number): number {
 export const QUEUE_WAIT_MS = 15000;
 export const WORLD_W = 8000;
 export const WORLD_H = 4500;
-export const TICK_MS = 50; // 20Hz
+/** Тік симуляції й розсилки стану: 30 Гц */
+export const TICK_HZ = 30;
+export const TICK_MS = 1000 / TICK_HZ;
 export const COUNTDOWN_MS = 3000;
 export const MATCH_TIME_LIMIT_MS = 4 * 60 * 1000;
 /** Мітка на радарі видима стільки мс після останнього пострілу. */
