@@ -4,7 +4,8 @@ import { verifyToken } from '../utils/jwt.js';
 import { User } from '../models/User.js';
 import { enqueue, dequeue, roomFor, onDisconnect, leaveRoom } from './matchmaking.js';
 import { DEFAULT_WEAPON_ID } from '../content/weapons.js';
-import { ensureRankSeason } from '../progress.js';
+import { ensureRankSeason, getRank } from '../progress.js';
+import { isQueueMode } from './constants.js';
 import type { SkillKind } from './types.js';
 
 export function attachPvp(server: HttpServer): void {
@@ -23,7 +24,9 @@ export function attachPvp(server: HttpServer): void {
 
   io.on('connection', (socket) => {
     socket.on('queue:join', async (data?: { mode?: string }) => {
-      const mode = data?.mode === 'ranked' ? 'ranked' : 'casual';
+      // 'ranked' — старі клієнти, тепер це соло
+      const raw = data?.mode === 'ranked' ? 'solo' : data?.mode;
+      const mode = isQueueMode(raw) ? raw : 'casual';
       const user = await User.findById(socket.data.userId as string);
       if (!user) return;
       ensureRankSeason(user);
@@ -45,7 +48,7 @@ export function attachPvp(server: HttpServer): void {
         level: progress?.level ?? 1,
         activeDefId: defIdOf(loadout?.active),
         passiveDefId: defIdOf(loadout?.passive),
-        rankPoints: user.rankPoints ?? 0,
+        rankPoints: mode === 'casual' ? 0 : getRank(user, mode).points,
       }, mode);
     });
 

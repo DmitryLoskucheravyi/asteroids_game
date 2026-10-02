@@ -195,6 +195,7 @@ export class PvpGame {
   }
 
   private applyInit(data: MatchInit): void {
+    this.teamSize = data.teamSize ?? 1;
     this.worldW = data.world.w;
     this.worldH = data.world.h;
     this.obstacles = data.obstacles;
@@ -231,10 +232,34 @@ export class PvpGame {
     return this.self?.maxHp ?? this.maxHp;
   }
 
+  /** Живих пілотів (соло) або живих команд (командні режими). */
   get aliveCount(): number {
+    if (this.teamSize > 1) return new Set([...this.participants.values()].filter((p) => p.alive).map((p) => p.team)).size;
     let n = 0;
     for (const p of this.participants.values()) if (p.alive) n++;
     return n;
+  }
+
+  /** Розмір команди в цьому матчі (1 — кожен сам за себе). */
+  teamSize = 1;
+
+  get myTeam(): number | undefined {
+    return this.self?.team;
+  }
+
+  /** Тіммейт — не ціль для своїх снарядів і завжди видно на радарі. */
+  isAlly(id: string | null | undefined): boolean {
+    if (!id || this.teamSize <= 1 || id === this.selfId) return false;
+    const p = this.participants.get(id);
+    return !!p && p.team === this.myTeam;
+  }
+
+  /** Чи одна команда в двох учасників (для снарядів, що летять від інших). */
+  private sameTeam(a: string | null | undefined, b: string | null | undefined): boolean {
+    if (!a || !b || this.teamSize <= 1) return false;
+    const pa = this.participants.get(a);
+    const pb = this.participants.get(b);
+    return !!pa && !!pb && pa.team === pb.team;
   }
 
   get timeLeft(): number {
@@ -647,7 +672,7 @@ export class PvpGame {
         continue;
       }
       for (const [id, p] of this.participants) {
-        if (id === this.selfId || !p.alive) continue;
+        if (id === this.selfId || !p.alive || this.isAlly(id)) continue;
         if (this.intercepted(pr.pos, id)) {
           pr.kill();
           break;
@@ -675,7 +700,7 @@ export class PvpGame {
       const ids = [...this.participants.keys()];
       if (this.selfId && !ids.includes(this.selfId)) ids.push(this.selfId);
       for (const id of ids) {
-        if (id === pr.ownerId) continue;
+        if (id === pr.ownerId || this.sameTeam(id, pr.ownerId)) continue;
         const p = id === this.selfId ? null : this.participants.get(id);
         const alive = id === this.selfId ? this.selfAlive : !!p?.alive;
         if (!alive) continue;
@@ -702,7 +727,7 @@ export class PvpGame {
     this.explosion(pr.pos.x, pr.pos.y, 0.7);
     this.ring(pr.pos.x, pr.pos.y, pr.splashRadius, '255,140,80', 0.35);
     for (const [id, p] of this.participants) {
-      if (id === this.selfId || id === directId || !p.alive || p.phase) continue;
+      if (id === this.selfId || id === directId || !p.alive || p.phase || this.isAlly(id)) continue;
       const rp = this.renderPos(id)!;
       if (Math.hypot(pr.pos.x - rp.x, pr.pos.y - rp.y) < pr.splashRadius) this.socket.emit('match:fire-hit', { targetId: id, source: 'splash' });
     }
@@ -715,7 +740,7 @@ export class PvpGame {
       let best: { x: number; y: number } | null = null;
       let bestD = 900;
       for (const [id, p] of this.participants) {
-        if (id === m.ownerId || !p.alive) continue;
+        if (id === m.ownerId || !p.alive || this.sameTeam(id, m.ownerId)) continue;
         const rp = id === this.selfId ? this.player.pos : this.renderPos(id)!;
         const d = Math.hypot(rp.x - m.pos.x, rp.y - m.pos.y);
         if (d < bestD && Math.abs(angleDiff(m.angle, Math.atan2(rp.y - m.pos.y, rp.x - m.pos.x))) < 1.6) {
@@ -735,7 +760,7 @@ export class PvpGame {
         continue;
       }
       for (const [id, p] of this.participants) {
-        if (id === m.ownerId || !p.alive) continue;
+        if (id === m.ownerId || !p.alive || this.sameTeam(id, m.ownerId)) continue;
         if (this.intercepted(m.pos, id)) {
           m.life = 0;
           break;
@@ -779,7 +804,7 @@ export class PvpGame {
     const ids = new Set([...this.participants.keys()]);
     if (this.selfId) ids.add(this.selfId);
     for (const id of ids) {
-      if (id === ownerId) continue;
+      if (id === ownerId || this.sameTeam(id, ownerId)) continue;
       const self = id === this.selfId;
       const p = self ? null : this.participants.get(id);
       if (self ? !this.selfAlive : !p?.alive) continue;
@@ -893,13 +918,14 @@ export class PvpGame {
   }
 
   /** Мітки на радарі: чужі кораблі видно лише поки стріляють (і трохи після). */
-  radarContacts(): { id: string; x: number; y: number; isSelf: boolean }[] {
+  radarContacts(): { id: string; x: number; y: number; isSelf: boolean; ally?: boolean }[] {
     const now = Date.now();
-    const out: { id: string; x: number; y: number; isSelf: boolean }[] = [];
+    const out: { id: string; x: number; y: number; isSelf: boolean; ally?: boolean }[] = [];
     if (this.selfId && this.selfAlive) out.push({ id: this.selfId, x: this.player.pos.x, y: this.player.pos.y, isSelf: true });
     for (const [id, p] of this.participants) {
       if (id === this.selfId || !p.alive) continue;
-      if (p.firing || now - p.lastFiredAt < RADAR_VISIBLE_AFTER_FIRE_MS) out.push({ id, x: p.pos.x, y: p.pos.y, isSelf: false });
+      if (this.isAlly(id)) out.push({ id, x: p.pos.x, y: p.pos.y, isSelf: false, ally: true });
+      else if (p.firing || now - p.lastFiredAt < RADAR_VISIBLE_AFTER_FIRE_MS) out.push({ id, x: p.pos.x, y: p.pos.y, isSelf: false });
     }
     return out;
   }
@@ -1173,13 +1199,21 @@ export class PvpGame {
     const pct = Math.max(0, p.hp / p.maxHp);
     ctx.fillStyle = 'rgba(10,9,24,0.8)';
     ctx.fillRect(x - 26, y - 44, 52, 6);
-    ctx.fillStyle = pct > 0.4 ? '#ff6a6a' : '#ff2a4a';
+    const ally = this.isAlly(p.id);
+    ctx.fillStyle = ally ? '#4fe08a' : pct > 0.4 ? '#ff6a6a' : '#ff2a4a';
     ctx.fillRect(x - 25, y - 43, 50 * pct, 4);
+    if (ally) {
+      ctx.strokeStyle = 'rgba(79,224,138,0.55)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, 34, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.font = '600 12px Bungee, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(10,9,24,0.9)';
     ctx.fillText(p.nickname, x + 1, y - 50);
-    ctx.fillStyle = '#ffb3b3';
+    ctx.fillStyle = ally ? '#a8ffc8' : '#ffb3b3';
     ctx.fillText(p.nickname, x, y - 51);
     if (p.lootCoins || p.lootCrystals) {
       ctx.font = '600 11px Bungee, sans-serif';

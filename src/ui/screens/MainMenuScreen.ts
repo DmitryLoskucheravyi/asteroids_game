@@ -38,7 +38,10 @@ const MODES: Record<PlayMode, { name: TKey; desc: TKey; icon: string }> = {
   campaign: { name: 'menu.campaign', desc: 'mode.campaignDesc', icon: Icons.star },
   survival: { name: 'menu.survival', desc: 'mode.survivalDesc', icon: Icons.clock },
   casual: { name: 'online.casual', desc: 'mode.casualDesc', icon: Icons.homing },
-  ranked: { name: 'online.ranked', desc: 'mode.rankedDesc', icon: Icons.trophy },
+  solo: { name: 'mode.solo', desc: 'mode.soloDesc', icon: Icons.trophy },
+  duo: { name: 'mode.duo', desc: 'mode.duoDesc', icon: Icons.trophy },
+  trio: { name: 'mode.trio', desc: 'mode.trioDesc', icon: Icons.trophy },
+  squad: { name: 'mode.squad', desc: 'mode.squadDesc', icon: Icons.trophy },
 };
 
 /**
@@ -125,9 +128,9 @@ export class MainMenuScreen extends Screen {
   }
 
   private modeIcon(mode: PlayMode): HTMLElement {
-    if (mode === 'ranked') {
-      const rk = rankInfo(Save.data.ranked.points);
-      return h('span', { class: 'mode-ico rank', html: rankEmblem(rk.id, rk.roman) });
+    if (mode === 'solo' || mode === 'duo' || mode === 'trio' || mode === 'squad') {
+      const rk = rankInfo(Save.rank(mode).points);
+      return h('span', { class: 'mode-ico rank', html: rankEmblem(rk.id, rk.roman, mode) });
     }
     return icon(MODES[mode].icon, `ico mode-ico ${mode}`);
   }
@@ -167,7 +170,7 @@ export class MainMenuScreen extends Screen {
     const questsReady = Save.data.quests.filter((q) => !q.claimed && q.progress >= q.target).length;
     const questsDone = Save.data.quests.filter((q) => q.claimed).length;
     const passReady = Save.data.pass.claimable ?? 0;
-    const mode = MODES[Save.data.settings.playMode] ? Save.data.settings.playMode : 'campaign';
+    const mode: PlayMode = MODES[Save.data.settings.playMode] ? Save.data.settings.playMode : 'campaign';
 
     const soundBtn = button(icon(Save.data.settings.volume > 0 ? Icons.sound : Icons.mute), () => {
       const s = Save.data.settings;

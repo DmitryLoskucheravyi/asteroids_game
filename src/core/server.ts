@@ -74,6 +74,7 @@ export interface ServerProfile {
   ownedWeapons: string[];
   ranked?: RankedView;
   stats?: PlayerStats;
+  rankedModes?: Record<'solo' | 'duo' | 'trio' | 'squad', RankedView>;
 }
 
 export type PlayerStats = Record<'pvpMatches' | 'pvpWins' | 'pvpTop3' | 'pvpKills' | 'pvpDeaths' | 'pvpDamage' | 'bestKills' | 'cratesOpened' | 'coinsEarned' | 'levelsCompleted' | 'stars' | 'survivalBest', number>;

@@ -13,6 +13,9 @@ leaderboardRouter.use(requireAuth);
 const BOARDS: Record<string, { value: unknown; minMatches?: number }> = {
   wins: { value: '$stats.pvpWins' },
   rank: { value: '$rankPoints' },
+  rankDuo: { value: '$teamRanks.duo.points' },
+  rankTrio: { value: '$teamRanks.trio.points' },
+  rankSquad: { value: '$teamRanks.squad.points' },
   kills: { value: '$stats.pvpKills' },
   kd: { value: { $round: [{ $divide: ['$stats.pvpKills', { $max: [1, '$stats.pvpDeaths'] }] }, 2] }, minMatches: 5 },
   winrate: { value: { $round: [{ $multiply: [100, { $divide: ['$stats.pvpWins', { $max: [1, '$stats.pvpMatches'] }] }] }, 1] }, minMatches: 10 },
@@ -44,9 +47,9 @@ leaderboardRouter.get('/:by', async (req: AuthedRequest, res) => {
     ...base,
     { $sort: { value: -1, _id: 1 } },
     { $limit: LIMIT },
-    { $project: { nickname: 1, level: 1, rankPoints: 1, value: 1, selectedPlane: 1 } },
+    { $project: { nickname: 1, level: 1, rankPoints: 1, teamRanks: 1, value: 1, selectedPlane: 1 } },
   ]);
-  const top = rows.map((r, i) => ({ place: i + 1, id: String(r._id), nickname: r.nickname, level: r.level, rankPoints: r.rankPoints ?? 0, plane: r.selectedPlane, value: r.value }));
+  const top = rows.map((r, i) => ({ place: i + 1, id: String(r._id), nickname: r.nickname, level: r.level, rankPoints: (req.params.by === 'rankDuo' ? r.teamRanks?.duo?.points : req.params.by === 'rankTrio' ? r.teamRanks?.trio?.points : req.params.by === 'rankSquad' ? r.teamRanks?.squad?.points : r.rankPoints) ?? 0, plane: r.selectedPlane, value: r.value }));
 
   // моє місце — навіть якщо я не в топі
   let me: { place: number | null; value: number } = { place: null, value: 0 };

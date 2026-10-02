@@ -7,7 +7,10 @@ import { Save } from '../../core/storage';
 import { itemSvg, weaponSvg } from '../../game/ItemArt';
 import { planeIconUrl } from '../../game/PlaneArt';
 import type { PlaneId } from '../../game/planes';
-import { rankEmblem, rankInfo } from '../../game/ranks';
+import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
+
+/** Кольори команд (смужка на картці, імена тіммейтів у бою — завжди зелені). */
+const TEAM_COLORS = ['#58d2ff', '#ff6a6a', '#ffd24a', '#b77bff', '#4fe08a'];
 import { PvpGame } from '../../game/PvpGame';
 import { BOOST_DURATION, FLARE_DURATION } from '../../game/systems/SkillSystem';
 import type { MatchInit, MatchResultEntry } from '../../net/pvpProtocol';
@@ -108,7 +111,7 @@ export class PvpScreen extends Screen {
         h('img', { class: 'pvp-avatar', src: planeIconUrl(plane, progress.tier, progress.level), alt: '' }),
         h('div', { class: 'pvp-self-info' }, h('div', { class: 'pvp-nick' }, Save.data.nickname || t(`plane.${plane}` as TKey)), h('div', { class: 'hp-bar' }, h('div', { class: 'hp-track' }, this.hpFill), this.hpText)),
       ),
-      h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t('pvp.alive') }, icon(Icons.heart, 'ico'), this.alive)), h('div', { class: 'pvp-loot', title: t('pvp.lootHint') }, h('span', { class: 'pvp-chip loot-coin' }, icon(Icons.coin, 'ico'), this.lootCoins), h('span', { class: 'pvp-chip loot-crystal' }, icon(Icons.crystal, 'ico'), this.lootCrystals))),
+      h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t((this.initData.teamSize ?? 1) > 1 ? 'pvp.teamsAlive' : 'pvp.alive') }, icon(Icons.heart, 'ico'), this.alive)), h('div', { class: 'pvp-loot', title: t('pvp.lootHint') }, h('span', { class: 'pvp-chip loot-coin' }, icon(Icons.coin, 'ico'), this.lootCoins), h('span', { class: 'pvp-chip loot-crystal' }, icon(Icons.crystal, 'ico'), this.lootCrystals))),
       h('div', { class: 'pvp-kills', title: t('matchresult.kills') }, h('span', { class: 'pvp-kills-ico', html: Icons.boss }), this.kills, h('small', {}, t('pvp.killsLabel'))),
       h('div', { class: 'hud-tr' }, leaveBtn),
       this.feed,
@@ -224,24 +227,29 @@ export class PvpScreen extends Screen {
    */
   private loadingScreen(): HTMLElement {
     const init = this.initData;
-    const ranked = init.mode === 'ranked';
+    const ranked = !!init.mode && init.mode !== 'casual';
+    const teamSize = init.teamSize ?? 1;
+    const myTeam = init.participants.find((p) => p.id === this.socket.id)?.team ?? -1;
+    // у командних режимах — картки згруповані за командами, моя команда першою
+    const list = teamSize > 1 ? [...init.participants].sort((a, b) => (a.team === myTeam ? -1 : 0) - (b.team === myTeam ? -1 : 0) || (a.team ?? 0) - (b.team ?? 0)) : init.participants;
     const selfId = this.socket.id;
     const tips: TKey[] = ['pvp.tip1', 'pvp.tip2', 'pvp.tip3', 'pvp.tip4', 'pvp.tip5'];
-    const cards = init.participants.map((p, i) => {
+    const cards = list.map((p, i) => {
       const rk = ranked ? rankInfo(p.rankPoints ?? 0) : null;
       return h(
         'div',
-        { class: `load-card${p.id === selfId ? ' self' : ''}`, style: `--i:${i}` },
+        { class: `load-card${p.id === selfId ? ' self' : ''}${teamSize > 1 && p.team === myTeam ? ' ally' : ''}`, style: `--i:${i};--team:${TEAM_COLORS[(p.team ?? 0) % TEAM_COLORS.length]}` },
+        teamSize > 1 ? h('span', { class: 'load-team' }, p.team === myTeam ? t('pvp.yourTeam') : t('pvp.team', { n: (p.team ?? 0) + 1 })) : null,
         h('img', { class: 'load-plane', src: planeIconUrl(p.planeId as PlaneId, p.tier ?? 1, p.level ?? 1), alt: '' }),
         h('b', { class: 'load-nick' }, p.nickname),
-        h('span', { class: 'load-meta' }, rk ? h('span', { class: 'load-rank', html: rankEmblem(rk.id, rk.roman), title: `${t(rk.nameKey)} ${rk.roman}` }) : null, h('span', { class: 'tier-chip' }, `${t('planes.tier')} ${p.tier ?? 1}`)),
+        h('span', { class: 'load-meta' }, rk ? h('span', { class: 'load-rank', html: rankEmblem(rk.id, rk.roman, init.mode as RankMode), title: `${t(rk.nameKey)} ${rk.roman}` }) : null, h('span', { class: 'tier-chip' }, `${t('planes.tier')} ${p.tier ?? 1}`)),
       );
     });
     return h(
       'div',
       { class: `pvp-loading${ranked ? ' ranked' : ''}`, style: `--count:${init.countdownMs}ms` },
-      h('div', { class: 'load-head' }, h('small', {}, t(ranked ? 'online.ranked' : 'online.casual')), h('h2', {}, t('pvp.matchFound'))),
-      h('div', { class: 'load-grid' }, ...cards),
+      h('div', { class: 'load-head' }, h('small', {}, ranked ? `${t('online.ranked')} · ${t(`mode.${init.mode}` as TKey)}` : t('online.casual')), h('h2', {}, t('pvp.matchFound'))),
+      h('div', { class: `load-grid${teamSize > 1 ? ` teams t${teamSize}` : ''}` }, ...cards),
       h('div', { class: 'load-foot' }, h('div', { class: 'load-bar' }, h('i')), h('span', { class: 'load-status' }, t('pvp.preparing')), h('p', { class: 'load-tip' }, t(tips[Math.floor(Math.random() * tips.length)]))),
     );
   }
@@ -337,9 +345,9 @@ export class PvpScreen extends Screen {
       ctx.fillRect(pk.x * sx - 3, pk.y * sy - 3, 6, 6);
     }
     for (const c of g.radarContacts()) {
-      ctx.fillStyle = c.isSelf ? '#58d2ff' : `rgba(255,74,90,${pulse})`;
+      ctx.fillStyle = c.isSelf ? '#58d2ff' : c.ally ? '#4fe08a' : `rgba(255,74,90,${pulse})`;
       ctx.beginPath();
-      ctx.arc(c.x * sx, c.y * sy, c.isSelf ? 4 : 5, 0, Math.PI * 2);
+      ctx.arc(c.x * sx, c.y * sy, c.isSelf || c.ally ? 4 : 5, 0, Math.PI * 2);
       ctx.fill();
     }
   }

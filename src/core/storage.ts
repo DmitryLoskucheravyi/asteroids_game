@@ -51,6 +51,8 @@ export interface SaveData {
   loadouts: Loadout[];
   ownedWeapons: string[];
   ranked: RankedView;
+  /** Рейтинг кожного режиму (соло, дуо, тріо, сквад) */
+  rankedModes: Partial<Record<'solo' | 'duo' | 'trio' | 'squad', RankedView>>;
   stats: PlayerStats | null;
   settings: {
     lang: Lang;
@@ -61,7 +63,7 @@ export interface SaveData {
   };
 }
 
-export type PlayMode = 'campaign' | 'survival' | 'casual' | 'ranked';
+export type PlayMode = 'campaign' | 'survival' | 'casual' | 'solo' | 'duo' | 'trio' | 'squad';
 
 const KEY = 'asteroids.save.v3';
 /** Ключ попередньої, доакаунтної версії — звідси одноразово мігруємо прогрес при реєстрації. */
@@ -89,6 +91,7 @@ const defaults = (): SaveData => ({
   loadouts: [],
   ownedWeapons: ['machine_gun'],
   ranked: { points: 0, best: 0, matches: 0, wins: 0 },
+  rankedModes: {},
   stats: null,
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
@@ -111,7 +114,7 @@ class SaveStore {
       return {
         ...base,
         ...parsed,
-        settings: { ...base.settings, ...(parsed.settings ?? {}) },
+        settings: { ...base.settings, ...(parsed.settings ?? {}), ...((parsed.settings as { playMode?: string } | undefined)?.playMode === 'ranked' ? { playMode: 'solo' as const } : {}) },
         stars: Array.isArray(parsed.stars) ? parsed.stars : [],
         survivalTop: Array.isArray(parsed.survivalTop) ? parsed.survivalTop : [],
         coins: Math.max(0, Math.floor(Number(parsed.coins) || 0)),
@@ -127,6 +130,7 @@ class SaveStore {
         loadouts: Array.isArray(parsed.loadouts) ? parsed.loadouts : [],
         ownedWeapons: Array.isArray(parsed.ownedWeapons) && parsed.ownedWeapons.length ? parsed.ownedWeapons : ['machine_gun'],
         ranked: { ...base.ranked, ...(parsed.ranked ?? {}) },
+        rankedModes: parsed.rankedModes ?? {},
       };
     } catch {
       return base;
@@ -166,6 +170,7 @@ class SaveStore {
       ownedWeapons: p.ownedWeapons,
       ranked: p.ranked ?? { points: 0, best: 0, matches: 0, wins: 0 },
       stats: p.stats ?? null,
+      rankedModes: p.rankedModes ?? { solo: p.ranked ?? { points: 0, best: 0, matches: 0, wins: 0 } },
     };
     this.save();
   }
@@ -224,6 +229,11 @@ class SaveStore {
 
   loadoutFor(id: PlaneId): Loadout {
     return this.data.loadouts.find((l) => l.planeId === id) ?? { planeId: id, active: null, passive: null, weapon: null };
+  }
+
+  /** Рейтинг режиму (соло — з основного профілю). */
+  rank(mode: 'solo' | 'duo' | 'trio' | 'squad'): RankedView {
+    return this.data.rankedModes[mode] ?? (mode === 'solo' ? this.data.ranked : { points: 0, best: 0, matches: 0, wins: 0 });
   }
 
   ownsWeapon(id: string): boolean {

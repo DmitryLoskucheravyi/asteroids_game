@@ -1,17 +1,16 @@
 import type { Server as IOServer, Socket } from 'socket.io';
 import { Room, type Entrant } from './room.js';
-import { ROOM_SIZE, QUEUE_WAIT_MS } from './constants.js';
-import type { MatchMode } from './types.js';
+import { MODE_SPEC, QUEUE_WAIT_MS, type QueueMode } from './constants.js';
 
 type QueueEntry = Entrant;
 
-const queues: Record<MatchMode, QueueEntry[]> = { casual: [], ranked: [] };
-const waitTimers: Record<MatchMode, ReturnType<typeof setTimeout> | null> = { casual: null, ranked: null };
+const queues: Record<QueueMode, QueueEntry[]> = { casual: [], solo: [], duo: [], trio: [], squad: [] };
+const waitTimers: Record<QueueMode, ReturnType<typeof setTimeout> | null> = { casual: null, solo: null, duo: null, trio: null, squad: null };
 const rooms = new Map<string, Room>();
 const socketRoom = new Map<string, string>();
 let roomSeq = 0;
 
-function startRoom(io: IOServer, mode: MatchMode): void {
+function startRoom(io: IOServer, mode: QueueMode): void {
   const timer = waitTimers[mode];
   if (timer) {
     clearTimeout(timer);
@@ -19,8 +18,8 @@ function startRoom(io: IOServer, mode: MatchMode): void {
   }
   const queue = queues[mode];
   // у рейтинговому — групуємо гравців близького рейтингу
-  if (mode === 'ranked') queue.sort((x, y) => x.rankPoints - y.rankPoints);
-  const entrants = queue.splice(0, ROOM_SIZE);
+  if (mode !== 'casual') queue.sort((x, y) => x.rankPoints - y.rankPoints);
+  const entrants = queue.splice(0, MODE_SPEC[mode].roomSize);
   if (!entrants.length) return;
   const id = `room-${++roomSeq}`;
   const room = new Room(id, io, entrants, mode);
@@ -30,12 +29,12 @@ function startRoom(io: IOServer, mode: MatchMode): void {
   if (queue.length && !waitTimers[mode]) waitTimers[mode] = setTimeout(() => startRoom(io, mode), QUEUE_WAIT_MS);
 }
 
-export function enqueue(io: IOServer, entry: QueueEntry, mode: MatchMode): void {
-  if (queues.casual.some((e) => e.socket.id === entry.socket.id) || queues.ranked.some((e) => e.socket.id === entry.socket.id) || socketRoom.has(entry.socket.id)) return;
+export function enqueue(io: IOServer, entry: QueueEntry, mode: QueueMode): void {
+  if (Object.values(queues).some((q) => q.some((e) => e.socket.id === entry.socket.id)) || socketRoom.has(entry.socket.id)) return;
   const queue = queues[mode];
   queue.push(entry);
   entry.socket.emit('queue:joined', { position: queue.length, mode });
-  if (queue.length >= ROOM_SIZE) {
+  if (queue.length >= MODE_SPEC[mode].roomSize) {
     startRoom(io, mode);
     return;
   }

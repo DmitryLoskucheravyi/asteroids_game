@@ -5,7 +5,7 @@ import { getItemDef } from '../../game/items';
 import { itemSvg, weaponSvg } from '../../game/ItemArt';
 import { planeIconUrl } from '../../game/PlaneArt';
 import { getPlane } from '../../game/planes';
-import { DIVISIONS, RANK_IDS, RP_PER_DIVISION, rankEmblem, rankInfo } from '../../game/ranks';
+import { DIVISIONS, RANK_IDS, RANK_MODES, RP_PER_DIVISION, rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 import { getWeaponDef } from '../../game/weapons';
 import { getSocket } from '../../net/socket';
 import type { MatchInit } from '../../net/pvpProtocol';
@@ -15,7 +15,7 @@ import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 import { PvpScreen } from './PvpScreen';
 
-type Mode = 'casual' | 'ranked';
+type Mode = 'casual' | RankMode;
 
 /** Онлайн: вибір режиму (звичайний / рейтинговий), ранг і сітка рангів, лоадаут, пошук матчу. */
 export class OnlineScreen extends Screen {
@@ -30,7 +30,7 @@ export class OnlineScreen extends Screen {
 
   private modeTab(mode: Mode, ic: string, labelKey: TKey, subKey: TKey): HTMLElement {
     return button(
-      h('span', { class: 'mode-inner' }, icon(ic, 'ico'), h('span', { class: 'mode-text' }, h('b', {}, t(labelKey)), h('small', {}, t(subKey)))),
+      h('span', { class: 'mode-inner' }, ic.includes('viewBox="0 0 64 64"') ? h('span', { class: 'mode-emblem', html: ic }) : icon(ic, 'ico'), h('span', { class: 'mode-text' }, h('b', {}, t(labelKey)), h('small', {}, t(subKey)))),
       () => {
         if (this.searching) return;
         this.mode = mode;
@@ -43,16 +43,19 @@ export class OnlineScreen extends Screen {
   }
 
   private rankCard(): HTMLElement {
-    const rk = Save.data.ranked;
+    const mode = this.mode as RankMode;
+    const rk = Save.rank(mode);
+    const seasonEndsAt = Save.data.ranked.seasonEndsAt;
     const info = rankInfo(rk.points);
     const best = rankInfo(rk.best);
     return h(
       'section',
       { class: `card rank-card rank-${info.id}` },
-      h('div', { class: 'rank-emblem big', html: rankEmblem(info.id, info.roman) }),
+      h('div', { class: 'rank-emblem big', html: rankEmblem(info.id, info.roman, mode) }),
       h(
         'div',
         { class: 'rank-main' },
+        h('small', { class: 'rank-mode' }, t(`mode.${mode}` as TKey)),
         h('h3', {}, `${t(info.nameKey)} ${info.roman}`),
         h('div', { class: 'rank-progress' }, h('i', { style: `width:${Math.round(info.progress * 100)}%` })),
         h('span', { class: 'muted small' }, info.top ? t('rank.top', { n: rk.points }) : t('rank.toNext', { n: RP_PER_DIVISION - info.inDivision, rp: rk.points })),
@@ -63,7 +66,7 @@ export class OnlineScreen extends Screen {
           h('span', {}, t('rank.wins'), h('b', {}, String(rk.wins))),
           h('span', {}, t('rank.best'), h('b', {}, `${t(best.nameKey)} ${best.roman}`)),
         ),
-        rk.seasonEndsAt ? h('span', { class: 'rank-season' }, t('rank.seasonEnds', { d: new Date(rk.seasonEndsAt).toLocaleDateString('uk-UA') })) : null,
+        seasonEndsAt ? h('span', { class: 'rank-season' }, t('rank.seasonEnds', { d: new Date(seasonEndsAt).toLocaleDateString('uk-UA') })) : null,
         rk.lastSeason
           ? (() => {
               const last = rankInfo(rk.lastSeason.points);
@@ -76,7 +79,8 @@ export class OnlineScreen extends Screen {
 
   /** Сітка рангів: 7 стовпців по 5 підрівнів, поточний підсвічено, пройдені — заповнені. */
   private ladder(): HTMLElement {
-    const cur = rankInfo(Save.data.ranked.points);
+    const mode = this.mode as RankMode;
+    const cur = rankInfo(Save.rank(mode).points);
     return h(
       'section',
       { class: 'card rank-ladder' },
@@ -88,7 +92,7 @@ export class OnlineScreen extends Screen {
           h(
             'div',
             { class: `ladder-col rank-${id}${r === cur.rankIndex ? ' current' : ''}${r < cur.rankIndex ? ' passed' : ''}` },
-            h('div', { class: 'rank-emblem', html: rankEmblem(id) }),
+            h('div', { class: 'rank-emblem', html: rankEmblem(id, null, mode) }),
             h('span', { class: 'ladder-name' }, t(`rank.${id}` as TKey)),
             h(
               'div',
@@ -143,19 +147,27 @@ export class OnlineScreen extends Screen {
   }
 
   protected build(): HTMLElement {
-    const ranked = this.mode === 'ranked';
+    const ranked = this.mode !== 'casual';
     return h(
       'div',
       { class: 'page online' },
       screenHeader(t('online.title'), () => this.onBack()),
-      h('div', { class: 'mode-tabs' }, this.modeTab('casual', Icons.homing, 'online.casual', 'online.casualSub'), this.modeTab('ranked', Icons.trophy, 'online.ranked', 'online.rankedSub')),
+      h(
+        'div',
+        { class: 'mode-tabs five' },
+        this.modeTab('casual', Icons.homing, 'online.casual', 'online.casualSub'),
+        ...RANK_MODES.map((m) => {
+          const r = rankInfo(Save.rank(m).points);
+          return this.modeTab(m, rankEmblem(r.id, r.roman, m), `mode.${m}` as TKey, `mode.${m}Sub` as TKey);
+        }),
+      ),
       h('div', { class: `online-layout${ranked ? ' ranked' : ''}` }, h('div', { class: 'online-col' }, ranked ? this.rankCard() : null, this.loadoutCard()), ranked ? this.ladder() : h('section', { class: 'card' }, h('p', { class: 'muted' }, t('online.subtitle')))),
       h(
         'div',
         { class: 'online-action' },
         this.searching
-          ? h('div', { class: 'searching' }, h('span', { class: 'spinner' }), t(ranked ? 'online.searchingRanked' : 'online.searching'), button(t('online.cancel'), () => this.cancelSearch(), 'btn danger'))
-          : button(t(ranked ? 'online.searchRanked' : 'online.search'), () => this.startSearch(), `launch-btn main online-go${ranked ? ' ranked' : ''}`, { 'data-autofocus': true }),
+          ? h('div', { class: 'searching' }, h('span', { class: 'spinner' }), ranked ? t('online.searchingMode', { m: t(`mode.${this.mode}` as TKey) }) : t('online.searching'), button(t('online.cancel'), () => this.cancelSearch(), 'btn danger'))
+          : button(ranked ? t('online.searchMode', { m: t(`mode.${this.mode}` as TKey) }) : t('online.search'), () => this.startSearch(), `launch-btn main online-go${ranked ? ' ranked' : ''}`, { 'data-autofocus': true }),
       ),
     );
   }

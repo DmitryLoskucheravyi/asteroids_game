@@ -1,4 +1,25 @@
 export const ROOM_SIZE = 10;
+
+/** Черги: звичайний FFA і чотири рейтингові режими, кожен зі своїм рейтингом. */
+export type QueueMode = 'casual' | 'solo' | 'duo' | 'trio' | 'squad';
+export type RankMode = Exclude<QueueMode, 'casual'>;
+export const RANK_MODES: readonly RankMode[] = ['solo', 'duo', 'trio', 'squad'];
+export const isQueueMode = (m: unknown): m is QueueMode => m === 'casual' || (RANK_MODES as readonly unknown[]).includes(m);
+
+/** Розмір команди й кімнати для кожного режиму. */
+export const MODE_SPEC: Record<QueueMode, { teamSize: number; roomSize: number }> = {
+  casual: { teamSize: 1, roomSize: 10 },
+  solo: { teamSize: 1, roomSize: 10 },
+  duo: { teamSize: 2, roomSize: 10 },
+  trio: { teamSize: 3, roomSize: 12 },
+  squad: { teamSize: 4, roomSize: 16 },
+};
+
+/** Місце команди → еквівалент у шкалі 10 місць (для нагород і RP однаковою таблицею). */
+export function scaledPlace(teamPlace: number, teams: number): number {
+  if (teams <= 1) return 1;
+  return Math.round(1 + ((teamPlace - 1) * (ROOM_SIZE - 1)) / (teams - 1));
+}
 export const QUEUE_WAIT_MS = 15000;
 export const WORLD_W = 8000;
 export const WORLD_H = 4500;

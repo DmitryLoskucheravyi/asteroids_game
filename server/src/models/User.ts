@@ -49,6 +49,18 @@ const LoadoutSchema = new Schema(
   { _id: false },
 );
 
+/** Рейтинг одного командного режиму (соло зберігається в rankPoints/rankBest/... як і раніше). */
+const RankStateSchema = new Schema(
+  {
+    points: { type: Number, default: 0 },
+    best: { type: Number, default: 0 },
+    matches: { type: Number, default: 0 },
+    wins: { type: Number, default: 0 },
+    lastSeason: { type: Schema.Types.Mixed, default: null },
+  },
+  { _id: false },
+);
+
 /** Накопичена статистика гравця — для таблиць лідерів. */
 const StatsSchema = new Schema(
   {
@@ -109,6 +121,11 @@ const UserSchema = new Schema({
   rankedMatches: { type: Number, default: 0 },
   rankedWins: { type: Number, default: 0 },
   rankSeasonId: { type: String, default: '' },
+  teamRanks: {
+    duo: { type: RankStateSchema, default: () => ({}) },
+    trio: { type: RankStateSchema, default: () => ({}) },
+    squad: { type: RankStateSchema, default: () => ({}) },
+  },
   /** Підсумок минулого сезону рейтингу (для показу нагороди) */
   rankLastSeason: { type: Schema.Types.Mixed, default: null },
   /** Одноразова компенсація за перебалансування предметів (v2) */

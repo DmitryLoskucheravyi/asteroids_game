@@ -1,6 +1,6 @@
 import type { Server as IOServer, Socket } from 'socket.io';
 import { User } from '../models/User.js';
-import { grantReward, addBp, ensureQuestSlots, incrementQuestProgress } from '../progress.js';
+import { grantReward, addBp, ensureQuestSlots, incrementQuestProgress, getRank, setRank } from '../progress.js';
 import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/weapons.js';
 import { getItemDef, type ItemMeta } from '../content/items.js';
 import { PLANE_IDS, planeCombat } from '../content/planes.js';
@@ -17,6 +17,10 @@ import {
   FLARE_DURATION_MS,
   FLARE_RADIUS,
   matchReward,
+  MODE_SPEC,
+  scaledPlace,
+  type QueueMode,
+  type RankMode,
   rollPlaceCrate,
   PICKUP_START,
   PICKUP_MAX,
@@ -26,7 +30,7 @@ import {
 } from './constants.js';
 import type { CrateType } from '../content/crates.js';
 import { botStrength, rankDelta } from '../content/ranks.js';
-import type { MatchMode, Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind, Pickup } from './types.js';
+import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind, Pickup } from './types.js';
 
 const BOT_NAMES = ['Вихор', 'Корсар', 'Немезида', 'Беркут', 'Скорпіон', 'Фантом-7', 'Ренегат', 'Сокира'];
 let botSeq = 0;
@@ -99,6 +103,9 @@ function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'ni
     shots: 0,
     travelled: 0,
     damageDealt: 0,
+    team: 0,
+    teamPlace: null,
+    diedAt: 0,
   };
 }
 
@@ -116,17 +123,35 @@ export class Room {
   private tickHandle: ReturnType<typeof setInterval> | null = null;
   private ended = false;
   onClose: () => void = () => {};
+  private readonly teamSize: number;
+  private readonly teams: number;
+  private teamSpawns: { x: number; y: number }[] = [];
 
   constructor(
     id: string,
     private readonly io: IOServer,
     entrants: Entrant[],
-    readonly mode: MatchMode = 'casual',
+    readonly mode: QueueMode = 'casual',
   ) {
     this.id = id;
+    const { teamSize, roomSize } = MODE_SPEC[mode];
+    this.teamSize = teamSize;
+    this.teams = roomSize / teamSize;
     const avgRp = entrants.reduce((s, e) => s + e.rankPoints, 0) / Math.max(1, entrants.length);
-    const botLevel = mode === 'ranked' ? botStrength(avgRp) : null;
+    const botLevel = mode !== 'casual' ? botStrength(avgRp) : null;
     this.obstacles = makeObstacles();
+    // точки збору команд — рівномірно по колу арени, тіммейти спавняться поруч
+    this.teamSpawns = Array.from({ length: this.teams }, (_, i) => {
+      const a = (i / this.teams) * Math.PI * 2 + Math.random() * 0.4;
+      return { x: WORLD_W / 2 + Math.cos(a) * WORLD_W * 0.36, y: WORLD_H / 2 + Math.sin(a) * WORLD_H * 0.36 };
+    });
+    let slot = 0;
+    // гравців розкидаємо по різних командах (перші місця в кожній), боти добирають решту
+    const nextTeam = (): number => {
+      const team = this.teamSize === 1 ? slot : slot % this.teams;
+      slot++;
+      return team;
+    };
 
     for (const e of entrants) {
       const active = e.activeDefId ? getItemDef(e.activeDefId) ?? null : null;
@@ -144,15 +169,18 @@ export class Room {
         },
         active?.slot === 'active' ? active : null,
         passive?.slot === 'passive' ? passive : null,
-        this.spawnPos(),
+        { x: 0, y: 0 },
       );
+      p.team = nextTeam();
+      p.pos = this.spawnFor(p.team);
+      p.angle = Math.atan2(WORLD_H / 2 - p.pos.y, WORLD_W / 2 - p.pos.x);
       p.rankPoints = e.rankPoints;
       this.participants.set(p.id, p);
       this.sockets.set(e.socket.id, e.socket);
       e.socket.join(id);
     }
 
-    while (this.participants.size < ROOM_SIZE) {
+    while (this.participants.size < roomSize) {
       const botId = `bot-${++botSeq}`;
       const p = makeParticipant(
         {
@@ -171,12 +199,15 @@ export class Room {
         },
         Math.random() < 0.35 ? getItemDef('nano_repair')! : null,
         null,
-        this.spawnPos(),
+        { x: 0, y: 0 },
       );
+      p.team = nextTeam();
+      p.pos = this.spawnFor(p.team);
+      p.angle = Math.atan2(WORLD_H / 2 - p.pos.y, WORLD_W / 2 - p.pos.x);
       p.botState = 'patrol';
       p.botTimer = 0;
       // у рейтинговому бот має правдоподібний рейтинг поруч із гравцями (для емблеми на екрані завантаження)
-      if (mode === 'ranked') p.rankPoints = Math.max(0, Math.round(avgRp + (Math.random() - 0.5) * 300));
+      if (mode !== 'casual') p.rankPoints = Math.max(0, Math.round(avgRp + (Math.random() - 0.5) * 300));
       this.participants.set(botId, p);
     }
 
@@ -189,11 +220,27 @@ export class Room {
       participants: this.publicList(Date.now()),
       countdownMs: COUNTDOWN_MS,
       mode,
+      teamSize: this.teamSize,
       timeLimitMs: MATCH_TIME_LIMIT_MS,
       pickups: [...this.pickups.values()],
     });
 
     setTimeout(() => this.begin(), COUNTDOWN_MS);
+  }
+
+  /** Спавн біля точки збору команди, але не в перешкоді. */
+  private spawnFor(team: number): { x: number; y: number } {
+    if (this.teamSize === 1) return this.spawnPos();
+    const c = this.teamSpawns[team];
+    for (let i = 0; i < 20; i++) {
+      const pos = { x: Math.max(80, Math.min(WORLD_W - 80, c.x + (Math.random() - 0.5) * 300)), y: Math.max(80, Math.min(WORLD_H - 80, c.y + (Math.random() - 0.5) * 300)) };
+      if (this.obstacles.every((o) => Math.hypot(pos.x - o.x, pos.y - o.y) > o.r + 40)) return pos;
+    }
+    return { ...c };
+  }
+
+  private sameTeam(a: Participant, b: Participant): boolean {
+    return this.teamSize > 1 && a.team === b.team;
   }
 
   /** Спавн подалі від перешкод та інших учасників. */
@@ -243,6 +290,7 @@ export class Room {
       lootCoins: p.lootCoins,
       lootCrystals: p.lootCrystals,
       rankPoints: p.rankPoints,
+      team: p.team,
     }));
   }
 
@@ -322,7 +370,7 @@ export class Room {
     if (this.state !== 'active') return;
     const attacker = this.participants.get(attackerId);
     const target = this.participants.get(targetId);
-    if (!attacker || !target || !attacker.alive || !target.alive || attacker === target) return;
+    if (!attacker || !target || !attacker.alive || !target.alive || attacker === target || this.sameTeam(attacker, target)) return;
     const now = Date.now();
     if (Math.hypot(attacker.pos.x - target.pos.x, attacker.pos.y - target.pos.y) > 1500) return;
 
@@ -378,7 +426,7 @@ export class Room {
           const radius = a.radius ?? 250;
           const until = now + (a.duration ?? 2.5) * 1000;
           for (const o of this.participants.values()) {
-            if (o === p || !o.alive) continue;
+            if (o === p || !o.alive || this.sameTeam(o, p)) continue;
             if (Math.hypot(o.pos.x - p.pos.x, o.pos.y - p.pos.y) >= radius) continue;
             o.slowUntil = until;
             if (a.power) this.applyDamage(p, o, a.power * p.damageMul, now);
@@ -394,7 +442,7 @@ export class Room {
   }
 
   private applyDamage(attacker: Participant, target: Participant, damage: number, now: number): void {
-    if (!target.alive || now < target.phaseUntil) return;
+    if (!target.alive || now < target.phaseUntil || this.sameTeam(attacker, target)) return;
     // під час пасток кулі й ракети збиваються (з невеликим допуском на затримку мережі)
     if (now < target.flareUntil - 80) return;
     // одне влучання не знімає більше половини максимального HP — ваншот неможливий
@@ -405,6 +453,7 @@ export class Room {
     const died = target.hp <= 0;
     if (died) {
       target.alive = false;
+      target.diedAt = now;
       target.firing = false;
       attacker.kills++;
       this.dropLoot(target);
@@ -457,7 +506,7 @@ export class Room {
     }
     const now = Date.now();
     for (const p of this.participants.values()) {
-      if (p === bot || !p.alive || now < p.phaseUntil) continue;
+      if (p === bot || !p.alive || now < p.phaseUntil || this.sameTeam(p, bot)) continue;
       const d = rayHit(p.pos.x, p.pos.y, HIT_RADIUS);
       if (d !== null && d < best) {
         best = d;
@@ -483,7 +532,8 @@ export class Room {
       }
       if (!dead) {
         for (const p of list) {
-          if (!p.alive || p.id === pr.ownerId) continue;
+          const owner = this.participants.get(pr.ownerId);
+          if (!p.alive || p.id === pr.ownerId || (owner && this.sameTeam(owner, p))) continue;
           const d = segDist(pr.x, pr.y, nx, ny, p.pos.x, p.pos.y);
           if (now < p.flareUntil && d < FLARE_RADIUS) {
             dead = true;
@@ -525,7 +575,8 @@ export class Room {
     const list = [...this.participants.values()];
     for (const p of list) {
       if (!p.isBot || !p.alive) continue;
-      const actions = updateBot(p, list, this.obstacles, this.projectiles, this.pickups.values(), dt, now);
+      const foes = this.teamSize > 1 ? list.filter((o) => o.team !== p.team) : list;
+      const actions = updateBot(p, foes, this.obstacles, this.projectiles, this.pickups.values(), dt, now);
       for (const a of actions.shots) this.spawnBotShot(p, a);
       if (actions.flare) this.useSkill(p, 'flare', now, p.angle);
       if (p.activeItem?.active?.kind === 'nanoRepair' && p.hp < p.maxHp * 0.5) this.useSkill(p, 'nanoRepair', now, p.angle);
@@ -541,19 +592,37 @@ export class Room {
 
   private checkEnd(force = false): void {
     if (this.ended) return;
-    const alive = [...this.participants.values()].filter((p) => p.alive);
+    const all = [...this.participants.values()];
+    const alive = all.filter((p) => p.alive);
+    const aliveTeams = new Set(alive.map((p) => p.team));
     const realAlive = alive.some((p) => !p.isBot);
-    if (!force && alive.length > 1 && (realAlive || !this.hasRealPlayers())) return;
+    if (!force && aliveTeams.size > 1 && (realAlive || !this.hasRealPlayers())) return;
     this.ended = true;
     this.state = 'ended';
     if (this.tickHandle) clearInterval(this.tickHandle);
 
-    const ranked = [...this.participants.values()].sort((a, b) => {
-      if (a.alive !== b.alive) return a.alive ? -1 : 1;
-      if (b.kills !== a.kills) return b.kills - a.kills;
-      return b.hp - a.hp;
+    // команди: живі — вище (за фрагами й HP), вибулі — за часом вибування (пізніше = краще)
+    const teamIds = [...new Set(all.map((p) => p.team))];
+    const teamInfo = teamIds.map((team) => {
+      const members = all.filter((p) => p.team === team);
+      const aliveN = members.filter((p) => p.alive).length;
+      return {
+        team,
+        aliveN,
+        kills: members.reduce((s, p) => s + p.kills, 0),
+        hp: members.reduce((s, p) => s + (p.alive ? p.hp : 0), 0),
+        out: aliveN ? Infinity : Math.max(...members.map((p) => p.diedAt)),
+      };
     });
-    ranked.forEach((p, i) => (p.place = i + 1));
+    teamInfo.sort((x, y) => (x.aliveN > 0 ? 1 : 0) !== (y.aliveN > 0 ? 1 : 0) ? (y.aliveN > 0 ? 1 : 0) - (x.aliveN > 0 ? 1 : 0) : x.aliveN > 0 ? y.kills - x.kills || y.hp - x.hp : y.out - x.out || y.kills - x.kills);
+    const teamPlace = new Map(teamInfo.map((t, i) => [t.team, i + 1]));
+    for (const p of all) {
+      p.teamPlace = teamPlace.get(p.team)!;
+      // для нагород і RP — місце команди в шкалі 10 місць
+      p.place = scaledPlace(p.teamPlace, this.teams);
+    }
+    const ranked = [...all].sort((x, y) => x.teamPlace! - y.teamPlace! || y.kills - x.kills);
+    const winners = ranked.filter((p) => p.teamPlace === 1);
 
     // увесь вантаж, що лишився на борту живих, забирає лише переможець
     const jackpot = { coins: 0, crystals: 0 };
@@ -562,20 +631,22 @@ export class Room {
       jackpot.coins += p.lootCoins;
       jackpot.crystals += p.lootCrystals;
     }
+    // у командних режимах переможці ділять лут порівну
+    const share = { coins: Math.floor(jackpot.coins / Math.max(1, winners.length)), crystals: Math.floor(jackpot.crystals / Math.max(1, winners.length)) };
     // ящик розігрується один раз на гравця — і для нарахування, і для екрана результатів
     const crates = new Map(ranked.map((p) => [p.id, rollPlaceCrate(p.place!)]));
     const rewardOf = (p: Participant) => {
-      const base = matchReward(p.place!, p.kills, this.mode === 'ranked');
+      const base = matchReward(p.place!, p.kills, this.mode !== 'casual');
       const idle = isIdle(p);
       const crate = crates.get(p.id) ?? null;
-      const won = p.place === 1;
+      const won = p.teamPlace === 1;
       // досвід пілота: за місце й фраги
       const xp = 30 + p.kills * 8 + Math.max(0, ROOM_SIZE + 1 - p.place!) * 6;
-      return { coins: (idle ? Math.round(base.coins * 0.5) : base.coins) + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, xp, crate };
+      return { coins: (idle ? Math.round(base.coins * 0.5) : base.coins) + (won ? share.coins : 0), crystals: won ? share.crystals : 0, bpXp: base.bpXp, xp, crate };
     };
 
     const rankOf = (p: Participant) => {
-      if (this.mode !== 'ranked' || p.isBot) return null;
+      if (this.mode === 'casual' || p.isBot) return null;
       // бездіяльний гравець отримує RP як за останнє місце
       const delta = rankDelta(isIdle(p) ? ROOM_SIZE : p.place!, p.kills, p.rankPoints);
       return { before: p.rankPoints, after: Math.max(0, p.rankPoints + delta), delta };
@@ -593,7 +664,9 @@ export class Room {
         kills: p.kills,
         isBot: p.isBot,
         reward: { coins: r.coins, crystals: r.crystals, crate: r.crate, xp: r.xp, bp: r.bpXp },
-        jackpot: p.place === 1 ? jackpot : { coins: 0, crystals: 0 },
+        jackpot: p.teamPlace === 1 ? share : { coins: 0, crystals: 0 },
+        team: p.team,
+        teamPlace: p.teamPlace!,
         rank: rankOf(p),
       };
     });
@@ -618,21 +691,20 @@ export class Room {
         incrementQuestProgress(user, 'pvpMatches', 1);
         incrementQuestProgress(user, 'pvpKills', p.kills);
         if (p.place! <= 3) incrementQuestProgress(user, 'pvpTop3', 1);
-        if (p.place === 1) incrementQuestProgress(user, 'pvpWins', 1);
+        if (p.teamPlace === 1) incrementQuestProgress(user, 'pvpWins', 1);
         const st = user.stats!;
         st.pvpMatches += 1;
         st.pvpKills += p.kills;
         st.pvpDamage += Math.round(p.damageDealt);
         st.bestKills = Math.max(st.bestKills, p.kills);
-        if (p.place === 1) st.pvpWins += 1;
+        if (p.teamPlace === 1) st.pvpWins += 1;
         if (p.place! <= 3) st.pvpTop3 += 1;
         if (!p.alive) st.pvpDeaths += 1;
         const rank = rankOf(p);
         if (rank) {
-          user.rankPoints = rank.after;
-          user.rankBest = Math.max(user.rankBest ?? 0, rank.after);
-          user.rankedMatches = (user.rankedMatches ?? 0) + 1;
-          if (p.place === 1) user.rankedWins = (user.rankedWins ?? 0) + 1;
+          const mode = this.mode as RankMode;
+          const cur = getRank(user, mode);
+          setRank(user, mode, { ...cur, points: rank.after, best: Math.max(cur.best, rank.after), matches: cur.matches + 1, wins: cur.wins + (p.teamPlace === 1 ? 1 : 0) });
         }
         await user.save();
       } catch {
@@ -647,8 +719,9 @@ export class Room {
     try {
       const user = await User.findById(p.userId);
       if (!user) return;
-      user.rankPoints = Math.max(0, (user.rankPoints ?? 0) + rankDelta(ROOM_SIZE, p.kills, p.rankPoints));
-      user.rankedMatches = (user.rankedMatches ?? 0) + 1;
+      const mode = this.mode as RankMode;
+      const cur = getRank(user, mode);
+      setRank(user, mode, { ...cur, points: Math.max(0, cur.points + rankDelta(ROOM_SIZE, p.kills, p.rankPoints)), matches: cur.matches + 1 });
       user.stats!.pvpMatches += 1;
       user.stats!.pvpDeaths += 1;
       user.stats!.pvpKills += p.kills;
@@ -660,8 +733,9 @@ export class Room {
 
   removeSocket(socketId: string): void {
     const p = this.participants.get(socketId);
-    if (p && this.mode === 'ranked' && !this.ended && p.alive && !p.isBot) void this.penalizeLeaver(p);
+    if (p && this.mode !== 'casual' && !this.ended && p.alive && !p.isBot) void this.penalizeLeaver(p);
     if (p) {
+      if (p.alive) p.diedAt = Date.now();
       p.alive = false;
       p.firing = false;
     }

@@ -5,13 +5,13 @@ import { Server, type LeaderboardView } from '../../core/server';
 import { Save } from '../../core/storage';
 import { planeIconUrl } from '../../game/PlaneArt';
 import type { PlaneId } from '../../game/planes';
-import { rankEmblem, rankInfo } from '../../game/ranks';
+import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 import { Icons, button, h, icon } from '../dom';
 import { Screen } from '../Screen';
 import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
-type Board = 'wins' | 'rank' | 'kills' | 'kd' | 'winrate' | 'top3' | 'matches' | 'bestKills' | 'damage' | 'level' | 'survival' | 'stars' | 'coins' | 'crates';
+type Board = 'wins' | 'rank' | 'rankDuo' | 'rankTrio' | 'rankSquad' | 'kills' | 'kd' | 'winrate' | 'top3' | 'matches' | 'bestKills' | 'damage' | 'level' | 'survival' | 'stars' | 'coins' | 'crates';
 
 /** Категорії, згруповані за змістом: PvP, рейтинг, прогрес. */
 const GROUPS: { title: TKey; boards: { id: Board; icon: string }[] }[] = [
@@ -28,7 +28,15 @@ const GROUPS: { title: TKey; boards: { id: Board; icon: string }[] }[] = [
       { id: 'matches', icon: Icons.clock },
     ],
   },
-  { title: 'lb.groupRanked', boards: [{ id: 'rank', icon: Icons.star }] },
+  {
+    title: 'lb.groupRanked',
+    boards: [
+      { id: 'rank', icon: Icons.star },
+      { id: 'rankDuo', icon: Icons.star },
+      { id: 'rankTrio', icon: Icons.star },
+      { id: 'rankSquad', icon: Icons.star },
+    ],
+  },
   {
     title: 'lb.groupProgress',
     boards: [
@@ -72,6 +80,11 @@ export class LeaderboardScreen extends Screen {
     }
   }
 
+  /** Режим, чию іконку рангу показувати в рядках. */
+  private get rankMode(): RankMode {
+    return this.board === 'rankDuo' ? 'duo' : this.board === 'rankTrio' ? 'trio' : this.board === 'rankSquad' ? 'squad' : 'solo';
+  }
+
   /** Значення в читабельному вигляді для кожної категорії. */
   private format(board: Board, value: number): string {
     switch (board) {
@@ -83,7 +96,10 @@ export class LeaderboardScreen extends Screen {
         return formatTime(value);
       case 'level':
         return `${Math.floor(value / 100000)}`;
-      case 'rank': {
+      case 'rank':
+      case 'rankDuo':
+      case 'rankTrio':
+      case 'rankSquad': {
         const r = rankInfo(value);
         return `${t(r.nameKey)} ${r.roman} · ${value} RP`;
       }
@@ -100,7 +116,7 @@ export class LeaderboardScreen extends Screen {
       h('span', { class: 'lb-place' }, place === 1 ? icon(Icons.trophy, 'ico') : place ? `#${place}` : '—'),
       plane ? h('img', { class: 'lb-plane', src: planeIconUrl(plane as PlaneId), alt: '' }) : h('span', {}),
       h('span', { class: 'lb-name' }, h('b', {}, nickname), h('small', {}, `${t('lb.level')} ${level}`)),
-      h('span', { class: 'lb-rank', html: rankEmblem(rk.id, rk.roman), title: `${t(rk.nameKey)} ${rk.roman}` }),
+      h('span', { class: 'lb-rank', html: rankEmblem(rk.id, rk.roman, this.rankMode), title: `${t(rk.nameKey)} ${rk.roman}` }),
       h('span', { class: 'lb-value' }, this.format(this.board, value)),
     );
   }
@@ -137,7 +153,7 @@ export class LeaderboardScreen extends Screen {
         { class: 'lb-list' },
         ...d.top.map((r) => this.row(r.place, r.nickname, r.plane, r.rankPoints, r.level, r.value, r.nickname === Save.data.nickname)),
         !meInTop ? h('div', { class: 'lb-sep' }, '···') : null,
-        !meInTop ? this.row(d.me.place, Save.data.nickname, Save.data.plane, Save.data.ranked.points, Save.data.level, d.me.value, true) : null,
+        !meInTop ? this.row(d.me.place, Save.data.nickname, Save.data.plane, Save.rank(this.rankMode).points, Save.data.level, d.me.value, true) : null,
       );
 
     return h(

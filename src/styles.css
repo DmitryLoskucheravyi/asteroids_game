@@ -7611,3 +7611,83 @@ input[type='range'] {
     flex-wrap: wrap;
   }
 }
+
+
+/* ===================== командні режими ===================== */
+
+.mode-tabs.five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.mode-emblem {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+.mode-emblem svg {
+  width: 100%;
+  height: 100%;
+}
+
+.rank-mode {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--burn-2);
+}
+
+.load-grid.teams.t3,
+.load-grid.teams.t4 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.load-grid.teams.t4 {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.load-card {
+  position: relative;
+  border-top: 3px solid var(--team, transparent);
+}
+
+.load-grid:not(.teams) .load-card {
+  border-top-color: transparent;
+}
+
+.load-card.ally {
+  box-shadow:
+    inset 0 0 0 2px #4fe08a,
+    inset 0 -4px 0 #4fe08a;
+}
+
+.load-team {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--team);
+}
+
+.load-card.ally .load-team {
+  color: #4fe08a;
+}
+
+.mr-row.ally {
+  background: rgba(79, 224, 138, 0.1);
+  box-shadow: inset 3px 0 0 #4fe08a;
+}
+
+.mr-team-note {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1100px) {
+  .mode-tabs.five {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .load-grid.teams.t4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

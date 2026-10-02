@@ -5,7 +5,7 @@ import { t, type TKey } from '../../core/i18n';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
 import { crate3d } from '../../game/CrateArt';
-import { rankEmblem, rankInfo } from '../../game/ranks';
+import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 import type { MatchResultEntry } from '../../net/pvpProtocol';
 import { Icons, button, h, icon } from '../dom';
 import { Screen } from '../Screen';
@@ -51,13 +51,28 @@ export class MatchResultScreen extends Screen {
     return this.results.some((r) => r.rank);
   }
 
+  /** Режим матчу: рейтинговий режим визначаємо за розміром команд. */
+  private get mode(): 'casual' | RankMode {
+    if (!this.ranked) return 'casual';
+    const me = this.me;
+    const size = me ? this.results.filter((r) => r.team === me.team).length : 1;
+    return size >= 4 ? 'squad' : size === 3 ? 'trio' : size === 2 ? 'duo' : 'solo';
+  }
+
+  private get teamSize(): number {
+    const me = this.me;
+    return me && me.team !== undefined ? this.results.filter((r) => r.team === me.team).length : 1;
+  }
+
   private gainRow(cls: string, ic: HTMLElement, label: string, value: HTMLElement, extra: HTMLElement | null = null): HTMLElement {
     return h('div', { class: `mr-gain ${cls} pending` }, h('span', { class: 'mr-gain-ico' }, ic), h('span', { class: 'mr-gain-label' }, label), value, extra);
   }
 
   protected build(): HTMLElement {
     const me = this.me;
-    const place = me?.place ?? this.results.length;
+    const team = this.teamSize > 1;
+    // у командних режимах показуємо місце команди
+    const place = (team ? me?.teamPlace : me?.place) ?? this.results.length;
     const title = place === 1 ? t('matchresult.victory') : place <= 3 ? t('matchresult.top3') : t('matchresult.placeN', { n: place });
 
     const standings = h(
@@ -66,10 +81,12 @@ export class MatchResultScreen extends Screen {
       h('h3', {}, icon(Icons.trophy, 'ico'), t('matchresult.standings')),
       ...this.results.map((r, i) => {
         const self = r.id === this.socket.id;
+        const pl = this.teamSize > 1 ? r.teamPlace ?? r.place : r.place;
+        const ally = this.teamSize > 1 && me && r.team === me.team;
         return h(
           'div',
-          { class: `mr-row${self ? ' self' : ''}${r.place === 1 ? ' winner' : ''}`, style: `--i:${i}` },
-          h('span', { class: 'mr-row-place' }, r.place === 1 ? icon(Icons.trophy, 'ico gold') : `#${r.place}`),
+          { class: `mr-row${self ? ' self' : ''}${ally && !self ? ' ally' : ''}${pl === 1 ? ' winner' : ''}`, style: `--i:${i}` },
+          h('span', { class: 'mr-row-place' }, pl === 1 ? icon(Icons.trophy, 'ico gold') : `#${pl}`),
           h('span', { class: 'mr-row-name' }, self ? `${r.nickname} · ${t('matchresult.you')}` : r.nickname),
           h('span', { class: 'mr-row-kills' }, icon(Icons.boss, 'ico'), String(r.kills)),
         );
@@ -86,7 +103,7 @@ export class MatchResultScreen extends Screen {
         gains.push(
           this.gainRow(
             'rank',
-            h('span', { class: 'mr-rank-emblem', html: rankEmblem(before.id, before.roman) }),
+            h('span', { class: 'mr-rank-emblem', html: rankEmblem(before.id, before.roman, this.mode === 'casual' ? 'solo' : this.mode) }),
             `${t(before.nameKey)} ${before.roman}`,
             h('b', { class: `mr-num ${me.rank.delta >= 0 ? 'rp-up' : 'rp-down'}` }, `${me.rank.before} RP`),
             h('span', { class: 'mr-rank-bar' }, h('i', { style: `width:${Math.round(before.progress * 100)}%` })),
@@ -118,9 +135,10 @@ export class MatchResultScreen extends Screen {
         h(
           'div',
           { class: 'mr-hero pending' },
-          h('small', {}, t(this.ranked ? 'online.ranked' : 'online.casual')),
+          h('small', {}, this.ranked ? `${t('online.ranked')} · ${t(`mode.${this.mode}` as TKey)}` : t('online.casual')),
           h('div', { class: 'mr-place' }, place === 1 ? icon(Icons.trophy, 'ico') : null, h('span', {}, place === 1 ? '1' : `#${place}`)),
           h('h2', {}, title),
+          team ? h('small', { class: 'mr-team-note' }, t('matchresult.teamPlace')) : null,
           h('div', { class: 'mr-kills pending' }, icon(Icons.boss, 'ico'), h('b', { class: 'mr-num', 'data-to': String(me?.kills ?? 0), 'data-prefix': '' }, '0'), h('span', {}, t('pvp.killsLabel'))),
         ),
         h('div', { class: 'mr-gains' }, ...gains),
@@ -128,7 +146,7 @@ export class MatchResultScreen extends Screen {
         h(
           'div',
           { class: 'mr-actions pending' },
-          button(h('span', { class: 'launch-inner' }, icon(Icons.play), h('b', {}, t('matchresult.again'))), () => this.app.show(new OnlineScreen(this.app, this.ranked ? 'ranked' : 'casual')), 'launch-btn main', { 'data-autofocus': true }),
+          button(h('span', { class: 'launch-inner' }, icon(Icons.play), h('b', {}, t('matchresult.again'))), () => this.app.show(new OnlineScreen(this.app, this.mode)), 'launch-btn main', { 'data-autofocus': true }),
           button(h('span', { class: 'launch-inner' }, icon(Icons.back), h('b', {}, t('matchresult.exit'))), () => this.app.show(new MainMenuScreen(this.app)), 'launch-btn'),
         ),
       ),
@@ -193,7 +211,7 @@ export class MatchResultScreen extends Screen {
       return `${v} RP (${r.delta >= 0 ? '+' : ''}${r.delta})`;
     });
     if (after.index !== before.index) {
-      emblem.innerHTML = rankEmblem(after.id, after.roman);
+      emblem.innerHTML = rankEmblem(after.id, after.roman, this.mode === 'casual' ? 'solo' : this.mode);
       label.textContent = `${t(after.nameKey)} ${after.roman}`;
       const up = after.index > before.index;
       row.classList.add(up ? 'promoted' : 'demoted');

@@ -33,6 +33,8 @@ export interface PublicParticipant {
   lootCoins: number;
   lootCrystals: number;
   rankPoints?: number;
+  /** Команда (у соло кожен сам собі команда) */
+  team?: number;
 }
 
 export interface PickupView {
@@ -58,7 +60,8 @@ export interface MatchInit {
   participants: PublicParticipant[];
   countdownMs: number;
   timeLimitMs: number;
-  mode?: 'casual' | 'ranked';
+  mode?: 'casual' | 'solo' | 'duo' | 'trio' | 'squad';
+  teamSize?: number;
   pickups: PickupView[];
 }
 
@@ -93,6 +96,8 @@ export interface MatchResultEntry {
   reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null; xp?: number; bp?: number };
   jackpot: { coins: number; crystals: number };
   rank: { before: number; after: number; delta: number } | null;
+  team?: number;
+  teamPlace?: number;
   id: string;
   userId: string | null;
   nickname: string;

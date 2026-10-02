@@ -4,6 +4,11 @@ import type { TKey } from '../core/i18n';
 export const RANK_IDS = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'master', 'galaxy'] as const;
 export type RankId = (typeof RANK_IDS)[number];
 export const RP_PER_DIVISION = 100;
+
+/** Рейтингові режими: кожен має окремий рейтинг за тією ж системою, але свою іконку. */
+export type RankMode = 'solo' | 'duo' | 'trio' | 'squad';
+export const RANK_MODES: readonly RankMode[] = ['solo', 'duo', 'trio', 'squad'];
+export const TEAM_SIZE: Record<RankMode, number> = { solo: 1, duo: 2, trio: 3, squad: 4 };
 export const DIVISIONS = 5;
 const MAX_INDEX = RANK_IDS.length * DIVISIONS - 1;
 const ROMAN = ['V', 'IV', 'III', 'II', 'I'];
@@ -58,7 +63,7 @@ export function rankInfo(rp: number): RankInfo {
  * Емблема рангу (SVG): гранований щит кольору рангу; з Платини з'являються крила,
  * з Майстра — корона, у Галактики — зоряна туманність усередині. Римська цифра — підрівень.
  */
-export function rankEmblem(id: RankId, roman: string | null = null): string {
+export function rankEmblem(id: RankId, roman: string | null = null, mode: RankMode = 'solo'): string {
   const [hi, lo] = RANK_COLORS[id];
   const idx = RANK_IDS.indexOf(id);
   const gid = `rg-${id}`;
@@ -74,6 +79,18 @@ export function rankEmblem(id: RankId, roman: string | null = null): string {
       ? `<circle cx="32" cy="34" r="11" fill="url(#${gid}-neb)"/><circle cx="27" cy="30" r="1.3" fill="#fff"/><circle cx="37" cy="37" r="1" fill="#fff"/><circle cx="34" cy="28" r="0.8" fill="#fff"/>
          <path d="M22 36c6-6 14-6 20-2" stroke="#fff" stroke-width="1" fill="none" opacity=".7"/>`
       : `<path d="M32 22l3.5 7.5 8 .8-6 5.4 1.8 7.8L32 39.6l-7.3 3.9 1.8-7.8-6-5.4 8-.8z" fill="#fff" opacity=".85"/>`;
+  // силует режиму: дуо — щит позаду, тріо — два щити, сквад — чотирипроменева зірка; знизу — позначки розміру команди
+  const shield = (dx: number, rot: number) => `<path transform="rotate(${rot} 32 32) translate(${dx} 0)" d="M32 10 46 16v15c0 8-6 14-14 17-8-3-14-9-14-17V16z" fill="${lo}" stroke="#0b0a18" stroke-width="2" opacity=".85"/>`;
+  const back =
+    mode === 'duo'
+      ? shield(9, 12)
+      : mode === 'trio'
+        ? shield(-10, -14) + shield(10, 14)
+        : mode === 'squad'
+          ? `<path d="M32 1 39 25 63 32 39 39 32 63 25 39 1 32 25 25z" fill="${lo}" stroke="#0b0a18" stroke-width="2" opacity=".9"/>`
+          : '';
+  const n = TEAM_SIZE[mode];
+  const pips = n > 1 ? Array.from({ length: n }, (_, i) => `<rect x="${32 - n * 3.5 + i * 7 + 1}" y="49" width="5" height="5" fill="${hi}" stroke="#0b0a18" stroke-width="1.2"/>`).join('') : '';
   const label = roman
     ? `<text x="32" y="60" text-anchor="middle" font-family="Unbounded, sans-serif" font-weight="800" font-size="11" fill="#fff" stroke="#0b0a18" stroke-width="3" paint-order="stroke">${roman}</text>`
     : '';
@@ -82,11 +99,13 @@ export function rankEmblem(id: RankId, roman: string | null = null): string {
       <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
       <radialGradient id="${gid}-neb"><stop offset="0" stop-color="#ffd0f4"/><stop offset=".5" stop-color="#9a4aff"/><stop offset="1" stop-color="#1a0a4a"/></radialGradient>
     </defs>
+    ${back}
     ${wings}
     <path d="M32 8 50 16v18c0 10-8 17-18 21-10-4-18-11-18-21V16z" fill="url(#${gid})" stroke="#0b0a18" stroke-width="2.5" stroke-linejoin="round"/>
     <path d="M32 13 45 19v14c0 7-5.5 12.5-13 16" fill="none" stroke="#fff" stroke-width="1.5" opacity=".45"/>
     ${core}
     ${crown}
+    ${roman ? '' : pips}
     ${label}
   </svg>`;
 }

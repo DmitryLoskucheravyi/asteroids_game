@@ -11,7 +11,7 @@ export interface Obstacle {
   r: number;
 }
 
-export type MatchMode = 'casual' | 'ranked';
+export type { QueueMode as MatchMode } from './constants.js';
 
 export type MatchState = 'searching' | 'countdown' | 'active' | 'ended';
 
@@ -40,6 +40,10 @@ export interface Participant {
   alive: boolean;
   kills: number;
   place: number | null;
+  /** Команда (у соло кожен сам собі команда) і місце команди */
+  team: number;
+  teamPlace: number | null;
+  diedAt: number;
   /** Таймстемпи (мс) дії ефектів */
   flareUntil: number;
   phaseUntil: number;
@@ -91,6 +95,7 @@ export interface PublicParticipant {
   lootCoins: number;
   lootCrystals: number;
   rankPoints: number;
+  team: number;
 }
 
 /** Монети / кристали на полі; 'pile' — усе, що випало зі збитого літака. */
@@ -121,6 +126,8 @@ export interface MatchResultEntry {
   /** Що гравець отримав за матч (місце + фраги + джекпот переможця) */
   reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null; xp: number; bp: number };
   jackpot: { coins: number; crystals: number };
+  team: number;
+  teamPlace: number;
   /** Рейтинговий матч: рейтинг до і після */
   rank: { before: number; after: number; delta: number } | null;
   id: string;

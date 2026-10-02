@@ -5,6 +5,7 @@ import { currentQuestSlots, findQuestDef, type QuestKind } from './content/quest
 import { currentSeason } from './content/pass.js';
 import { divisionIndex, seasonReward } from './content/ranks.js';
 import { duplicateCrystals } from './content/compensation.js';
+import { RANK_MODES, type RankMode } from './pvp/constants.js';
 import type { CrateType } from './content/crates.js';
 
 type Doc = HydratedDocument<UserDoc>;
@@ -87,19 +88,58 @@ export function addBp(user: Doc, amount: number): void {
   user.passBpPoints += Math.max(0, Math.floor(amount));
 }
 
+/** Єдиний доступ до рейтингу режиму: соло — старі поля, командні — teamRanks. */
+export interface RankState {
+  points: number;
+  best: number;
+  matches: number;
+  wins: number;
+  lastSeason: unknown;
+}
+
+export function getRank(user: Doc, mode: RankMode): RankState {
+  if (mode === 'solo') return { points: user.rankPoints ?? 0, best: user.rankBest ?? 0, matches: user.rankedMatches ?? 0, wins: user.rankedWins ?? 0, lastSeason: user.rankLastSeason ?? null };
+  const r = user.teamRanks?.[mode];
+  return { points: r?.points ?? 0, best: r?.best ?? 0, matches: r?.matches ?? 0, wins: r?.wins ?? 0, lastSeason: r?.lastSeason ?? null };
+}
+
+export function setRank(user: Doc, mode: RankMode, r: RankState): void {
+  if (mode === 'solo') {
+    user.rankPoints = r.points;
+    user.rankBest = r.best;
+    user.rankedMatches = r.matches;
+    user.rankedWins = r.wins;
+    user.rankLastSeason = r.lastSeason as never;
+    return;
+  }
+  const t = user.teamRanks![mode]!;
+  t.points = r.points;
+  t.best = r.best;
+  t.matches = r.matches;
+  t.wins = r.wins;
+  t.lastSeason = r.lastSeason as never;
+  user.markModified(`teamRanks.${mode}`);
+}
+
 /**
- * Новий сезон рейтингу: нагорода за підрівень, досягнутий у минулому сезоні (ящик за рангом + 💎 = 5 × номер підрівня),
- * і мʼякий скид рейтингу ×0.8, щоб усі не обвалились на дно.
+ * Новий сезон рейтингу — окремо для кожного режиму: нагорода за досягнутий підрівень
+ * (ящик за рангом + 💎 = 5 × номер підрівня) і мʼякий скид ×0.8.
  */
 export function ensureRankSeason(user: Doc): void {
   const { id } = currentSeason();
   if (user.rankSeasonId === id) return;
-  const played = !!user.rankSeasonId && (user.rankedMatches ?? 0) > 0;
-  if (played) {
-    const reward = seasonReward(user.rankPoints ?? 0);
-    grantReward(user, { crate: reward.crate, crystals: reward.crystals }, 'rankSeason');
-    user.rankLastSeason = { seasonId: user.rankSeasonId!, points: user.rankPoints ?? 0, division: divisionIndex(user.rankPoints ?? 0), crate: reward.crate, crystals: reward.crystals };
-    user.rankPoints = Math.round((user.rankPoints ?? 0) * 0.8);
+  if (user.rankSeasonId) {
+    for (const mode of RANK_MODES) {
+      const r = getRank(user, mode);
+      if (r.matches <= 0) continue;
+      const reward = seasonReward(r.points);
+      grantReward(user, { crate: reward.crate, crystals: reward.crystals }, 'rankSeason');
+      setRank(user, mode, {
+        ...r,
+        lastSeason: { seasonId: user.rankSeasonId, points: r.points, division: divisionIndex(r.points), crate: reward.crate, crystals: reward.crystals },
+        points: Math.round(r.points * 0.8),
+      });
+    }
   }
   user.rankSeasonId = id;
 }
