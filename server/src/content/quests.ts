@@ -15,6 +15,8 @@ export type QuestKind =
   | 'passClaims'
   | 'questsCompleted'
   | 'survivalRuns';
+import type { CrateType } from './crates.js';
+
 export type QuestPeriod = 'daily' | 'weekly';
 
 export interface QuestDef {
@@ -22,7 +24,7 @@ export interface QuestDef {
   kind: QuestKind;
   period: QuestPeriod;
   target: number;
-  reward: { coins: number; xp: number; crate?: 'common' | 'rare' | 'legendary' };
+  reward: { coins: number; xp: number; crate?: CrateType };
 }
 
 export const QUEST_POOL: readonly QuestDef[] = [
@@ -44,11 +46,11 @@ export const QUEST_POOL: readonly QuestDef[] = [
   { id: 'd_kills_3', kind: 'pvpKills', period: 'daily', target: 3, reward: { coins: 150, xp: 80 } },
   { id: 'd_kills_8', kind: 'pvpKills', period: 'daily', target: 8, reward: { coins: 320, xp: 160, crate: 'common' } },
   { id: 'd_top3_1', kind: 'pvpTop3', period: 'daily', target: 1, reward: { coins: 180, xp: 90 } },
-  { id: 'd_win_1', kind: 'pvpWins', period: 'daily', target: 1, reward: { coins: 300, xp: 150, crate: 'common' } },
+  { id: 'd_win_1', kind: 'pvpWins', period: 'daily', target: 1, reward: { coins: 300, xp: 150, crate: 'rare' } },
   { id: 'd_upgrade_1', kind: 'planeUpgrades', period: 'daily', target: 1, reward: { coins: 80, xp: 60 } },
   { id: 'd_upgrade_3', kind: 'planeUpgrades', period: 'daily', target: 3, reward: { coins: 220, xp: 140 } },
   { id: 'd_pvp_5', kind: 'pvpMatches', period: 'daily', target: 5, reward: { coins: 450, xp: 220, crate: 'common' } },
-  { id: 'd_kills_15', kind: 'pvpKills', period: 'daily', target: 15, reward: { coins: 600, xp: 300, crate: 'rare' } },
+  { id: 'd_kills_15', kind: 'pvpKills', period: 'daily', target: 15, reward: { coins: 600, xp: 300, crate: 'epic' } },
   { id: 'd_top3_3', kind: 'pvpTop3', period: 'daily', target: 3, reward: { coins: 450, xp: 220 } },
   { id: 'd_coins_500', kind: 'coinsEarned', period: 'daily', target: 500, reward: { coins: 100, xp: 60 } },
   { id: 'd_coins_1500', kind: 'coinsEarned', period: 'daily', target: 1500, reward: { coins: 250, xp: 140 } },
@@ -63,15 +65,15 @@ export const QUEST_POOL: readonly QuestDef[] = [
 export const WEEKLY_QUEST_POOL: readonly QuestDef[] = [
   { id: 'w_levels_10', kind: 'levelsCompleted', period: 'weekly', target: 10, reward: { coins: 350, xp: 220, crate: 'common' } },
   { id: 'w_levels_25', kind: 'levelsCompleted', period: 'weekly', target: 25, reward: { coins: 800, xp: 450, crate: 'rare' } },
-  { id: 'w_stars3_10', kind: 'threeStarLevels', period: 'weekly', target: 10, reward: { coins: 700, xp: 400, crate: 'rare' } },
+  { id: 'w_stars3_10', kind: 'threeStarLevels', period: 'weekly', target: 10, reward: { coins: 700, xp: 400, crate: 'epic' } },
   { id: 'w_crystals_250', kind: 'crystalsCollected', period: 'weekly', target: 250, reward: { coins: 400, xp: 250, crate: 'common' } },
-  { id: 'w_crystals_600', kind: 'crystalsCollected', period: 'weekly', target: 600, reward: { coins: 900, xp: 500, crate: 'rare' } },
+  { id: 'w_crystals_600', kind: 'crystalsCollected', period: 'weekly', target: 600, reward: { coins: 900, xp: 500, crate: 'epic' } },
   { id: 'w_survival_900', kind: 'survivalSeconds', period: 'weekly', target: 900, reward: { coins: 450, xp: 260, crate: 'rare' } },
   { id: 'w_crates_10', kind: 'cratesOpened', period: 'weekly', target: 10, reward: { coins: 500, xp: 280, crate: 'rare' } },
   { id: 'w_pvp_10', kind: 'pvpMatches', period: 'weekly', target: 10, reward: { coins: 1000, xp: 500, crate: 'rare' } },
   { id: 'w_kills_30', kind: 'pvpKills', period: 'weekly', target: 30, reward: { coins: 1400, xp: 650, crate: 'rare' } },
   { id: 'w_top3_5', kind: 'pvpTop3', period: 'weekly', target: 5, reward: { coins: 1200, xp: 600, crate: 'rare' } },
-  { id: 'w_win_3', kind: 'pvpWins', period: 'weekly', target: 3, reward: { coins: 1800, xp: 800, crate: 'legendary' } },
+  { id: 'w_win_3', kind: 'pvpWins', period: 'weekly', target: 3, reward: { coins: 1800, xp: 800, crate: 'mythic' } },
   { id: 'w_upgrade_5', kind: 'planeUpgrades', period: 'weekly', target: 5, reward: { coins: 600, xp: 400, crate: 'rare' } },
   { id: 'w_upgrade_12', kind: 'planeUpgrades', period: 'weekly', target: 12, reward: { coins: 1300, xp: 700, crate: 'legendary' } },
   { id: 'w_pvp_25', kind: 'pvpMatches', period: 'weekly', target: 25, reward: { coins: 2500, xp: 1100, crate: 'legendary' } },
@@ -82,7 +84,7 @@ export const WEEKLY_QUEST_POOL: readonly QuestDef[] = [
   { id: 'w_items_3', kind: 'itemsBought', period: 'weekly', target: 3, reward: { coins: 900, xp: 450, crate: 'rare' } },
   { id: 'w_daily_5', kind: 'dailyClaimed', period: 'weekly', target: 5, reward: { coins: 600, xp: 350, crate: 'rare' } },
   { id: 'w_pass_5', kind: 'passClaims', period: 'weekly', target: 5, reward: { coins: 700, xp: 380, crate: 'rare' } },
-  { id: 'w_quests_20', kind: 'questsCompleted', period: 'weekly', target: 20, reward: { coins: 1500, xp: 800, crate: 'legendary' } },
+  { id: 'w_quests_20', kind: 'questsCompleted', period: 'weekly', target: 20, reward: { coins: 1500, xp: 800, crate: 'mythic' } },
   { id: 'w_runs_20', kind: 'survivalRuns', period: 'weekly', target: 20, reward: { coins: 800, xp: 420, crate: 'rare' } },
 ] as const;
 

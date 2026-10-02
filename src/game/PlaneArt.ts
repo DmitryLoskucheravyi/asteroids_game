@@ -458,58 +458,135 @@ function tintToward(base: string, target: string, amount: number): string {
   return `rgb(${mix(r1, r2)},${mix(g1, g2)},${mix(b1, b2)})`;
 }
 
-function overallBBox(parts: Part[]): [number, number, number, number] {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
+/** Ключові точки силуету: кінчик крила (найдальша від осі точка), ніс і хвіст. */
+function silhouette(parts: Part[]): { tipX: number; tipY: number; noseY: number; tailY: number; bodyW: number } {
+  let tipX = 0;
+  let tipY = 0;
+  let noseY = Infinity;
+  let tailY = -Infinity;
+  let bodyW = 3;
+  const visit = (x: number, y: number) => {
+    if (Math.abs(x) > tipX) {
+      tipX = Math.abs(x);
+      tipY = y;
+    }
+    if (y < noseY) noseY = y;
+    if (y > tailY) tailY = y;
+    // ширина фюзеляжу в районі центру — для бронеплит
+    if (Math.abs(y) < 6 && Math.abs(x) < 8) bodyW = Math.max(bodyW, Math.abs(x));
+  };
   for (const p of parts) {
-    if (p.kind === 'dot') continue;
-    const [x0, y0, x1, y1] = bboxOf(p);
-    if (x0 < minX) minX = x0;
-    if (y0 < minY) minY = y0;
-    if (x1 > maxX) maxX = x1;
-    if (y1 > maxY) maxY = y1;
+    if (p.kind === 'poly') for (let i = 0; i < p.pts.length; i += 2) visit(p.pts[i], p.pts[i + 1]);
+    else if (p.kind === 'rect') {
+      visit(p.x, p.y);
+      visit(p.x + p.w, p.y + p.h);
+    } else if (p.kind === 'ellipse') {
+      visit(p.x - p.rx, p.y);
+      visit(p.x + p.rx, p.y);
+      visit(p.x, p.y - p.ry);
+      visit(p.x, p.y + p.ry);
+    }
   }
-  return [minX, minY, maxX, maxY];
+  return { tipX, tipY, noseY, tailY, bodyW };
+}
+
+const LIMIT = 34.5;
+const clampX = (x: number) => Math.max(-LIMIT, Math.min(LIMIT, x));
+
+/** Пара симетричних деталей (ліва + дзеркальна права). */
+function pair(make: (side: 1 | -1) => Part[]): Part[] {
+  return [...make(-1), ...make(1)];
 }
 
 /**
- * Тір > 1 підфарбовує корпус у бік тірового кольору (деталі з flat — вікна, двигуни — лишає чистими)
- * і додає декоративні акценти (кінчики крил, "енергетична" лінія по хребту) поверх силуету,
- * не змінюючи саму геометрію — впізнаваність корабля зберігається.
+ * Тір — помітно новий корпус поверх базового силуету:
+ * 2 — бронеплити вздовж фюзеляжу й бокові повітрозабірники, корпус у тіровому кольорі;
+ * 3 — додаються передні кермà (canards), подвійні кілі й темні броньовані смуги;
+ * 4 — розширені крила-лезо з золотою окантовкою, додаткові сопла й світне ядро.
  */
 function applyTierSkin(parts: Part[], tier: number): Part[] {
   if (tier <= 1) return parts;
   const tint = TIER_COLORS[Math.min(tier, 4)];
-  const amount = 0.16 + tier * 0.07;
+  // легкий тінт — корпус лишається насиченим, а новий вигляд дають деталі
+  const amount = 0.08 + tier * 0.06;
   const recolored = parts.map((p) => {
     if (p.kind === 'hole' || p.kind === 'dot' || p.flat) return p;
     return { ...p, base: tintToward(p.base, tint, amount) };
   });
-  const [minX, minY, maxX, maxY] = overallBBox(parts);
-  const midY = (minY + maxY) / 2;
-  const deco: Part[] = [dot(minX + 0.6, midY, tint), dot(maxX - 0.6, midY, tint)];
-  const spineSteps = tier; // більше рисок на корпусі з кожним тіром
-  for (let i = 0; i < spineSteps; i++) {
-    const y = minY + ((i + 1) / (spineSteps + 1)) * (maxY - minY);
-    deco.push(rect(-0.7, y - 1.1, 1.4, 2.2, tint, true));
+  const { tipX, tipY, noseY, tailY, bodyW } = silhouette(parts);
+  const len = tailY - noseY;
+  const gun = '#3a4258';
+  const under: Part[] = [];
+  const over: Part[] = [];
+
+  // T2: темні бронеплити вздовж фюзеляжу з яскравою окантовкою + повітрозабірники
+  over.push(
+    ...pair((sd) => [
+      poly([sd * (bodyW - 0.5), noseY + len * 0.26, sd * (bodyW + 4.2), noseY + len * 0.36, sd * (bodyW + 4.2), noseY + len * 0.74, sd * (bodyW - 0.5), noseY + len * 0.84], gun),
+      rect(sd > 0 ? bodyW + 3 : -bodyW - 4.2, noseY + len * 0.38, 1.2, len * 0.34, tint, true),
+      rect(sd > 0 ? bodyW + 0.6 : -bodyW - 2.6, noseY + len * 0.4, 2, 4, '#0c0f1c', true),
+    ]),
+  );
+
+  if (tier >= 3) {
+    // великі передні кермà
+    under.push(...pair((sd) => [poly([sd * bodyW, noseY + len * 0.16, sd * clampX(bodyW + 12), noseY + len * 0.3, sd * clampX(bodyW + 11), noseY + len * 0.36, sd * bodyW, noseY + len * 0.32], shade(tint, -0.25))]));
+    // подвійні кілі
+    over.push(...pair((sd) => [poly([sd * (bodyW + 0.5), tailY - len * 0.3, sd * (bodyW + 5.5), tailY - len * 0.02, sd * (bodyW + 1), tailY - len * 0.06], shade(tint, -0.1)), dot(sd * (bodyW + 4.5), tailY - len * 0.05, tint)]));
+    // яскраві смуги на крилах
+    over.push(...pair((sd) => [poly([sd * tipX * 0.5, tipY - 3, sd * tipX * 0.62, tipY - 3, sd * tipX * 0.62, tipY + 4, sd * tipX * 0.5, tipY + 4], tint, true)]));
   }
-  if (tier >= 4) deco.push(dot(-1.6, minY + 2.2, '#ffffff'), dot(1.6, minY + 2.2, '#ffffff'));
-  return [...recolored, ...deco];
+
+  if (tier >= 4) {
+    const gold = '#ffd24a';
+    // крила-лезо з золотою кромкою
+    under.push(
+      ...pair((sd) => [
+        poly([sd * tipX * 0.55, tipY - 3, sd * clampX(tipX + 6.5), tipY + 2, sd * clampX(tipX + 5), tipY + 11, sd * tipX * 0.65, tipY + 5], shade(tint, -0.3)),
+        poly([sd * clampX(tipX + 3), tipY + 1, sd * clampX(tipX + 6.5), tipY + 2, sd * clampX(tipX + 5), tipY + 11, sd * clampX(tipX + 3.5), tipY + 8], gold),
+      ]),
+    );
+    // додаткові сопла з вогнем
+    over.push(...pair((sd) => [rect(sd > 0 ? bodyW + 0.4 : -bodyW - 4.4, tailY - 3.6, 4, 4, '#2a2d38', true), rect(sd > 0 ? bodyW + 1.2 : -bodyW - 3.6, tailY, 2.4, 2, '#ffcf6a', true)]));
+    // світне ядро і золотий ніс
+    over.push(ellipse(0, noseY + len * 0.56, 2, 3.6, '#fff3b0', true), poly([0, noseY - 0.5, -1.8, noseY + 4, 1.8, noseY + 4], gold, true));
+  }
+  return [...under, ...recolored, ...over];
 }
 
-/** 1..4 маленькі піпси тірового кольору на фюзеляжі — показують рівень прокачки в межах тіру. */
+/**
+ * Рівень у межах тіру — обвіси, які видно з першого погляду:
+ * 2 — підвісні паливні баки під крилами; 3 — пара великих ракет на пілонах;
+ * 4 — сенсорна штанга на носі, напрямні на кінцях крил і спинний гребінь.
+ */
 function levelPips(parts: Part[], tier: number, level: number): Part[] {
   if (level <= 1) return [];
-  const tint = TIER_COLORS[Math.max(2, Math.min(tier, 4))] || '#8fd8ff';
-  const [minX, , maxX, maxY] = overallBBox(parts);
-  const cx = (minX + maxX) / 2;
-  const pips: Part[] = [];
-  const spacing = 2.6;
-  const start = cx - ((level - 1) * spacing) / 2;
-  for (let i = 0; i < level - 1; i++) pips.push(dot(start + i * spacing, maxY - 2, tint));
-  return pips;
+  const accent = TIER_COLORS[Math.max(2, Math.min(tier, 4))] || '#8fd8ff';
+  const { tipX, tipY, noseY, tailY, bodyW } = silhouette(parts);
+  const len = tailY - noseY;
+  const out: Part[] = [];
+  // паливні баки
+  out.push(...pair((sd) => [ellipse(sd * tipX * 0.4, tipY + 3, 2.6, 6.2, '#d8dce8'), rect(sd * tipX * 0.4 - 1.3, tipY + 7, 2.6, 1.6, accent, true)]));
+  if (level >= 3) {
+    // великі ракети з червоними боєголовками
+    out.push(
+      ...pair((sd) => {
+        const x = sd * tipX * 0.74;
+        return [rect(x - 1.5, tipY - 6, 3, 13, '#e6e9f0'), ellipse(x, tipY - 6, 1.6, 2.4, '#ff3a3a', true), rect(x - 2.6, tipY + 5, 5.2, 2, shade(accent, -0.2))];
+      }),
+    );
+  }
+  if (level >= 4) {
+    out.push(
+      rect(-0.8, noseY - 5, 1.6, 6, '#d8dce8', true),
+      dot(0, noseY - 5.2, '#ff3a3a'),
+      // спинний гребінь
+      poly([0, noseY + len * 0.45, -1.6, noseY + len * 0.6, 0, noseY + len * 0.75, 1.6, noseY + len * 0.6], accent, true),
+      ...pair((sd) => [rect(sd > 0 ? clampX(tipX) - 2 : -clampX(tipX), tipY - 6, 2, 10, '#9aa6c0'), dot(sd * (clampX(tipX) - 1), tipY - 6.4, accent)]),
+    );
+  }
+  void bodyW;
+  return out;
 }
 
 // ---------- растеризатор (тверда піксельна сітка, без згладжування) ----------
@@ -711,6 +788,16 @@ function bodyCanvas(id: PlaneId, tier: number, level: number): HTMLCanvasElement
 export function drawPlane(ctx: Ctx, id: PlaneId, size: number, t: number, tier = 1, level = 1): void {
   const k = size / 64;
   const s = UNITS * k;
+  if (tier >= 3) {
+    const tint = TIER_COLORS[Math.min(tier, 4)];
+    const [r, g, b] = parseColor(tint);
+    const pulse = 0.75 + Math.sin(t * 3) * 0.25;
+    const grad = ctx.createRadialGradient(0, 0, s * 0.1, 0, 0, s * 0.62);
+    grad.addColorStop(0, `rgba(${r},${g},${b},${(tier >= 4 ? 0.38 : 0.22) * pulse})`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(-s * 0.62, -s * 0.62, s * 1.24, s * 1.24);
+  }
   const prevSmooth = ctx.imageSmoothingEnabled;
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(bodyCanvas(id, tier, level), -s / 2, -s / 2, s, s);

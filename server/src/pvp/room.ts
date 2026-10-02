@@ -17,6 +17,7 @@ import {
   FLARE_DURATION_MS,
   FLARE_RADIUS,
   matchReward,
+  PLACE_CRATES,
   PICKUP_START,
   PICKUP_MAX,
   PICKUP_SPAWN_MS,
@@ -148,7 +149,10 @@ export class Room {
           planeId: PLANE_IDS[Math.floor(Math.random() * PLANE_IDS.length)],
           tier: 1 + Math.floor(Math.random() * 3),
           level: 1 + Math.floor(Math.random() * 4),
-          weaponId: Math.random() < 0.3 ? 'rocket_launcher' : 'machine_gun',
+          weaponId: (() => {
+            const r = Math.random();
+            return r < 0.25 ? 'rocket_launcher' : r < 0.45 ? 'laser' : 'machine_gun';
+          })(),
         },
         Math.random() < 0.35 ? getItemDef('nano_repair')! : null,
         null,
@@ -285,7 +289,7 @@ export class Room {
     const p = this.participants.get(socketId);
     if (!p || !p.alive || this.state !== 'active') return;
     if (![data?.x, data?.y, data?.angle].every((n) => typeof n === 'number' && Number.isFinite(n))) return;
-    const kind = data.kind === 'rocket' || data.kind === 'missile' ? data.kind : 'bullet';
+    const kind = data.kind === 'rocket' || data.kind === 'missile' || data.kind === 'laser' ? data.kind : 'bullet';
     p.lastFiredAt = Date.now();
     const def = getWeaponDef(p.weaponId);
     this.relay(socketId, 'match:shot', { ownerId: p.id, x: data.x, y: data.y, angle: data.angle, kind, speed: kind === 'missile' ? 560 : def?.projectileSpeed ?? 900 });
@@ -386,6 +390,11 @@ export class Room {
   private spawnBotShot(bot: Participant, angle: number): void {
     const def = getWeaponDef(bot.weaponId) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
     const nose = { x: bot.pos.x + Math.cos(bot.angle) * 24, y: bot.pos.y + Math.sin(bot.angle) * 24 };
+    if (def.kind === 'laser') {
+      this.fireLaser(bot, nose, angle, def.range ?? 700, def.damage * bot.damageMul);
+      return;
+    }
+    if (def.kind !== 'bullet' && def.kind !== 'rocket') return;
     this.projectiles.push({
       ownerId: bot.id,
       kind: def.kind,
@@ -399,6 +408,38 @@ export class Room {
       splash: def.splashRadius ?? 0,
     });
     this.io.to(this.id).emit('match:shot', { ownerId: bot.id, x: nose.x, y: nose.y, angle, kind: def.kind, speed: def.projectileSpeed });
+  }
+
+  /** Лазер бота: миттєвий промінь до першої перешкоди або цілі. */
+  private fireLaser(bot: Participant, from: { x: number; y: number }, angle: number, range: number, damage: number): void {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    let best = range;
+    let hit: Participant | null = null;
+    const rayHit = (cx: number, cy: number, r: number): number | null => {
+      const fx = cx - from.x;
+      const fy = cy - from.y;
+      const along = fx * dx + fy * dy;
+      if (along < 0) return null;
+      const perp2 = fx * fx + fy * fy - along * along;
+      if (perp2 > r * r) return null;
+      return along - Math.sqrt(r * r - perp2);
+    };
+    for (const o of this.obstacles) {
+      const d = rayHit(o.x, o.y, o.r);
+      if (d !== null && d < best) best = d;
+    }
+    const now = Date.now();
+    for (const p of this.participants.values()) {
+      if (p === bot || !p.alive || now < p.phaseUntil) continue;
+      const d = rayHit(p.pos.x, p.pos.y, HIT_RADIUS);
+      if (d !== null && d < best) {
+        best = d;
+        hit = p;
+      }
+    }
+    this.io.to(this.id).emit('match:shot', { ownerId: bot.id, x: from.x, y: from.y, angle, kind: 'laser', speed: 0 });
+    if (hit) this.applyDamage(bot, hit, damage, now);
   }
 
   private updateProjectiles(dt: number, now: number): void {
@@ -498,7 +539,7 @@ export class Room {
     const rewardOf = (p: Participant) => {
       const base = matchReward(p.place!, p.kills);
       const won = p.place === 1;
-      return { coins: base.coins + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp };
+      return { coins: base.coins + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, crate: PLACE_CRATES[p.place!] ?? null };
     };
 
     void this.grantRewards(ranked, rewardOf);
@@ -512,7 +553,7 @@ export class Room {
         place: p.place!,
         kills: p.kills,
         isBot: p.isBot,
-        reward: { coins: r.coins, crystals: r.crystals },
+        reward: { coins: r.coins, crystals: r.crystals, crate: r.crate },
         jackpot: p.place === 1 ? jackpot : { coins: 0, crystals: 0 },
       };
     });
@@ -524,14 +565,14 @@ export class Room {
     }, 1200);
   }
 
-  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number }): Promise<void> {
+  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; crate: 'legendary' | 'epic' | 'rare' | null }): Promise<void> {
     for (const p of ranked) {
       if (p.isBot || !p.userId) continue;
       try {
         const user = await User.findById(p.userId);
         if (!user) continue;
         const reward = rewardOf(p);
-        grantReward(user, { coins: reward.coins, crystals: reward.crystals }, 'pvp');
+        grantReward(user, { coins: reward.coins, crystals: reward.crystals, crate: reward.crate ?? undefined }, 'pvp');
         addBp(user, reward.bpXp);
         ensureQuestSlots(user);
         incrementQuestProgress(user, 'pvpMatches', 1);

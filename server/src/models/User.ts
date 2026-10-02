@@ -11,7 +11,7 @@ const QuestProgressSchema = new Schema(
 );
 
 const CrateSchema = new Schema({
-  crateType: { type: String, enum: ['common', 'rare', 'legendary'], required: true },
+  crateType: { type: String, enum: ['common', 'rare', 'epic', 'mythic', 'legendary'], required: true },
   source: { type: String, required: true },
   acquiredAt: { type: Date, default: () => new Date() },
   openedAt: { type: Date, default: null },

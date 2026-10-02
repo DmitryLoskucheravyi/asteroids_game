@@ -30,11 +30,13 @@ export function weaponStatLines(def: WeaponDef, damageMul = 1): { key: TKey; val
   const out: { key: TKey; value: string }[] = [
     { key: 'stat.damage', value: dmg.toFixed(dmg < 10 ? 1 : 0) },
     { key: 'stat.fireRate', value: `${def.fireRate}/s` },
-    { key: 'stat.dps', value: Math.round(dmg * def.fireRate).toString() },
+    { key: 'stat.dps', value: Math.round(dmg * def.fireRate * (def.salvo ?? 1)).toString() },
   ];
   if (def.burst) out.push({ key: 'stat.burst', value: `${def.burst.shots} / ${def.burst.cooldown}s` });
   if (typeof def.ammo === 'number') out.push({ key: 'stat.ammo', value: `${def.ammo} / ${def.reloadTime}s` });
   if (def.splashRadius) out.push({ key: 'stat.radius', value: String(def.splashRadius) });
+  if (def.range) out.push({ key: 'stat.range', value: String(def.range) });
+  if (def.salvo) out.push({ key: 'stat.salvo', value: `×${def.salvo}` });
   return out;
 }
 

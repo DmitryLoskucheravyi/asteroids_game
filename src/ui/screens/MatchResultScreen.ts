@@ -1,6 +1,7 @@
 import type { Socket } from 'socket.io-client';
 import type { App } from '../../app/App';
-import { t } from '../../core/i18n';
+import { t, type TKey } from '../../core/i18n';
+import { crate3d } from '../../game/CrateArt';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
 import type { MatchResultEntry } from '../../net/pvpProtocol';
@@ -37,7 +38,7 @@ export class MatchResultScreen extends Screen {
       ? h('div', { class: 'mr-jackpot' }, h('span', {}, t('matchresult.jackpot', { name: winner.nickname })), coinBadge(winner.jackpot.coins, 'coin-badge'), winner.jackpot.crystals ? crystalBadge(winner.jackpot.crystals, 'coin-badge crystal-badge') : null)
       : null;
     const myReward = me
-      ? h('div', { class: 'mr-reward' }, h('span', {}, t('matchresult.reward')), coinBadge(me.reward.coins, 'coin-badge big'), me.reward.crystals ? crystalBadge(me.reward.crystals, 'coin-badge big crystal-badge') : null)
+      ? h('div', { class: 'mr-reward' }, h('span', {}, t('matchresult.reward')), coinBadge(me.reward.coins, 'coin-badge big'), me.reward.crystals ? crystalBadge(me.reward.crystals, 'coin-badge big crystal-badge') : null, me.reward.crate ? h('span', { class: 'mr-crate' }, crate3d(me.reward.crate, 44, 'tile-crate idle'), t(`crate.${me.reward.crate}` as TKey)) : null)
       : null;
 
     return h(

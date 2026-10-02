@@ -2,7 +2,9 @@ export const SEASON_ID = 'season-1';
 export const SEASON_STARTS = new Date('2026-01-01T00:00:00Z');
 export const SEASON_ENDS = new Date('2026-12-31T23:59:59Z');
 
-export type PassReward = { coins: number; xp: number; crate?: 'common' | 'rare' | 'legendary'; crystals?: number };
+import type { CrateType } from './crates.js';
+
+export type PassReward = { coins: number; xp: number; crate?: CrateType; crystals?: number };
 
 export interface PassTier {
   tier: number;
@@ -27,14 +29,14 @@ export const PASS_TIERS: readonly PassTier[] = Array.from({ length: TIER_COUNT }
     tier,
     bpRequired: tier * 120,
     reward: {
-      ...(big ? { coins: 150 + tier * 10, xp: 60, crate: (tier % 20 === 0 ? 'legendary' : tier % 10 === 0 ? 'rare' : 'common') as PassReward['crate'] } : { coins: 50 + tier * 5, xp: 25 }),
+      ...(big ? { coins: 150 + tier * 10, xp: 60, crate: (tier % 20 === 0 ? 'legendary' : tier % 15 === 0 ? 'mythic' : tier % 10 === 0 ? 'epic' : tier % 5 === 0 ? 'rare' : 'common') as PassReward['crate'] } : { coins: 50 + tier * 5, xp: 25 }),
       ...(crystalMilestone ? { crystals: crystalMilestone } : {}),
     },
     // преміум відчутно щедріший: ящик на кожному тьєрі, рідкість росте з номером
     premiumReward: {
       coins: 120 + tier * 18,
       xp: 45 + tier * 2,
-      crate: tier % 20 === 0 ? 'legendary' : tier % 8 === 0 ? 'rare' : 'common',
+      crate: tier % 20 === 0 ? 'legendary' : tier % 12 === 0 ? 'mythic' : tier % 8 === 0 ? 'epic' : tier % 4 === 0 ? 'rare' : 'common',
     },
   };
 });

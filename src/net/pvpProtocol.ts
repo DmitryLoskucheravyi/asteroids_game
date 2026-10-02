@@ -65,7 +65,7 @@ export interface ShotEvent {
   x: number;
   y: number;
   angle: number;
-  kind: 'bullet' | 'rocket' | 'missile';
+  kind: 'bullet' | 'rocket' | 'missile' | 'laser';
   speed: number;
 }
 
@@ -88,7 +88,7 @@ export interface HitEvent {
 }
 
 export interface MatchResultEntry {
-  reward: { coins: number; crystals: number };
+  reward: { coins: number; crystals: number; crate: 'legendary' | 'epic' | 'rare' | null };
   jackpot: { coins: number; crystals: number };
   id: string;
   userId: string | null;

@@ -56,6 +56,18 @@ interface Missile {
   life: number;
   remote: boolean;
   ownerId: string | null;
+  /** 'weapon' — залп зі зброї, 'swarm' — предмет "Рій ракет" (сервер рахує урон по-різному) */
+  source: 'weapon' | 'swarm';
+}
+
+/** Слід лазерного променя — живе кілька кадрів. */
+interface Beam {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  t: number;
+  hostile: boolean;
 }
 
 /** Плавне відображення чужих літаків між серверними тіками (20 Гц). */
@@ -100,6 +112,7 @@ export class PvpGame {
   private projectiles: Projectile[] = [];
   private remote: Projectile[] = [];
   private missiles: Missile[] = [];
+  private beams: Beam[] = [];
   private decoys: Decoy[] = [];
   private rings: Ring[] = [];
   private texts: FloatText[] = [];
@@ -332,7 +345,7 @@ export class PvpGame {
         for (let i = 0; i < 6; i++) {
           const ang = this.aim + (i - 2.5) * 0.28;
           const pos = this.nose();
-          this.missiles.push({ pos, angle: ang, life: 2.6, remote: false, ownerId: this.selfId });
+          this.missiles.push({ pos, angle: ang, life: 2.6, remote: false, ownerId: this.selfId, source: 'swarm' });
           this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle: ang, kind: 'missile' });
         }
         break;
@@ -345,7 +358,16 @@ export class PvpGame {
     if (s.ownerId === this.selfId) return;
     const pos = new Vec2(s.x, s.y);
     if (s.kind === 'missile') {
-      this.missiles.push({ pos, angle: s.angle, life: 2.6, remote: true, ownerId: s.ownerId });
+      this.missiles.push({ pos, angle: s.angle, life: 2.6, remote: true, ownerId: s.ownerId, source: 'weapon' });
+      return;
+    }
+    if (s.kind === 'laser') {
+      const ray = this.raycast(s.x, s.y, s.angle, 760, s.ownerId);
+      this.beams.push({ x1: s.x, y1: s.y, x2: s.x + Math.cos(s.angle) * ray.dist, y2: s.y + Math.sin(s.angle) * ray.dist, t: 0, hostile: true });
+      if (Vec2.dist(pos, this.player.pos) < 900 && this.clock - this.lastShotSfx > 0.08) {
+        this.lastShotSfx = this.clock;
+        Sfx.laserZap();
+      }
       return;
     }
     this.remote.push(new Projectile(s.kind, pos, s.angle, s.speed, 0, 0, true, s.ownerId));
@@ -535,7 +557,22 @@ export class PvpGame {
     if (!shots) return;
     const pos = this.nose();
     const angle = this.aim + (Math.random() - 0.5) * 2 * (this.weapon.spread ?? 0);
-    this.projectiles.push(new Projectile(this.weapon.kind, pos, angle, this.weapon.projectileSpeed, this.weapon.damage, this.weapon.splashRadius ?? 0, false, this.selfId));
+    if (this.weapon.kind === 'laser') {
+      this.fireLaser(pos, angle);
+      return;
+    }
+    if (this.weapon.kind === 'missile') {
+      const n = this.weapon.salvo ?? 3;
+      for (let i = 0; i < n; i++) {
+        const a = angle + (i - (n - 1) / 2) * 0.32;
+        this.missiles.push({ pos: pos.clone(), angle: a, life: 2.6, remote: false, ownerId: this.selfId, source: 'weapon' });
+        this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle: a, kind: 'missile' });
+      }
+      this.muzzle(pos.x, pos.y, angle, true);
+      Sfx.boost();
+      return;
+    }
+    this.projectiles.push(new Projectile(this.weapon.kind as 'bullet' | 'rocket', pos, angle, this.weapon.projectileSpeed, this.weapon.damage, this.weapon.splashRadius ?? 0, false, this.selfId));
     this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle, kind: this.weapon.kind });
     this.muzzle(pos.x, pos.y, angle, this.weapon.kind === 'rocket');
     if (this.weapon.kind === 'rocket') Sfx.bossShot();
@@ -705,7 +742,7 @@ export class PvpGame {
         if (Math.hypot(rp.x - m.pos.x, rp.y - m.pos.y) < HIT_RADIUS + 4) {
           m.life = 0;
           this.explosion(m.pos.x, m.pos.y, 0.4);
-          if (!m.remote) this.socket.emit('match:fire-hit', { targetId: id, source: 'swarm' });
+          if (!m.remote) this.socket.emit('match:fire-hit', { targetId: id, source: m.source });
           break;
         }
       }
@@ -713,8 +750,68 @@ export class PvpGame {
     this.missiles = this.missiles.filter((m) => m.life > 0);
   }
 
+  /**
+   * Промінь до першої перешкоди або літака (з урахуванням пасток і фазового зсуву).
+   * Повертає відстань і id цілі (якщо влучив у літак).
+   */
+  private raycast(x: number, y: number, angle: number, range: number, ownerId: string | null): { dist: number; targetId: string | null; blocked: boolean } {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const hitAt = (cx: number, cy: number, r: number): number | null => {
+      const fx = cx - x;
+      const fy = cy - y;
+      const along = fx * dx + fy * dy;
+      if (along < 0) return null;
+      const perp2 = fx * fx + fy * fy - along * along;
+      if (perp2 > r * r) return null;
+      return along - Math.sqrt(r * r - perp2);
+    };
+    let best = range;
+    let targetId: string | null = null;
+    let blocked = false;
+    for (const o of this.obstacles) {
+      const d = hitAt(o.x, o.y, o.r);
+      if (d !== null && d < best) best = d;
+    }
+    const ids = new Set([...this.participants.keys()]);
+    if (this.selfId) ids.add(this.selfId);
+    for (const id of ids) {
+      if (id === ownerId) continue;
+      const self = id === this.selfId;
+      const p = self ? null : this.participants.get(id);
+      if (self ? !this.selfAlive : !p?.alive) continue;
+      if (self ? this.phase > 0 : p?.phase) continue;
+      const rp = this.renderPos(id);
+      if (!rp) continue;
+      const flaring = self ? this.skills.isFlaring : !!p?.flare;
+      const d = hitAt(rp.x, rp.y, flaring ? FLARE_RADIUS * 0.7 : HIT_RADIUS);
+      if (d !== null && d < best) {
+        best = d;
+        targetId = flaring ? null : id;
+        blocked = flaring;
+      }
+    }
+    return { dist: Math.max(0, best), targetId, blocked };
+  }
+
+  private fireLaser(from: Vec2, angle: number): void {
+    const ray = this.raycast(from.x, from.y, angle, this.weapon.range ?? 760, this.selfId);
+    const x2 = from.x + Math.cos(angle) * ray.dist;
+    const y2 = from.y + Math.sin(angle) * ray.dist;
+    this.beams.push({ x1: from.x, y1: from.y, x2, y2, t: 0, hostile: false });
+    this.socket.emit('match:shot', { x: from.x, y: from.y, angle, kind: 'laser' });
+    if (ray.targetId) this.socket.emit('match:fire-hit', { targetId: ray.targetId, source: 'weapon' });
+    this.particles.emit(x2, y2, { count: ray.blocked ? 4 : 2, speed: [30, 120], life: [0.1, 0.25], size: [2, 3], colors: ray.blocked ? ['#fff1a8', '#ff9a3a'] : ['#ffffff', '#ff5ad0', '#c070ff'] });
+    if (this.clock - this.lastShotSfx > 0.08) {
+      this.lastShotSfx = this.clock;
+      Sfx.laserZap();
+    }
+  }
+
   private updateFx(dt: number): void {
     this.particles.update(dt);
+    for (const b of this.beams) b.t += dt;
+    this.beams = this.beams.filter((b) => b.t < 0.09);
     for (const r of this.rings) r.t += dt;
     this.rings = this.rings.filter((r) => r.t < r.dur);
     for (const t of this.texts) {
@@ -859,6 +956,20 @@ export class PvpGame {
     for (const pr of this.projectiles) pr.render(ctx, this.clock);
     for (const pr of this.remote) pr.render(ctx, this.clock);
     for (const m of this.missiles) this.renderMissile(ctx, m);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const b of this.beams) {
+      const k = 1 - b.t / 0.09;
+      ctx.strokeStyle = b.hostile ? `rgba(255,70,90,${0.45 * k})` : `rgba(200,90,255,${0.45 * k})`;
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.moveTo(b.x1, b.y1);
+      ctx.lineTo(b.x2, b.y2);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${0.9 * k})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
 
     for (const r of this.rings) {
       const k = r.t / r.dur;

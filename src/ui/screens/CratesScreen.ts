@@ -1,7 +1,8 @@
 import { t, type TKey } from '../../core/i18n';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
-import { Icons, button, h, icon } from '../dom';
+import { button, h } from '../dom';
+import { crate3d } from '../../game/CrateArt';
 import { openCrateModal } from '../CrateModal';
 import { Screen } from '../Screen';
 import { screenHeader } from './LevelSelectScreen';
@@ -30,14 +31,15 @@ export class CratesScreen extends Screen {
     const inner = h(
       'span',
       { class: `crate-tile crate-${crate.crateType}` },
-      h('span', { class: 'crate-tile-ico bob' }, icon(Icons.gift, 'ico')),
-      h('span', { class: 'crate-tile-label' }, t(`crate.${crate.crateType}` as TKey)),
+      h('span', { class: 'crate-tile-3d' }, crate3d(crate.crateType, 84, 'tile-crate idle')),
+      h('span', { class: `crate-tile-label rarity-${crate.crateType}` }, t(`crate.${crate.crateType}` as TKey)),
     );
     return button(inner, () => openCrateModal(crate.id, crate.crateType, () => this.render()), 'crate-tile-btn');
   }
 
   protected build(): HTMLElement {
-    const crates = Save.data.crates.filter((c) => !c.openedAt);
+    const order = ['legendary', 'mythic', 'epic', 'rare', 'common'];
+    const crates = Save.data.crates.filter((c) => !c.openedAt).sort((a, b) => order.indexOf(a.crateType) - order.indexOf(b.crateType));
     return h(
       'div',
       { class: 'page crates' },

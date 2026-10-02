@@ -95,6 +95,10 @@ class SoundFx {
     this.noise(0.05, 0.07, 6000, 1800);
     this.tone(900, 0.04, 'square', 0.025, 500);
   }
+  /** Імпульс лазера */
+  laserZap(): void {
+    this.tone(1800, 0.06, 'sawtooth', 0.04, 900);
+  }
   /** Влучання по цілі */
   hitMark(): void {
     this.tone(1500, 0.05, 'square', 0.05, 1100);

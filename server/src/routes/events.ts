@@ -7,12 +7,16 @@ import { MAX_LEVEL, CRYSTAL_COINS } from '../content/levels.js';
 import { bpForLevelComplete, bpForSurvival } from '../content/pass.js';
 import { ensureQuestSlots, incrementQuestProgress, grantReward, addBp } from '../progress.js';
 
+import type { CrateType } from '../content/crates.js';
+
 export const eventsRouter = Router();
 eventsRouter.use(requireAuth);
 
 /** Невеликий шанс отримати ящик за ігрову подію — щоб ящики капали й поза завданнями/пропуском. */
-function maybeDropCrate(chance: number): 'common' | undefined {
-  return Math.random() < chance ? 'common' : undefined;
+function maybeDropCrate(chance: number): CrateType | undefined {
+  if (Math.random() >= chance) return undefined;
+  const r = Math.random();
+  return r < 0.03 ? 'mythic' : r < 0.12 ? 'epic' : r < 0.35 ? 'rare' : 'common';
 }
 
 eventsRouter.post('/level-complete', async (req: AuthedRequest, res) => {
@@ -38,7 +42,7 @@ eventsRouter.post('/level-complete', async (req: AuthedRequest, res) => {
 
   const coins = levelReward(lvl, st, firstClear) + cry * CRYSTAL_COINS;
   const xp = 15 + lvl * 2 + st * 5;
-  const crate = maybeDropCrate(firstClear ? 0.2 : 0.1);
+  const crate = maybeDropCrate(firstClear ? 0.35 : 0.18);
   const result = grantReward(user, { coins, xp, crate, crystals: prism }, 'level');
 
   ensureQuestSlots(user);
@@ -91,7 +95,7 @@ eventsRouter.post('/survival', async (req: AuthedRequest, res) => {
 
   const coins = survivalReward(secs) + cry * CRYSTAL_COINS;
   const xp = Math.floor(secs / 4);
-  const crate = maybeDropCrate(0.08);
+  const crate = maybeDropCrate(Math.min(0.5, 0.1 + secs / 600));
   const result = grantReward(user, { coins, xp, crate, crystals: prism }, 'survival');
 
   ensureQuestSlots(user);

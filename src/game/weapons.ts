@@ -1,6 +1,7 @@
 import type { TKey } from '../core/i18n';
 
-export type WeaponKind = 'bullet' | 'rocket';
+/** bullet/rocket — снаряди; laser — миттєвий промінь; missile — залп самонавідних ракет. */
+export type WeaponKind = 'bullet' | 'rocket' | 'laser' | 'missile';
 
 export interface WeaponDef {
   id: string;
@@ -21,6 +22,10 @@ export interface WeaponDef {
   burst?: { shots: number; cooldown: number };
   /** Розкид, рад */
   spread?: number;
+  /** Лазер — дальність променя */
+  range?: number;
+  /** Залп — скільки ракет за один постріл */
+  salvo?: number;
   /** 0 — стартова зброя, доступна всім безкоштовно */
   price: number;
 }
@@ -40,7 +45,21 @@ export const WEAPON_DEFS: readonly WeaponDef[] = [
     spread: 0.035,
     price: 0,
   },
-  { id: 'rocket_launcher', kind: 'rocket', nameKey: 'weapon.rocketLauncher', descKey: 'weaponDesc.rocketLauncher', fireRate: 1.2, projectileSpeed: 620, damage: 26, splashRadius: 90, ammo: 6, reloadTime: 3.5, price: 450 },
+  { id: 'rocket_launcher', kind: 'rocket', nameKey: 'weapon.rocketLauncher', descKey: 'weaponDesc.rocketLauncher', fireRate: 1.6, projectileSpeed: 780, damage: 42, splashRadius: 125, ammo: 8, reloadTime: 2.6, price: 450 },
+  {
+    id: 'laser',
+    kind: 'laser',
+    nameKey: 'weapon.laser',
+    descKey: 'weaponDesc.laser',
+    fireRate: 12,
+    projectileSpeed: 0,
+    damage: 4.5,
+    range: 760,
+    ammo: 'infinite',
+    burst: { shots: 48, cooldown: 2.4 },
+    price: 1200,
+  },
+  { id: 'homing_salvo', kind: 'missile', nameKey: 'weapon.homingSalvo', descKey: 'weaponDesc.homingSalvo', fireRate: 1.5, projectileSpeed: 560, damage: 12, salvo: 3, ammo: 5, reloadTime: 3.2, price: 1800 },
 ];
 
 export const getWeaponDef = (id: string | null | undefined): WeaponDef | undefined => WEAPON_DEFS.find((w) => w.id === id);
@@ -49,7 +68,7 @@ export const DEFAULT_WEAPON_ID = 'machine_gun';
 /** Чи досить сильна зброя, щоб знищити астероїд цього розміру (ast без розколу на уламки — одне влучання). */
 export function canDestroy(kind: WeaponKind, size: 'small' | 'medium' | 'large'): boolean {
   if (size === 'large') return false;
-  if (kind === 'rocket') return true;
+  if (kind === 'rocket' || kind === 'missile') return true;
   return size === 'small';
 }
 

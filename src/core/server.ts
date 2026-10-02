@@ -2,7 +2,7 @@ import { api } from './api';
 import type { PlaneId } from '../game/planes';
 import type { ItemRarity } from '../game/items';
 
-export type CrateType = 'common' | 'rare' | 'legendary';
+export type CrateType = 'common' | 'rare' | 'epic' | 'mythic' | 'legendary';
 export type QuestKind =
   | 'levelsCompleted'
   | 'crystalsCollected'
@@ -81,7 +81,13 @@ export interface RewardResult {
   crystals: number;
 }
 
-export type CrateReward = { kind: 'coins'; amount: number } | { kind: 'plane'; planeId: PlaneId } | { kind: 'xp'; amount: number };
+export type CrateReward =
+  | { kind: 'coins'; amount: number }
+  | { kind: 'xp'; amount: number }
+  | { kind: 'crystals'; amount: number }
+  | { kind: 'plane'; planeId: PlaneId }
+  | { kind: 'item'; defId: string; rarity: ItemRarity }
+  | { kind: 'weapon'; weaponId: string };
 
 export interface PassTierView {
   tier: number;
@@ -127,7 +133,7 @@ export const Server = {
   claimTier: (tier: number, track: 'free' | 'premium') => api.post<{ profile: ServerProfile; reward: RewardResult }>(`/pass/claim/${tier}`, { track }),
   buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
 
-  openCrate: (crateId: string) => api.post<{ profile: ServerProfile; reward: CrateReward }>(`/crates/${crateId}/open`),
+  openCrate: (crateId: string) => api.post<{ profile: ServerProfile; rewards: CrateReward[] }>(`/crates/${crateId}/open`),
 
   buyItem: (defId: string) => api.post<{ profile: ServerProfile }>('/items/buy', { defId }),
   buyWeapon: (weaponId: string) => api.post<{ profile: ServerProfile }>('/items/buy-weapon', { weaponId }),

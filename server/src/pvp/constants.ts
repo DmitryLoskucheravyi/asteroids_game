@@ -21,6 +21,9 @@ export const FLARE_COOLDOWN_MS = 9000;
 export const FLARE_DURATION_MS = 1400;
 export const FLARE_RADIUS = 95;
 
+/** Гарантований ящик за призове місце. */
+export const PLACE_CRATES: Record<number, 'legendary' | 'epic' | 'rare'> = { 1: 'legendary', 2: 'epic', 3: 'rare' };
+
 /** Нагорода за місце в матчі: монети + XP сезонного пропуску. */
 export function matchReward(place: number, kills: number): { coins: number; bpXp: number } {
   const placeBonus = [700, 450, 300, 200, 120][place - 1] ?? 100;

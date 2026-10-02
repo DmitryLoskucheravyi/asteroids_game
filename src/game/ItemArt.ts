@@ -91,6 +91,23 @@ const WEAPON_ART: Record<string, string> = {
     <path d="M58 27l4 5-4 5z" fill="#ff4a3a"/>
     <path d="M18 40v10h8V40" fill="#3a4a2a" stroke="#0b0a18" stroke-width="2.5"/>
     <rect x="22" y="18" width="10" height="6" fill="#9aa6c0" stroke="#0b0a18" stroke-width="2.5"/>`,
+  laser: `
+    <rect x="6" y="25" width="30" height="14" rx="3" fill="#3a2a5a" stroke="#0b0a18" stroke-width="2.5"/>
+    <path d="M36 27h10l4 5-4 5H36z" fill="#9aa6c0" stroke="#0b0a18" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="20" cy="32" r="4" fill="#ff5ad0" stroke="#0b0a18" stroke-width="2"/>
+    <path d="M50 32h12" stroke="#ff5ad0" stroke-width="4" stroke-linecap="round"/>
+    <path d="M50 32h12" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M14 39v10h8V39" fill="#2a1f45" stroke="#0b0a18" stroke-width="2.5"/>`,
+  homing_salvo: `
+    <rect x="8" y="30" width="40" height="18" rx="3" fill="#3a4a5a" stroke="#0b0a18" stroke-width="2.5"/>
+    ${[14, 24, 34]
+      .map(
+        (x) => `<path d="M${x} 30V14l4-6 4 6v16z" fill="#e8ecf5" stroke="#0b0a18" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M${x} 14l4-6 4 6z" fill="#ffd24a"/>`,
+      )
+      .join('')}
+    <circle cx="54" cy="22" r="6" fill="none" stroke="#ff4a5a" stroke-width="2"/>
+    <circle cx="54" cy="22" r="1.8" fill="#ff4a5a"/>`,
 };
 
 const wrap = (body: string): string => `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
