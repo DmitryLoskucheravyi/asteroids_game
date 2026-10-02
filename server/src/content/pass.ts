@@ -24,7 +24,12 @@ export interface PassTier {
   premiumReward: PassReward;
 }
 
-const TIER_COUNT = 40;
+const TIER_COUNT = 100;
+
+/** BP на один тьєр росте поступово: перші йдуть швидко, останні — справжній марафон. */
+const bpStep = (tier: number): number => 100 + Math.floor(tier * 4);
+const BP_REQUIRED: number[] = [];
+for (let t = 1, sum = 0; t <= TIER_COUNT; t++) BP_REQUIRED.push((sum += bpStep(t)));
 
 /** Ціна преміум-пропуску на сезон, у монетах (без реальних платежів). */
 export const PREMIUM_PASS_PRICE = 500;
@@ -35,20 +40,30 @@ const FREE_SPECIAL: Record<number, Partial<PassReward>> = {
   16: { item: 'armor_plating' },
   24: { item: 'targeting_cpu' },
   32: { weapon: 'laser' },
-  40: { plane: 'swift', crate: 'legendary' },
+  50: { plane: 'swift' },
+  62: { item: 'nano_repair' },
+  74: { item: 'afterburner' },
+  86: { item: 'overclock_core' },
+  100: { plane: 'phoenix' },
 };
 const PREMIUM_SPECIAL: Record<number, Partial<PassReward>> = {
   6: { item: 'nano_repair' },
   14: { item: 'afterburner' },
   20: { item: 'nano_coating' },
   28: { weapon: 'homing_salvo' },
-  36: { item: 'overclock_core' },
-  40: { plane: 'thunder', crate: 'legendary' },
+  40: { item: 'emp_pulse' },
+  50: { plane: 'thunder' },
+  64: { item: 'decoy_flare' },
+  75: { item: 'overdrive' },
+  88: { item: 'missile_swarm' },
+  95: { item: 'phoenix_heart' },
+  100: { plane: 'ufo' },
 };
 
 function crateFor(tier: number, premium: boolean): CrateType {
-  if (tier % 20 === 0) return 'legendary';
-  if (tier % (premium ? 12 : 15) === 0) return 'mythic';
+  // легендарний — лише на віхах 50 і 100
+  if (tier % 50 === 0) return 'legendary';
+  if (tier % (premium ? 15 : 25) === 0) return 'mythic';
   if (tier % (premium ? 8 : 10) === 0) return 'epic';
   if (tier % (premium ? 4 : 5) === 0) return 'rare';
   return 'common';
@@ -66,7 +81,7 @@ export const PASS_TIERS: readonly PassTier[] = Array.from({ length: TIER_COUNT }
   if (tier % 2 === 0) prem.crate = crateFor(tier, true);
   else prem.crystals = 6 + Math.floor(tier / 2);
   Object.assign(prem, PREMIUM_SPECIAL[tier] ?? {});
-  return { tier, bpRequired: tier * 120, reward: free, premiumReward: prem };
+  return { tier, bpRequired: BP_REQUIRED[i], reward: free, premiumReward: prem };
 });
 
 /** Скільки тьєрів можна забрати прямо зараз (обидва треки). */
