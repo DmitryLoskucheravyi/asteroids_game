@@ -27,7 +27,7 @@ export const ITEM_DEFS: readonly ItemMeta[] = [
   { id: 'nano_coating', slot: 'passive', rarity: 'epic', price: 2200, combat: { damage: 0.4, hp: 40 } },
   { id: 'overclock_core', slot: 'passive', rarity: 'mythic', price: 4200, combat: { damage: 0.55, fireRate: 0.25, cooldown: 0.15 } },
   { id: 'phoenix_heart', slot: 'passive', rarity: 'legendary', price: 7500, combat: { hp: 50, damage: 0.75 } },
-  { id: 'nano_repair', slot: 'active', rarity: 'common', combat: { damage: 0.2 }, price: 380, active: { kind: 'nanoRepair', cooldown: 20, power: 35 } },
+  { id: 'nano_repair', slot: 'active', rarity: 'common', combat: { damage: 0.2 }, price: 380, active: { kind: 'nanoRepair', cooldown: 24, power: 18 } },
   { id: 'emp_pulse', slot: 'active', rarity: 'rare', combat: { damage: 0.3 }, price: 1000, active: { kind: 'emp', cooldown: 16, duration: 2.5, radius: 260, power: 20 } },
   { id: 'decoy_flare', slot: 'active', rarity: 'epic', combat: { damage: 0.4 }, price: 2400, active: { kind: 'phase', cooldown: 18, duration: 2 } },
   { id: 'overdrive', slot: 'active', rarity: 'mythic', combat: { damage: 0.55 }, price: 4500, active: { kind: 'overdrive', cooldown: 22, duration: 4 } },

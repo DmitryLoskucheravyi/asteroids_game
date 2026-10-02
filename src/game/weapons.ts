@@ -34,13 +34,13 @@ export const WEAPON_DEFS: readonly WeaponDef[] = [
     descKey: 'weaponDesc.machineGun',
     fireRate: 16,
     projectileSpeed: 1150,
-    damage: 2,
+    damage: 3.5,
     ammo: 'infinite',
     burst: { shots: 36, cooldown: 1.8 },
     spread: 0.035,
     price: 0,
   },
-  { id: 'rocket_launcher', kind: 'rocket', nameKey: 'weapon.rocketLauncher', descKey: 'weaponDesc.rocketLauncher', fireRate: 1.2, projectileSpeed: 620, damage: 16, splashRadius: 90, ammo: 6, reloadTime: 3.5, price: 450 },
+  { id: 'rocket_launcher', kind: 'rocket', nameKey: 'weapon.rocketLauncher', descKey: 'weaponDesc.rocketLauncher', fireRate: 1.2, projectileSpeed: 620, damage: 26, splashRadius: 90, ammo: 6, reloadTime: 3.5, price: 450 },
 ];
 
 export const getWeaponDef = (id: string | null | undefined): WeaponDef | undefined => WEAPON_DEFS.find((w) => w.id === id);

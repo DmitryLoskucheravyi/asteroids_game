@@ -51,14 +51,14 @@ export interface ItemDef {
 export const ITEM_DEFS: readonly ItemDef[] = [
   // ---- пасиви ----
   { id: 'magnet_booster', slot: 'passive', rarity: 'common', nameKey: 'item.magnetBooster', descKey: 'itemDesc.magnetBooster', feature: { magnetRadius: 120 }, combat: { damage: 0.2, speed: 0.03 }, price: 300, color: '#18c8b0' },
-  { id: 'armor_plating', slot: 'passive', rarity: 'common', nameKey: 'item.armorPlating', descKey: 'itemDesc.armorPlating', feature: { shieldRegen: -4 }, combat: { damage: 0.2, hp: 25 }, price: 350, color: '#9aa6c0' },
+  { id: 'armor_plating', slot: 'passive', rarity: 'common', nameKey: 'item.armorPlating', descKey: 'itemDesc.armorPlating', feature: { shieldRegen: -2 }, combat: { damage: 0.2, hp: 25 }, price: 350, color: '#9aa6c0' },
   { id: 'targeting_cpu', slot: 'passive', rarity: 'rare', nameKey: 'item.targetingCpu', descKey: 'itemDesc.targetingCpu', combat: { damage: 0.45 }, price: 900, color: '#58d2ff' },
   { id: 'afterburner', slot: 'passive', rarity: 'rare', nameKey: 'item.afterburner', descKey: 'itemDesc.afterburner', feature: { extraBoost: 1 }, combat: { damage: 0.3, speed: 0.1 }, price: 950, color: '#ff8a3a' },
   { id: 'nano_coating', slot: 'passive', rarity: 'epic', nameKey: 'item.nanoCoating', descKey: 'itemDesc.nanoCoating', feature: { extraLives: 1 }, combat: { damage: 0.4, hp: 40 }, price: 2200, color: '#b77bff' },
   { id: 'overclock_core', slot: 'passive', rarity: 'mythic', nameKey: 'item.overclockCore', descKey: 'itemDesc.overclockCore', feature: { jumpCooldownMul: 0.85 }, combat: { damage: 0.55, fireRate: 0.25, cooldown: 0.15 }, price: 4200, color: '#ff4fa8' },
   { id: 'phoenix_heart', slot: 'passive', rarity: 'legendary', nameKey: 'item.phoenixHeart', descKey: 'itemDesc.phoenixHeart', feature: { extraLives: 1, startShield: true }, combat: { hp: 50, damage: 0.75 }, price: 7500, color: '#ffc23a' },
   // ---- активи ----
-  { id: 'nano_repair', slot: 'active', rarity: 'common', nameKey: 'item.nanoRepair', descKey: 'itemDesc.nanoRepair', active: { kind: 'nanoRepair', cooldown: 20, power: 35 }, combat: { damage: 0.2 }, price: 380, color: '#4fe08a' },
+  { id: 'nano_repair', slot: 'active', rarity: 'common', nameKey: 'item.nanoRepair', descKey: 'itemDesc.nanoRepair', active: { kind: 'nanoRepair', cooldown: 24, power: 18 }, combat: { damage: 0.2 }, price: 380, color: '#4fe08a' },
   { id: 'emp_pulse', slot: 'active', rarity: 'rare', nameKey: 'item.empPulse', descKey: 'itemDesc.empPulse', active: { kind: 'emp', cooldown: 16, duration: 2.5, radius: 260, power: 20 }, combat: { damage: 0.3 }, price: 1000, color: '#9fe3ff' },
   { id: 'decoy_flare', slot: 'active', rarity: 'epic', nameKey: 'item.phaseShift', descKey: 'itemDesc.phaseShift', active: { kind: 'phase', cooldown: 18, duration: 2 }, combat: { damage: 0.4 }, price: 2400, color: '#c9a7ff' },
   { id: 'overdrive', slot: 'active', rarity: 'mythic', nameKey: 'item.overdrive', descKey: 'itemDesc.overdrive', active: { kind: 'overdrive', cooldown: 22, duration: 4 }, combat: { damage: 0.55 }, price: 4500, color: '#ff5a3a' },

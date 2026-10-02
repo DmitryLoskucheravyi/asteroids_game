@@ -14,8 +14,8 @@ export interface WeaponMeta {
 }
 
 export const WEAPON_DEFS: readonly WeaponMeta[] = [
-  { id: 'machine_gun', kind: 'bullet', price: 0, damage: 2, fireRate: 16, projectileSpeed: 1150, burst: { shots: 36, cooldown: 1.8 }, spread: 0.035 },
-  { id: 'rocket_launcher', kind: 'rocket', price: 450, damage: 16, fireRate: 1.2, projectileSpeed: 620, splashRadius: 90, ammo: 6, reloadTime: 3.5 },
+  { id: 'machine_gun', kind: 'bullet', price: 0, damage: 3.5, fireRate: 16, projectileSpeed: 1150, burst: { shots: 36, cooldown: 1.8 }, spread: 0.035 },
+  { id: 'rocket_launcher', kind: 'rocket', price: 450, damage: 26, fireRate: 1.2, projectileSpeed: 620, splashRadius: 90, ammo: 6, reloadTime: 3.5 },
 ];
 
 export const getWeaponDef = (id: string): WeaponMeta | undefined => WEAPON_DEFS.find((w) => w.id === id);
