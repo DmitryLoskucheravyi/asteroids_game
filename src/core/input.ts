@@ -1,6 +1,6 @@
 import { Save } from './storage';
 
-export type Action = 'freeze' | 'boost' | 'jump' | 'pause' | 'item';
+export type Action = 'freeze' | 'boost' | 'jump' | 'pause' | 'item' | 'flare';
 /** 'fire' — утримувана дія (стрільба), не дискретна emit()-подія, тому окремо від Action. */
 export type BindAction = 'up' | 'down' | 'left' | 'right' | 'fire' | Action;
 
@@ -15,10 +15,11 @@ export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
   boost: ['Digit2', 'Numpad2', 'KeyQ'],
   jump: ['Space', 'ShiftLeft', 'ShiftRight'],
   item: ['Digit4', 'Numpad4', 'KeyR'],
+  flare: ['Digit3', 'Numpad3', 'KeyC'],
   pause: ['Escape', 'KeyP'],
 };
 
-export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'fire', 'freeze', 'boost', 'jump', 'item', 'pause'];
+export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'fire', 'freeze', 'boost', 'jump', 'flare', 'item', 'pause'];
 
 /** Коди клавіш для дії: кастомний бінд гравця (якщо є) замінює дефолтний набір повністю. */
 function codesFor(action: BindAction): string[] {
@@ -88,6 +89,7 @@ export class InputState {
     if (codesFor('boost').includes(code)) return 'boost';
     if (codesFor('jump').includes(code)) return 'jump';
     if (codesFor('item').includes(code)) return 'item';
+    if (codesFor('flare').includes(code)) return 'flare';
     if (codesFor('pause').includes(code)) return 'pause';
     return null;
   }

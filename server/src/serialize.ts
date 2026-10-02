@@ -1,6 +1,7 @@
 import type { HydratedDocument } from 'mongoose';
 import type { UserDoc } from './models/User.js';
 import { findQuestDef } from './content/quests.js';
+import { getItemDef } from './content/items.js';
 
 export function serializeProfile(user: HydratedDocument<UserDoc>) {
   return {
@@ -46,7 +47,10 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       openedAt: c.openedAt,
     })),
     keybinds: (user.keybinds ?? {}) as Record<string, string>,
-    items: user.items.map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: it.rarity })),
+    // рідкість завжди береться з визначення предмета (старі записи могли мати довільну)
+    items: user.items
+      .filter((it) => getItemDef(it.defId))
+      .map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: getItemDef(it.defId)!.rarity })),
     loadouts: user.loadouts,
     ownedWeapons: user.ownedWeapons,
   };

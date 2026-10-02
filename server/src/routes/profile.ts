@@ -3,7 +3,7 @@ import type { HydratedDocument } from 'mongoose';
 import { User, type UserDoc } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
-import { ensureQuestSlots } from '../progress.js';
+import { ensureQuestSlots, incrementQuestProgress } from '../progress.js';
 import { isPlaneId, PLANE_PRICES, MAX_TIER, MAX_LEVEL_IN_TIER, levelUpCost, tierUpCost } from '../content/planes.js';
 
 export const profileRouter = Router();
@@ -95,6 +95,8 @@ profileRouter.post('/plane/:planeId/level-up', async (req: AuthedRequest, res) =
   }
   user.coins -= cost;
   progress.level += 1;
+  ensureQuestSlots(user);
+  incrementQuestProgress(user, 'planeUpgrades', 1);
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });
@@ -128,6 +130,8 @@ profileRouter.post('/plane/:planeId/tier-up', async (req: AuthedRequest, res) =>
   user.crystals -= cost.crystals;
   progress.tier += 1;
   progress.level = 1;
+  ensureQuestSlots(user);
+  incrementQuestProgress(user, 'planeUpgrades', 1);
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });

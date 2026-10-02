@@ -77,6 +77,7 @@ export const Icons = {
   heart: svg('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" fill="currentColor" fill-opacity=".35"/>'),
   coin: svg('<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".3"/><circle cx="12" cy="12" r="6"/><path d="M12 9v6"/>'),
   gift: svg('<rect x="3" y="9" width="18" height="12" rx="2"/><path d="M3 13h18M12 9v12M12 9c-2-4-7-4-6-1 .5 1.5 3 1 6 1zM12 9c2-4 7-4 6-1-.5 1.5-3 1-6 1z"/>'),
+  flare: svg('<path d="M12 3v6" /><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M6 20c1-4 3-6 6-8M18 20c-1-4-3-6-6-8M3 14c3-1 6-1 9-2M21 14c-3-1-6-1-9-2"/><circle cx="5.5" cy="20.5" r="1.5" fill="currentColor"/><circle cx="18.5" cy="20.5" r="1.5" fill="currentColor"/><circle cx="2.5" cy="14" r="1.2" fill="currentColor"/><circle cx="21.5" cy="14" r="1.2" fill="currentColor"/>'),
   wall: svg('<rect x="2" y="5" width="7" height="5" rx="1"/><rect x="15" y="5" width="7" height="5" rx="1"/><rect x="2" y="14" width="4" height="5" rx="1"/><rect x="11" y="14" width="11" height="5" rx="1"/>'),
 };
 

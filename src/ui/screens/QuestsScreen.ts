@@ -13,6 +13,12 @@ const QUEST_ICON: Record<QuestView['kind'], string> = {
   crystalsCollected: Icons.crystal,
   survivalSeconds: Icons.clock,
   cratesOpened: Icons.gift,
+  pvpMatches: Icons.homing,
+  pvpKills: Icons.boss,
+  pvpTop3: Icons.trophy,
+  pvpWins: Icons.star,
+  threeStarLevels: Icons.star,
+  planeUpgrades: Icons.bolt,
 };
 
 /** Завдання: щоденні й тижневі, з прогресом, що тягнеться з профілю (сервер — єдине джерело правди). */

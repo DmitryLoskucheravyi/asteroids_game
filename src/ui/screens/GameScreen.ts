@@ -8,7 +8,9 @@ import { Save } from '../../core/storage';
 import { Server, type RewardResult } from '../../core/server';
 import { Game, type GameMode, type GameResult } from '../../game/Game';
 import { MAX_LEVEL } from '../../game/levels';
-import { BOOST_DURATION, FREEZE_DURATION } from '../../game/systems/SkillSystem';
+import { BOOST_DURATION, FLARE_DURATION, FREEZE_DURATION } from '../../game/systems/SkillSystem';
+import { getItemDef } from '../../game/items';
+import { itemSvg } from '../../game/ItemArt';
 import { Icons, button, h, icon } from '../dom';
 import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
@@ -35,9 +37,8 @@ export class GameScreen extends Screen {
   private hudCenter!: HTMLElement;
   private hudCoins!: HTMLElement;
   private hudCoinsText!: HTMLElement;
-  private hudAmmo!: HTMLElement;
-  private hudAmmoText!: HTMLElement;
-  private slots!: Record<'freeze' | 'boost' | 'jump' | 'item', SkillSlot>;
+  private slots!: Record<'freeze' | 'boost' | 'jump' | 'flare' | 'item', SkillSlot>;
+  private passiveSlot: HTMLElement | null = null;
   private shieldSlot!: HTMLElement;
   private featSlot!: HTMLElement;
   private featIcon!: HTMLElement;
@@ -60,10 +61,8 @@ export class GameScreen extends Screen {
     this.hudCenter = h('div', { class: 'hud-center' });
     this.hudCoinsText = h('span', {}, String(Save.data.coins));
     this.hudCoins = h('div', { class: 'hud-coins' }, icon(Icons.coin, 'ico coin'), this.hudCoinsText);
-    this.hudAmmoText = h('span', {}, '');
-    this.hudAmmo = h('div', { class: 'hud-ammo' }, icon(Icons.bolt, 'ico'), this.hudAmmoText);
 
-    const slot = (key: 'freeze' | 'boost' | 'jump' | 'item', ic: string, hint: string, labelKey = `hud.${key}`): SkillSlot => {
+    const slot = (key: 'freeze' | 'boost' | 'jump' | 'flare' | 'item', ic: string, hint: string, labelKey = `hud.${key}`): SkillSlot => {
       const count = h('span', { class: 'sk-count' });
       const el = button(
         h('span', { class: 'sk-inner' }, icon(ic), count, h('span', { class: 'sk-key' }, hint), h('span', { class: 'sk-label' }, t(labelKey as TKey))),
@@ -78,8 +77,21 @@ export class GameScreen extends Screen {
       freeze: slot('freeze', Icons.snow, displayKey(primaryKeyFor('freeze'))),
       boost: slot('boost', Icons.bolt, displayKey(primaryKeyFor('boost'))),
       jump: slot('jump', Icons.dash, displayKey(primaryKeyFor('jump'))),
+      flare: slot('flare', Icons.flare, displayKey(primaryKeyFor('flare'))),
       item: slot('item', Icons.star, displayKey(primaryKeyFor('item')), 'hud.item'),
     };
+    // актив і пасив показуються своїми картинками
+    const loadout = Save.loadoutFor(Save.owns(Save.data.plane) ? Save.data.plane : 'falcon');
+    const activeDef = getItemDef(Save.itemById(loadout.active)?.defId ?? '');
+    if (activeDef) {
+      const ico = this.slots.item.el.querySelector('.ico');
+      if (ico) ico.innerHTML = itemSvg(activeDef.id);
+      this.slots.item.el.classList.add('sk-art', `rarity-frame-${activeDef.rarity}`);
+    }
+    const passiveDef = getItemDef(Save.itemById(loadout.passive)?.defId ?? '');
+    this.passiveSlot = passiveDef
+      ? h('div', { class: `skill sk-passive sk-art rarity-frame-${passiveDef.rarity}`, title: t(passiveDef.nameKey) }, h('span', { class: 'sk-inner' }, icon(itemSvg(passiveDef.id)), h('span', { class: 'sk-label' }, t('hud.passive'))))
+      : null;
     this.slots.item.el.hidden = true;
     this.featIcon = h('span', { class: 'ico' });
     this.featText = h('span', { class: 'sk-label' });
@@ -98,10 +110,9 @@ export class GameScreen extends Screen {
       { class: `game${isTouch() ? ' touch' : ''}` },
       h('div', { class: 'hud-tl' }, h('div', { class: 'hud-label' }, label), this.hudTime, campaign ? h('div', { class: 'hud-bar' }, this.hudProgress) : null),
       this.hudCenter,
-      h('div', { class: 'hud-tr' }, this.hudAmmo, this.hudCoins, fsBtn, this.pauseBtn),
-      h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el, this.slots.item.el),
+      h('div', { class: 'hud-tr' }, this.hudCoins, fsBtn, this.pauseBtn),
+      h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.item.el, this.passiveSlot),
       isTouch() ? this.buildJoystick() : null,
-      isTouch() ? this.buildFireButton() : null,
     );
     return el;
   }
@@ -147,20 +158,6 @@ export class GameScreen extends Screen {
     zone.addEventListener('pointerup', end);
     zone.addEventListener('pointercancel', end);
     return zone;
-  }
-
-  private buildFireButton(): HTMLElement {
-    const btn = h('button', { class: 'fire-btn', tabindex: -1 }, icon(Icons.bolt, 'ico'));
-    const set = (v: boolean) => (e: PointerEvent): void => {
-      e.preventDefault();
-      this.app.input.touchFiring = v;
-      btn.classList.toggle('on', v);
-    };
-    btn.addEventListener('pointerdown', set(true));
-    btn.addEventListener('pointerup', set(false));
-    btn.addEventListener('pointercancel', set(false));
-    btn.addEventListener('pointerleave', set(false));
-    return btn;
   }
 
   onShow(): void {
@@ -229,6 +226,9 @@ export class GameScreen extends Screen {
       case 'item':
         this.game.useItem();
         break;
+      case 'flare':
+        this.game.useFlare();
+        break;
       case 'pause':
         this.pause();
         break;
@@ -268,12 +268,6 @@ export class GameScreen extends Screen {
     }
     this.set(this.hudCoinsText, coinsNow);
 
-    const ammo = g.ammoInfo;
-    this.hudAmmo.hidden = ammo.infinite;
-    if (!ammo.infinite) {
-      this.set(this.hudAmmoText, ammo.reloading ? t('hud.reloading') : String(ammo.ammo));
-      this.hudAmmo.classList.toggle('reloading', ammo.reloading);
-    }
 
     const fz = this.slots.freeze;
     this.set(fz.count, String(sk.freezeCharges));
@@ -292,6 +286,13 @@ export class GameScreen extends Screen {
     this.set(jp.count, multi ? `${sk.jumpCharges}/${sk.jumpChargesMax}` : sk.jumpCharges > 0 ? t('hud.ready') : sk.jumpCooldown.toFixed(1));
     jp.el.classList.toggle('empty', sk.jumpCharges === 0);
     jp.el.style.setProperty('--p', String(sk.jumpCharges < sk.jumpChargesMax ? sk.jumpCooldown / sk.jumpCooldownMax : 0));
+
+    const fl = this.slots.flare;
+    const flReady = sk.flareCooldown <= 0;
+    this.set(fl.count, flReady ? t('hud.ready') : sk.flareCooldown.toFixed(1));
+    fl.el.classList.toggle('empty', !flReady && !sk.isFlaring);
+    fl.el.classList.toggle('active', sk.isFlaring);
+    fl.el.style.setProperty('--p', String(sk.isFlaring ? sk.flareLeft / FLARE_DURATION : flReady ? 0 : sk.flareCooldown / sk.flareCooldownMax));
 
     const it = this.slots.item;
     it.el.hidden = !sk.itemEquipped();

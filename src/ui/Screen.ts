@@ -17,8 +17,11 @@ export abstract class Screen {
     fresh.classList.add('screen');
     if (this.el) {
       const wasActive = this.el.classList.contains('active');
+      const scroll = this.el.scrollTop;
       this.el.replaceWith(fresh);
       if (wasActive) fresh.classList.add('active');
+      // перебудова після покупки/екіпірування не повинна кидати сторінку нагору
+      fresh.scrollTop = scroll;
     }
     this.el = fresh;
     return fresh;

@@ -50,20 +50,22 @@ export interface PlaneSpec {
   feature: PlaneFeature;
   /** Ціна в коінс (0 — є з самого початку) */
   price: number;
+  /** Бойові характеристики (PvP): базове HP і множник урону зброї */
+  combat: { hp: number; damage: number };
 }
 
 export const PLANES: readonly PlaneSpec[] = [
-  { id: 'falcon', accel: 2600, maxSpeed: 420, drag: 5.5, radius: 15, flame: ['#9fe3ff', '#2f7bff'], feature: { extraBoost: 1, boostDurationMul: 1.5 }, price: 0 },
-  { id: 'phantom', accel: 3300, maxSpeed: 370, drag: 7.5, radius: 13, flame: ['#ffc2ef', '#ff3fa4'], feature: { jumpDistanceMul: 1.5, jumpCooldownMul: 0.75 }, price: 150 },
-  { id: 'blaze', accel: 2300, maxSpeed: 500, drag: 4.2, radius: 16, flame: ['#ffe39a', '#ff5a1f'], feature: { ramOnBoost: true }, price: 250 },
-  { id: 'wasp', accel: 3100, maxSpeed: 380, drag: 7, radius: 10, flame: ['#fff3a0', '#ffb000'], feature: { extraFreeze: 1 }, price: 400 },
-  { id: 'collector', accel: 2500, maxSpeed: 400, drag: 5.5, radius: 16, flame: ['#a8fff0', '#18c8b0'], feature: { magnetRadius: 260 }, price: 600 },
-  { id: 'swift', accel: 2900, maxSpeed: 450, drag: 6, radius: 14, flame: ['#d8f6ff', '#28c8f0'], feature: { jumpCharges: 2 }, price: 800 },
-  { id: 'titan', accel: 2100, maxSpeed: 390, drag: 5, radius: 17, flame: ['#fff1a8', '#ffb020'], feature: { startShield: true, shieldRegen: 22 }, price: 1100 },
-  { id: 'chronos', accel: 2700, maxSpeed: 420, drag: 6, radius: 14, flame: ['#e2c2ff', '#8a3cff'], feature: { freezeDurationMul: 2, extraFreeze: 1 }, price: 1400 },
-  { id: 'thunder', accel: 2800, maxSpeed: 440, drag: 5.5, radius: 15, flame: ['#c8e8ff', '#3a7bff'], feature: { dashShockwave: 150, jumpCooldownMul: 0.85 }, price: 1800 },
-  { id: 'ufo', accel: 7000, maxSpeed: 380, drag: 16, radius: 15, flame: ['#c8ffd8', '#3adc78'], feature: { gravityImmune: true, noRotate: true }, price: 2300 },
-  { id: 'phoenix', accel: 3000, maxSpeed: 460, drag: 6, radius: 14, flame: ['#fff1a8', '#ff5a1f'], feature: { extraLives: 1, extraBoost: 1 }, price: 3000 },
+  { id: 'falcon', accel: 2600, maxSpeed: 420, drag: 5.5, radius: 15, flame: ['#9fe3ff', '#2f7bff'], feature: { extraBoost: 1, boostDurationMul: 1.5 }, price: 0, combat: { hp: 100, damage: 1.0 } },
+  { id: 'phantom', accel: 3300, maxSpeed: 370, drag: 7.5, radius: 13, flame: ['#ffc2ef', '#ff3fa4'], feature: { jumpDistanceMul: 1.5, jumpCooldownMul: 0.75 }, price: 150, combat: { hp: 90, damage: 1.05 } },
+  { id: 'blaze', accel: 2300, maxSpeed: 500, drag: 4.2, radius: 16, flame: ['#ffe39a', '#ff5a1f'], feature: { ramOnBoost: true }, price: 250, combat: { hp: 110, damage: 1.15 } },
+  { id: 'wasp', accel: 3100, maxSpeed: 380, drag: 7, radius: 10, flame: ['#fff3a0', '#ffb000'], feature: { extraFreeze: 1 }, price: 400, combat: { hp: 80, damage: 1.0 } },
+  { id: 'collector', accel: 2500, maxSpeed: 400, drag: 5.5, radius: 16, flame: ['#a8fff0', '#18c8b0'], feature: { magnetRadius: 260 }, price: 600, combat: { hp: 105, damage: 0.95 } },
+  { id: 'swift', accel: 2900, maxSpeed: 450, drag: 6, radius: 14, flame: ['#d8f6ff', '#28c8f0'], feature: { jumpCharges: 2 }, price: 800, combat: { hp: 95, damage: 1.05 } },
+  { id: 'titan', accel: 2100, maxSpeed: 390, drag: 5, radius: 17, flame: ['#fff1a8', '#ffb020'], feature: { startShield: true, shieldRegen: 22 }, price: 1100, combat: { hp: 140, damage: 0.95 } },
+  { id: 'chronos', accel: 2700, maxSpeed: 420, drag: 6, radius: 14, flame: ['#e2c2ff', '#8a3cff'], feature: { freezeDurationMul: 2, extraFreeze: 1 }, price: 1400, combat: { hp: 100, damage: 1.05 } },
+  { id: 'thunder', accel: 2800, maxSpeed: 440, drag: 5.5, radius: 15, flame: ['#c8e8ff', '#3a7bff'], feature: { dashShockwave: 150, jumpCooldownMul: 0.85 }, price: 1800, combat: { hp: 105, damage: 1.15 } },
+  { id: 'ufo', accel: 7000, maxSpeed: 380, drag: 16, radius: 15, flame: ['#c8ffd8', '#3adc78'], feature: { gravityImmune: true, noRotate: true }, price: 2300, combat: { hp: 100, damage: 1.1 } },
+  { id: 'phoenix', accel: 3000, maxSpeed: 460, drag: 6, radius: 14, flame: ['#fff1a8', '#ff5a1f'], feature: { extraLives: 1, extraBoost: 1 }, price: 3000, combat: { hp: 115, damage: 1.2 } },
 ];
 
 export const getPlane = (id: PlaneId): PlaneSpec => PLANES.find((p) => p.id === id) ?? PLANES[0];
@@ -127,6 +129,16 @@ export function effectivePlaneSpec(base: PlaneSpec, progress: PlaneProgress): Pl
     maxSpeed: base.maxSpeed * tierFactor * levelSpeedFactor,
     drag: base.drag * levelDragFactor,
     feature: featureBonus ? featureBonus(base.feature, tier) : base.feature,
+  };
+}
+
+/** Бойові характеристики з урахуванням тіру/рівня. Тримати синхронізовано з server/src/content/planes.ts (planeCombat). */
+export function planeCombat(base: PlaneSpec, progress: PlaneProgress): { hp: number; damageMul: number } {
+  const tier = Math.min(MAX_TIER, Math.max(1, progress.tier));
+  const level = Math.min(MAX_LEVEL_IN_TIER, Math.max(1, progress.level));
+  return {
+    hp: base.combat.hp + (tier - 1) * 20 + (level - 1) * 5,
+    damageMul: base.combat.damage * (1 + 0.08 * (tier - 1) + 0.02 * (level - 1)),
   };
 }
 

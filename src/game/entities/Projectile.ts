@@ -3,7 +3,8 @@ import { Entity, type WorldView } from './Entity';
 
 export type ProjectileKind = 'bullet' | 'rocket';
 
-const RANGE: Record<ProjectileKind, number> = { bullet: 620, rocket: 820 };
+/** Дальність польоту (дзеркалить PROJECTILE_RANGE у server/src/content/weapons.ts). */
+export const RANGE: Record<ProjectileKind, number> = { bullet: 900, rocket: 1000 };
 
 /** Снаряд гравця: летить по прямій від точки спавну, гине на межі дальності або світу. */
 export class Projectile extends Entity {
@@ -17,8 +18,11 @@ export class Projectile extends Entity {
     speed: number,
     readonly damage: number,
     readonly splashRadius: number,
+    /** Ворожий снаряд (PvP) — інший колір трасера */
+    readonly hostile = false,
+    readonly ownerId: string | null = null,
   ) {
-    super(pos, Vec2.fromAngle(angle, speed), kind === 'rocket' ? 5 : 3);
+    super(pos, Vec2.fromAngle(angle, speed), kind === 'rocket' ? 6 : 2.5);
     this.angle = angle;
   }
 
@@ -34,17 +38,27 @@ export class Projectile extends Entity {
     ctx.translate(this.pos.x, this.pos.y);
     ctx.rotate(this.angle + Math.PI / 2);
     if (this.kind === 'bullet') {
-      const g = ctx.createLinearGradient(0, -9, 0, 9);
-      g.addColorStop(0, '#ffffff');
-      g.addColorStop(1, '#8fe3ff');
+      // дрібна куля з трасером; ворожі — червоні й трохи довші, щоб їх було видно здалеку
+      const len = this.hostile ? 22 : 16;
+      const g = ctx.createLinearGradient(0, -3, 0, len);
+      g.addColorStop(0, this.hostile ? 'rgba(255,120,100,0.95)' : 'rgba(220,250,255,0.95)');
+      g.addColorStop(1, this.hostile ? 'rgba(255,60,60,0)' : 'rgba(120,220,255,0)');
       ctx.fillStyle = g;
+      ctx.fillRect(this.hostile ? -1.3 : -1, -3, this.hostile ? 2.6 : 2, len + 3);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = this.hostile ? 'rgba(255,90,70,0.35)' : 'rgba(140,220,255,0.3)';
       ctx.beginPath();
-      ctx.ellipse(0, 0, 2.2, 9, 0, 0, Math.PI * 2);
+      ctx.arc(0, -2, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = this.hostile ? '#ffe0d8' : '#ffffff';
+      ctx.beginPath();
+      ctx.arc(0, -2, 1.7, 0, Math.PI * 2);
       ctx.fill();
     } else {
       ctx.fillStyle = '#e6e9f0';
       ctx.fillRect(-2.2, -7, 4.4, 14);
-      ctx.fillStyle = '#ff4a3a';
+      ctx.fillStyle = this.hostile ? '#ff2a6a' : '#ff4a3a';
       ctx.beginPath();
       ctx.ellipse(0, -8, 2.6, 4, 0, 0, Math.PI * 2);
       ctx.fill();

@@ -11,12 +11,12 @@ import { Pickup, type PickupKind } from './entities/Pickup';
 import { Player } from './entities/Player';
 import { CRYSTAL_INTERVAL, SURVIVAL_BASE, getLevel, introducedHazard, type LevelConfig } from './levels';
 import { CRYSTAL_COINS } from './economy';
-import { applyItemPassive, effectiveActive, getItemDef, type ActiveKind } from './items';
+import { applyItemPassive, getItemDef, type ActiveEffect } from './items';
 import { effectivePlaneSpec, getPlane, type PlaneFeature, type PlaneId } from './planes';
 import { Projectile } from './entities/Projectile';
-import { DEFAULT_WEAPON_ID, canDestroy, getWeaponDef, type WeaponDef } from './weapons';
+import { canDestroy } from './weapons';
 import { ParticleSystem } from './systems/Particles';
-import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
+import { BOOST_MULTIPLIER, FLARE_RADIUS, SkillSystem } from './systems/SkillSystem';
 import { Starfield } from './systems/Starfield';
 
 export type GameMode = 'campaign' | 'survival';
@@ -162,16 +162,14 @@ export class Game {
   onEnd: (r: GameResult) => void = () => {};
 
   /** Активний предмет екіпіровки (якщо є) — ефект масштабований рідкістю. */
-  private activeItem: { kind: ActiveKind; duration: number; radius: number } | null = null;
+  private activeItem: ActiveEffect | null = null;
+  /** Множник перезарядок навичок від пасиву */
+  private cooldownMul = 1;
   /** EMP: стаціонарне поле заморозки в точці каста на activeItem.duration секунд. */
   private empTimer = 0;
   private readonly empPos = new Vec2();
 
   /** Екіпірована зброя (завжди є — за замовчуванням стартовий кулемет). */
-  private weapon: WeaponDef;
-  private fireTimer = 0;
-  ammo = 0;
-  reloadTimer = 0;
 
   constructor(
     readonly mode: GameMode,
@@ -184,20 +182,19 @@ export class Game {
     let spec = effectivePlaneSpec(getPlane(planeId), progress);
 
     const passiveItem = Save.itemById(loadout.passive);
-    if (passiveItem) spec = applyItemPassive(spec, getItemDef(passiveItem.defId), passiveItem.rarity);
-
-    const activeItem = Save.itemById(loadout.active);
-    if (activeItem) {
-      const def = getItemDef(activeItem.defId);
-      if (def?.active) {
-        const eff = effectiveActive(def, activeItem.rarity);
-        this.activeItem = { kind: def.active.kind, duration: eff.duration, radius: eff.radius };
-        this.itemCooldownMax = eff.cooldown;
-      }
+    const passiveDef = passiveItem ? getItemDef(passiveItem.defId) : undefined;
+    if (passiveDef) {
+      spec = applyItemPassive(spec, passiveDef);
+      this.cooldownMul = 1 - (passiveDef.combat?.cooldown ?? 0);
     }
 
-    this.weapon = getWeaponDef(loadout.weapon ?? undefined) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
-    this.ammo = this.weapon.ammo === 'infinite' ? Infinity : this.weapon.ammo;
+    const activeItem = Save.itemById(loadout.active);
+    const activeDef = activeItem ? getItemDef(activeItem.defId) : undefined;
+    if (activeDef?.active) {
+      this.activeItem = activeDef.active;
+      this.itemCooldownMax = activeDef.active.cooldown;
+    }
+
 
     this.player = new Player(spec, progress.tier, progress.level);
   }
@@ -240,7 +237,7 @@ export class Game {
     this.player.reset(this.width / 2, this.height * 0.62);
     this.player.invulnerable = 0;
     const feat = this.feature;
-    this.skills.reset(feat, this.itemCooldownMax);
+    this.skills.reset(feat, this.itemCooldownMax, this.cooldownMul);
     this.player.shield = !!feat.startShield;
     this.lives = feat.extraLives ?? 0;
     this.shieldRegenTimer = 0;
@@ -249,9 +246,6 @@ export class Game {
     this.prisms = 0;
     this.coins = 0;
     this.projectiles = [];
-    this.fireTimer = 0;
-    this.reloadTimer = 0;
-    this.ammo = this.weapon.ammo === 'infinite' ? Infinity : this.weapon.ammo;
     this.difficultyStep = 0;
     this.ended = false;
     this.shake = 0;
@@ -331,24 +325,60 @@ export class Game {
   useItem(): void {
     if (this.state !== 'running' || !this.activeItem || !this.skills.tryItem()) return;
     const item = this.activeItem;
+    const { x, y } = this.player.pos;
     switch (item.kind) {
       case 'emp':
-        this.empTimer = item.duration;
-        this.empPos.set(this.player.pos.x, this.player.pos.y);
+        this.empTimer = item.duration ?? 2;
+        this.empPos.set(x, y);
         Sfx.freeze();
-        this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.5, r0: 10, r1: item.radius, color: '160,220,255' });
+        this.rings.push({ x, y, t: 0, dur: 0.5, r0: 10, r1: item.radius ?? 200, color: '160,220,255' });
         break;
-      case 'decoyFlare':
-        this.player.invulnerable = Math.max(this.player.invulnerable, item.duration);
+      case 'phase':
+        this.player.invulnerable = Math.max(this.player.invulnerable, item.duration ?? 2);
         Sfx.powerup();
-        this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.4, r0: 10, r1: 70, color: '255,226,122' });
-        this.particles.emit(this.player.pos.x, this.player.pos.y, { count: 20, speed: [40, 140], life: [0.3, 0.6], size: [2, 4], colors: ['#fff6c8', '#ffe27a'] });
+        this.rings.push({ x, y, t: 0, dur: 0.4, r0: 10, r1: 70, color: '201,167,255' });
+        this.particles.emit(x, y, { count: 20, speed: [40, 140], life: [0.3, 0.6], size: [2, 4], colors: ['#efe4ff', '#c9a7ff'] });
         break;
       case 'nanoRepair':
         this.player.shield = true;
         Sfx.powerup();
-        this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.4, r0: 10, r1: 60, color: '80,255,160' });
+        this.rings.push({ x, y, t: 0, dur: 0.4, r0: 10, r1: 60, color: '80,255,160' });
         break;
+      case 'overdrive':
+        // у кампанії стрільби немає — овердрайв дає безкоштовний форсаж
+        this.skills.boostLeft = Math.max(this.skills.boostLeft, item.duration ?? 4);
+        Sfx.boost();
+        this.rings.push({ x, y, t: 0, dur: 0.4, r0: 10, r1: 80, color: '255,90,58' });
+        break;
+      case 'swarm': {
+        Sfx.boost();
+        const base = this.player.spec.feature.noRotate ? -Math.PI / 2 : this.player.angle;
+        for (let i = 0; i < 6; i++) {
+          const a = base + (i - 2.5) * 0.22;
+          this.projectiles.push(new Projectile('rocket', this.player.nose(), a, 560, item.power ?? 9, 70));
+        }
+        break;
+      }
+    }
+  }
+
+  /** Теплові пастки: збивають самонавідні астероїди й дрібні уламки поруч. */
+  useFlare(): void {
+    if (this.state !== 'running' || !this.skills.tryFlare()) return;
+    const { x, y } = this.player.pos;
+    Sfx.jump();
+    this.rings.push({ x, y, t: 0, dur: 0.45, r0: 10, r1: FLARE_RADIUS * 2.2, color: '255,190,90' });
+    const back = this.player.exhaustAngle;
+    for (let i = 0; i < 8; i++) {
+      this.particles.emit(x, y, { count: 4, speed: [120, 260], angle: back + (i - 3.5) * 0.3, spread: 0.15, life: [0.6, 1.1], size: [3, 6], colors: ['#ffffff', '#fff1a8', '#ff9a3a'], drag: 1.5 });
+    }
+    for (const a of this.asteroids) {
+      if (!a.alive || !this.destructible(a)) continue;
+      const d = Vec2.dist(a.pos, this.player.pos);
+      if ((a instanceof HomingAsteroid && d < FLARE_RADIUS * 3) || (a.size === 'small' && d < FLARE_RADIUS * 1.6)) {
+        a.kill();
+        this.burst(a.pos.x, a.pos.y, a.visual, false);
+      }
     }
   }
 
@@ -442,39 +472,8 @@ export class Game {
     this.updateShieldRegen(dt);
     this.updateHazards(dt, true);
     this.updatePickups(dt);
-    this.updateWeapon(dt);
     this.updateProjectiles(dt);
     if (!this.frozen) this.updateSpawning(dt);
-  }
-
-  /** Стан зброї для HUD: тип, патрони (Infinity — безлімітні), чи йде перезарядка. */
-  get ammoInfo(): { kind: WeaponDef['kind']; ammo: number; infinite: boolean; reloading: boolean; reloadPct: number } {
-    return {
-      kind: this.weapon.kind,
-      ammo: this.ammo,
-      infinite: this.weapon.ammo === 'infinite',
-      reloading: this.reloadTimer > 0,
-      reloadPct: this.weapon.reloadTime ? 1 - this.reloadTimer / this.weapon.reloadTime : 0,
-    };
-  }
-
-  private updateWeapon(dt: number): void {
-    this.fireTimer = Math.max(0, this.fireTimer - dt);
-    if (this.reloadTimer > 0) {
-      this.reloadTimer -= dt;
-      if (this.reloadTimer <= 0 && this.weapon.ammo !== 'infinite') this.ammo = this.weapon.ammo;
-      return;
-    }
-    if (!this.input.firing() || this.fireTimer > 0 || this.ammo <= 0) return;
-    this.fireTimer = 1 / this.weapon.fireRate;
-    if (this.weapon.ammo !== 'infinite') {
-      this.ammo--;
-      if (this.ammo <= 0) this.reloadTimer = this.weapon.reloadTime ?? 2;
-    }
-    const nose = this.player.nose();
-    const angle = this.player.spec.feature.noRotate ? -Math.PI / 2 : this.player.angle;
-    this.projectiles.push(new Projectile(this.weapon.kind, nose, angle, this.weapon.projectileSpeed, this.weapon.damage, this.weapon.splashRadius ?? 0));
-    Sfx.jump();
   }
 
   private destroyByWeapon(a: Asteroid, splashRadius: number): void {
@@ -580,7 +579,7 @@ export class Game {
     const empActive = this.empTimer > 0 && this.activeItem?.kind === 'emp';
     const world = this.worldView();
     for (const a of this.asteroids) {
-      const empHit = empActive && circlesOverlap(a.pos, a.radius, this.empPos, this.activeItem!.radius);
+      const empHit = empActive && circlesOverlap(a.pos, a.radius, this.empPos, this.activeItem!.radius ?? 200);
       a.frozen = frozen || empHit;
       if (!frozen && !empHit) a.update(dt, world);
       if (a instanceof Comet && !a.warning && !frozen) {

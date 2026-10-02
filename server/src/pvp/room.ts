@@ -1,16 +1,42 @@
 import type { Server as IOServer, Socket } from 'socket.io';
 import { User } from '../models/User.js';
-import { grantReward, addBp } from '../progress.js';
-import { getWeaponDef, DEFAULT_WEAPON_ID } from '../content/weapons.js';
+import { grantReward, addBp, ensureQuestSlots, incrementQuestProgress } from '../progress.js';
+import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/weapons.js';
+import { getItemDef, type ItemMeta } from '../content/items.js';
+import { PLANE_IDS, planeCombat } from '../content/planes.js';
 import { updateBot } from './bot.js';
-import { ROOM_SIZE, WORLD_W, WORLD_H, TICK_MS, MATCH_TIME_LIMIT_MS, RADAR_VISIBLE_AFTER_FIRE_MS, baseHpFor, matchReward } from './constants.js';
-import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry } from './types.js';
+import {
+  ROOM_SIZE,
+  WORLD_W,
+  WORLD_H,
+  TICK_MS,
+  COUNTDOWN_MS,
+  MATCH_TIME_LIMIT_MS,
+  HIT_RADIUS,
+  FLARE_COOLDOWN_MS,
+  FLARE_DURATION_MS,
+  FLARE_RADIUS,
+  matchReward,
+} from './constants.js';
+import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind } from './types.js';
 
 const BOT_NAMES = ['Вихор', 'Корсар', 'Немезида', 'Беркут', 'Скорпіон', 'Фантом-7', 'Ренегат', 'Сокира'];
 let botSeq = 0;
 
+export interface Entrant {
+  socket: Socket;
+  userId: string;
+  nickname: string;
+  planeId: string;
+  weaponId: string;
+  tier: number;
+  level: number;
+  activeDefId: string | null;
+  passiveDefId: string | null;
+}
+
 function randPos(): { x: number; y: number } {
-  return { x: 40 + Math.random() * (WORLD_W - 80), y: 40 + Math.random() * (WORLD_H - 80) };
+  return { x: 200 + Math.random() * (WORLD_W - 400), y: 200 + Math.random() * (WORLD_H - 400) };
 }
 
 function makeObstacles(): Obstacle[] {
@@ -19,96 +45,155 @@ function makeObstacles(): Obstacle[] {
   return list;
 }
 
+/** Найменша відстань від точки (cx,cy) до відрізка (ax,ay)-(bx,by). */
+function segDist(ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const k = len2 > 0 ? Math.max(0, Math.min(1, ((cx - ax) * dx + (cy - ay) * dy) / len2)) : 0;
+  return Math.hypot(ax + dx * k - cx, ay + dy * k - cy);
+}
+
+function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'nickname' | 'planeId' | 'tier' | 'level' | 'weaponId'>, active: ItemMeta | null, passive: ItemMeta | null, pos: { x: number; y: number }): Participant {
+  const combat = planeCombat(base.planeId, base.tier, base.level);
+  const hp = Math.round(combat.hp + (passive?.combat?.hp ?? 0));
+  return {
+    ...base,
+    activeItem: active,
+    passiveItem: passive,
+    // бонус урону дають обидва предмети — і пасив, і актив
+    damageMul: combat.damageMul * (1 + (passive?.combat?.damage ?? 0) + (active?.combat?.damage ?? 0)),
+    fireRateMul: 1 + (passive?.combat?.fireRate ?? 0),
+    cooldownMul: 1 - (passive?.combat?.cooldown ?? 0),
+    pos,
+    angle: Math.atan2(WORLD_H / 2 - pos.y, WORLD_W / 2 - pos.x),
+    firing: false,
+    lastFiredAt: 0,
+    hp,
+    maxHp: hp,
+    alive: true,
+    kills: 0,
+    place: null,
+    flareUntil: 0,
+    phaseUntil: 0,
+    slowUntil: 0,
+    lastFlareAt: -Infinity,
+    lastItemAt: -Infinity,
+    hitWindowStart: 0,
+    hitsInWindow: 0,
+  };
+}
+
 export class Room {
   readonly id: string;
   state: MatchState = 'countdown';
   private participants = new Map<string, Participant>();
   private sockets = new Map<string, Socket>();
   private obstacles: Obstacle[];
+  private projectiles: ServerProjectile[] = [];
   private startedAt = Date.now();
   private tickHandle: ReturnType<typeof setInterval> | null = null;
   private ended = false;
+  onClose: () => void = () => {};
 
   constructor(
     id: string,
     private readonly io: IOServer,
-    entrants: { socket: Socket; userId: string; nickname: string; planeId: string; weaponId: string; tier: number; level: number }[],
+    entrants: Entrant[],
   ) {
     this.id = id;
     this.obstacles = makeObstacles();
 
     for (const e of entrants) {
-      const hp = baseHpFor(e.tier, e.level);
-      this.participants.set(e.socket.id, {
-        id: e.socket.id,
-        userId: e.userId,
-        isBot: false,
-        nickname: e.nickname,
-        planeId: e.planeId,
-        weaponId: getWeaponDef(e.weaponId) ? e.weaponId : DEFAULT_WEAPON_ID,
-        pos: randPos(),
-        angle: -Math.PI / 2,
-        firing: false,
-        lastFiredAt: 0,
-        hp,
-        maxHp: hp,
-        alive: true,
-        kills: 0,
-        place: null,
-      });
+      const active = e.activeDefId ? getItemDef(e.activeDefId) ?? null : null;
+      const passive = e.passiveDefId ? getItemDef(e.passiveDefId) ?? null : null;
+      const p = makeParticipant(
+        {
+          id: e.socket.id,
+          userId: e.userId,
+          isBot: false,
+          nickname: e.nickname,
+          planeId: e.planeId,
+          tier: e.tier,
+          level: e.level,
+          weaponId: getWeaponDef(e.weaponId) ? e.weaponId : DEFAULT_WEAPON_ID,
+        },
+        active?.slot === 'active' ? active : null,
+        passive?.slot === 'passive' ? passive : null,
+        this.spawnPos(),
+      );
+      this.participants.set(p.id, p);
       this.sockets.set(e.socket.id, e.socket);
       e.socket.join(id);
     }
 
     while (this.participants.size < ROOM_SIZE) {
       const botId = `bot-${++botSeq}`;
-      const hp = baseHpFor(1 + Math.floor(Math.random() * 3), 1 + Math.floor(Math.random() * 4));
-      this.participants.set(botId, {
-        id: botId,
-        userId: null,
-        isBot: true,
-        nickname: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
-        planeId: 'falcon',
-        weaponId: Math.random() < 0.3 ? 'rocket_launcher' : 'machine_gun',
-        pos: randPos(),
-        angle: -Math.PI / 2,
-        firing: false,
-        lastFiredAt: 0,
-        hp,
-        maxHp: hp,
-        alive: true,
-        kills: 0,
-        place: null,
-        botState: 'patrol',
-        botDir: { x: 0, y: 1 },
-        botTimer: 0,
-      });
+      const p = makeParticipant(
+        {
+          id: botId,
+          userId: null,
+          isBot: true,
+          nickname: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
+          planeId: PLANE_IDS[Math.floor(Math.random() * PLANE_IDS.length)],
+          tier: 1 + Math.floor(Math.random() * 3),
+          level: 1 + Math.floor(Math.random() * 4),
+          weaponId: Math.random() < 0.3 ? 'rocket_launcher' : 'machine_gun',
+        },
+        Math.random() < 0.35 ? getItemDef('nano_repair')! : null,
+        null,
+        this.spawnPos(),
+      );
+      p.botState = 'patrol';
+      p.botTimer = 0;
+      this.participants.set(botId, p);
     }
 
     this.io.to(id).emit('match:init', {
       roomId: id,
       world: { w: WORLD_W, h: WORLD_H },
       obstacles: this.obstacles,
-      selfId: null, // клієнт бере свій id із власного socket.id
-      participants: this.publicList(),
+      participants: this.publicList(Date.now()),
+      countdownMs: COUNTDOWN_MS,
+      timeLimitMs: MATCH_TIME_LIMIT_MS,
     });
 
-    setTimeout(() => this.begin(), 3000);
+    setTimeout(() => this.begin(), COUNTDOWN_MS);
+  }
+
+  /** Спавн подалі від перешкод та інших учасників. */
+  private spawnPos(): { x: number; y: number } {
+    let best = randPos();
+    let bestScore = -Infinity;
+    for (let i = 0; i < 24; i++) {
+      const c = randPos();
+      let score = Infinity;
+      for (const o of this.obstacles) score = Math.min(score, Math.hypot(c.x - o.x, c.y - o.y) - o.r - 40);
+      for (const p of this.participants.values()) score = Math.min(score, Math.hypot(c.x - p.pos.x, c.y - p.pos.y) / 4);
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+    return best;
   }
 
   private begin(): void {
+    if (this.ended) return;
     this.state = 'active';
     this.startedAt = Date.now();
     this.io.to(this.id).emit('match:start', { startedAt: this.startedAt });
     this.tickHandle = setInterval(() => this.tick(), TICK_MS);
   }
 
-  private publicList(): PublicParticipant[] {
+  private publicList(now: number): PublicParticipant[] {
     return [...this.participants.values()].map((p) => ({
       id: p.id,
       isBot: p.isBot,
       nickname: p.nickname,
       planeId: p.planeId,
+      tier: p.tier,
+      level: p.level,
       pos: p.pos,
       angle: p.angle,
       firing: p.firing,
@@ -117,64 +202,215 @@ export class Room {
       maxHp: p.maxHp,
       alive: p.alive,
       kills: p.kills,
+      flare: now < p.flareUntil,
+      phase: now < p.phaseUntil,
+      slowed: now < p.slowUntil,
     }));
+  }
+
+  /** Розсилка всім у кімнаті, крім автора (він уже показав ефект локально). */
+  private relay(fromId: string, event: string, data: unknown): void {
+    const s = this.sockets.get(fromId);
+    if (s) s.to(this.id).emit(event, data);
+    else this.io.to(this.id).emit(event, data);
   }
 
   onMove(socketId: string, pos: { x: number; y: number }, angle: number, firing: boolean): void {
     const p = this.participants.get(socketId);
     if (!p || !p.alive || this.state !== 'active') return;
+    if (typeof pos?.x !== 'number' || typeof pos?.y !== 'number' || !Number.isFinite(angle)) return;
     p.pos.x = Math.max(0, Math.min(WORLD_W, pos.x));
     p.pos.y = Math.max(0, Math.min(WORLD_H, pos.y));
     p.angle = angle;
-    if (firing && !p.firing) p.lastFiredAt = Date.now();
-    p.firing = firing;
+    p.firing = !!firing;
   }
 
-  onHit(attackerId: string, targetId: string): void {
+  /** Гравець вистрілив — ретранслюємо, щоб інші бачили снаряд. */
+  onShot(socketId: string, data: { x: number; y: number; angle: number; kind: string }): void {
+    const p = this.participants.get(socketId);
+    if (!p || !p.alive || this.state !== 'active') return;
+    if (![data?.x, data?.y, data?.angle].every((n) => typeof n === 'number' && Number.isFinite(n))) return;
+    const kind = data.kind === 'rocket' || data.kind === 'missile' ? data.kind : 'bullet';
+    p.lastFiredAt = Date.now();
+    const def = getWeaponDef(p.weaponId);
+    this.relay(socketId, 'match:shot', { ownerId: p.id, x: data.x, y: data.y, angle: data.angle, kind, speed: kind === 'missile' ? 560 : def?.projectileSpeed ?? 900 });
+  }
+
+  onHit(attackerId: string, targetId: string, source: string): void {
     if (this.state !== 'active') return;
     const attacker = this.participants.get(attackerId);
     const target = this.participants.get(targetId);
-    if (!attacker || !target || !attacker.alive || !target.alive) return;
-    const def = getWeaponDef(attacker.weaponId);
-    this.applyDamage(attacker, target, def?.damage ?? 1);
+    if (!attacker || !target || !attacker.alive || !target.alive || attacker === target) return;
+    const now = Date.now();
+    if (Math.hypot(attacker.pos.x - target.pos.x, attacker.pos.y - target.pos.y) > 1500) return;
+
+    // грубий анти-чит: не більше N влучань за секунду
+    if (now - attacker.hitWindowStart > 1000) {
+      attacker.hitWindowStart = now;
+      attacker.hitsInWindow = 0;
+    }
+    if (++attacker.hitsInWindow > 50) return;
+
+    const def = getWeaponDef(attacker.weaponId) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+    let damage: number;
+    if (source === 'swarm') {
+      const a = attacker.activeItem?.active;
+      if (a?.kind !== 'swarm' || now - attacker.lastItemAt > 5000) return;
+      damage = (a.power ?? 0) * attacker.damageMul;
+    } else if (source === 'splash') {
+      if (def.kind !== 'rocket' && attacker.activeItem?.active?.kind !== 'swarm') return;
+      damage = def.damage * 0.5 * attacker.damageMul;
+    } else {
+      damage = def.damage * attacker.damageMul;
+    }
+    this.applyDamage(attacker, target, damage, now);
   }
 
-  private applyDamage(attacker: Participant, target: Participant, damage: number): void {
+  onSkill(socketId: string, data: { kind: SkillKind; x: number; y: number; angle: number }): void {
+    const p = this.participants.get(socketId);
+    if (!p || !p.alive || this.state !== 'active') return;
+    this.useSkill(p, data?.kind, Date.now(), Number(data?.angle) || p.angle);
+  }
+
+  private useSkill(p: Participant, kind: SkillKind, now: number, angle: number): void {
+    let extra: Record<string, number> = {};
+    if (kind === 'flare') {
+      if (now - p.lastFlareAt < FLARE_COOLDOWN_MS * p.cooldownMul * 0.9) return;
+      p.lastFlareAt = now;
+      p.flareUntil = now + FLARE_DURATION_MS;
+    } else if (kind === 'jump') {
+      // ривок — чисто візуальний для інших (позицію шле клієнт)
+    } else {
+      const a = p.activeItem?.active;
+      if (!a || a.kind !== kind) return;
+      if (now - p.lastItemAt < a.cooldown * 1000 * p.cooldownMul * 0.9) return;
+      p.lastItemAt = now;
+      switch (a.kind) {
+        case 'nanoRepair':
+          p.hp = Math.min(p.maxHp, p.hp + (a.power ?? 30));
+          break;
+        case 'phase':
+          p.phaseUntil = now + (a.duration ?? 2) * 1000;
+          break;
+        case 'emp': {
+          const radius = a.radius ?? 250;
+          const until = now + (a.duration ?? 2.5) * 1000;
+          for (const o of this.participants.values()) {
+            if (o === p || !o.alive) continue;
+            if (Math.hypot(o.pos.x - p.pos.x, o.pos.y - p.pos.y) >= radius) continue;
+            o.slowUntil = until;
+            if (a.power) this.applyDamage(p, o, a.power * p.damageMul, now);
+          }
+          extra = { radius, duration: a.duration ?? 2.5 };
+          break;
+        }
+        default:
+          break;
+      }
+    }
+    this.relay(p.id, 'match:skill', { id: p.id, kind, x: p.pos.x, y: p.pos.y, angle, ...extra });
+  }
+
+  private applyDamage(attacker: Participant, target: Participant, damage: number, now: number): void {
+    if (!target.alive || now < target.phaseUntil) return;
+    // під час пасток кулі й ракети збиваються (з невеликим допуском на затримку мережі)
+    if (now < target.flareUntil - 80) return;
     target.hp = Math.max(0, target.hp - damage);
-    const died = target.hp <= 0 && target.alive;
+    target.botLastHitAt = now;
+    const died = target.hp <= 0;
     if (died) {
       target.alive = false;
+      target.firing = false;
       attacker.kills++;
     }
-    this.io.to(this.id).emit('match:hit', { attackerId: attacker.id, targetId: target.id, hp: target.hp, died });
+    this.io.to(this.id).emit('match:hit', { attackerId: attacker.id, targetId: target.id, hp: target.hp, died, damage: Math.round(damage * 10) / 10 });
     if (died) this.checkEnd();
+  }
+
+  private spawnBotShot(bot: Participant, angle: number): void {
+    const def = getWeaponDef(bot.weaponId) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+    const nose = { x: bot.pos.x + Math.cos(bot.angle) * 24, y: bot.pos.y + Math.sin(bot.angle) * 24 };
+    this.projectiles.push({
+      ownerId: bot.id,
+      kind: def.kind,
+      x: nose.x,
+      y: nose.y,
+      vx: Math.cos(angle) * def.projectileSpeed,
+      vy: Math.sin(angle) * def.projectileSpeed,
+      traveled: 0,
+      range: PROJECTILE_RANGE[def.kind],
+      damage: def.damage * bot.damageMul,
+      splash: def.splashRadius ?? 0,
+    });
+    this.io.to(this.id).emit('match:shot', { ownerId: bot.id, x: nose.x, y: nose.y, angle, kind: def.kind, speed: def.projectileSpeed });
+  }
+
+  private updateProjectiles(dt: number, now: number): void {
+    const list = [...this.participants.values()];
+    for (const pr of this.projectiles) {
+      const nx = pr.x + pr.vx * dt;
+      const ny = pr.y + pr.vy * dt;
+      let dead = false;
+      let hit: Participant | null = null;
+      for (const o of this.obstacles) {
+        if (segDist(pr.x, pr.y, nx, ny, o.x, o.y) < o.r) {
+          dead = true;
+          break;
+        }
+      }
+      if (!dead) {
+        for (const p of list) {
+          if (!p.alive || p.id === pr.ownerId) continue;
+          const d = segDist(pr.x, pr.y, nx, ny, p.pos.x, p.pos.y);
+          if (now < p.flareUntil && d < FLARE_RADIUS) {
+            dead = true;
+            break;
+          }
+          if (now < p.phaseUntil) continue;
+          if (d < HIT_RADIUS + (pr.kind === 'rocket' ? 6 : 0)) {
+            hit = p;
+            dead = true;
+            break;
+          }
+        }
+      }
+      pr.x = nx;
+      pr.y = ny;
+      pr.traveled += Math.hypot(pr.vx, pr.vy) * dt;
+      if (pr.traveled > pr.range || pr.x < -50 || pr.y < -50 || pr.x > WORLD_W + 50 || pr.y > WORLD_H + 50) dead = true;
+      if (hit) {
+        const owner = this.participants.get(pr.ownerId);
+        if (owner) {
+          this.applyDamage(owner, hit, pr.damage, now);
+          if (pr.splash > 0) {
+            for (const p of list) {
+              if (p === hit || p === owner || !p.alive) continue;
+              if (Math.hypot(p.pos.x - pr.x, p.pos.y - pr.y) < pr.splash) this.applyDamage(owner, p, pr.damage * 0.5, now);
+            }
+          }
+        }
+      }
+      if (dead) pr.range = -1;
+    }
+    this.projectiles = this.projectiles.filter((p) => p.range >= 0);
   }
 
   private tick(): void {
     if (this.state !== 'active') return;
     const now = Date.now();
+    const dt = TICK_MS / 1000;
     const list = [...this.participants.values()];
     for (const p of list) {
       if (!p.isBot || !p.alive) continue;
-      updateBot(p, list, this.obstacles, TICK_MS / 1000, now);
-      if (p.firing) {
-        const enemies = list.filter((e) => e.alive && e.id !== p.id);
-        let nearest: Participant | null = null;
-        let nearestDist = Infinity;
-        for (const e of enemies) {
-          const d = Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y);
-          if (d < nearestDist) {
-            nearestDist = d;
-            nearest = e;
-          }
-        }
-        if (nearest && nearestDist < 560 && Math.random() < 0.6) {
-          const def = getWeaponDef(p.weaponId);
-          this.applyDamage(p, nearest, def?.damage ?? 1);
-        }
-      }
+      const actions = updateBot(p, list, this.obstacles, this.projectiles, dt, now);
+      for (const a of actions.shots) this.spawnBotShot(p, a);
+      if (actions.flare) this.useSkill(p, 'flare', now, p.angle);
+      if (p.activeItem?.active?.kind === 'nanoRepair' && p.hp < p.maxHp * 0.5) this.useSkill(p, 'nanoRepair', now, p.angle);
     }
-    this.io.to(this.id).emit('match:state', { participants: this.publicList(), t: now - this.startedAt });
+    // кілька підкроків — швидкі кулі не "проскакують" крізь літаки
+    for (let i = 0; i < 2; i++) this.updateProjectiles(dt / 2, now);
+    if (this.ended) return;
+    this.io.to(this.id).emit('match:state', { participants: this.publicList(now), t: now - this.startedAt });
 
     if (now - this.startedAt > MATCH_TIME_LIMIT_MS) this.checkEnd(true);
   }
@@ -182,23 +418,28 @@ export class Room {
   private checkEnd(force = false): void {
     if (this.ended) return;
     const alive = [...this.participants.values()].filter((p) => p.alive);
-    if (!force && alive.length > 1) return;
+    const realAlive = alive.some((p) => !p.isBot);
+    if (!force && alive.length > 1 && (realAlive || !this.hasRealPlayers())) return;
     this.ended = true;
     this.state = 'ended';
     if (this.tickHandle) clearInterval(this.tickHandle);
 
     const ranked = [...this.participants.values()].sort((a, b) => {
       if (a.alive !== b.alive) return a.alive ? -1 : 1;
-      return b.kills - a.kills;
+      if (b.kills !== a.kills) return b.kills - a.kills;
+      return b.hp - a.hp;
     });
     ranked.forEach((p, i) => (p.place = i + 1));
 
     void this.grantRewards(ranked);
 
     const results: MatchResultEntry[] = ranked.map((p) => ({ id: p.id, userId: p.userId, nickname: p.nickname, place: p.place!, kills: p.kills, isBot: p.isBot }));
-    this.io.to(this.id).emit('match:end', { results });
-    for (const s of this.sockets.values()) s.leave(this.id);
-    setTimeout(() => this.destroy(), 500);
+    // невелика пауза, щоб клієнт встиг показати останній вибух
+    setTimeout(() => {
+      this.io.to(this.id).emit('match:end', { results });
+      for (const s of this.sockets.values()) s.leave(this.id);
+      setTimeout(() => this.destroy(), 500);
+    }, 1200);
   }
 
   private async grantRewards(ranked: Participant[]): Promise<void> {
@@ -210,6 +451,11 @@ export class Room {
         const reward = matchReward(p.place!, p.kills);
         grantReward(user, { coins: reward.coins }, 'pvp');
         addBp(user, reward.bpXp);
+        ensureQuestSlots(user);
+        incrementQuestProgress(user, 'pvpMatches', 1);
+        incrementQuestProgress(user, 'pvpKills', p.kills);
+        if (p.place! <= 3) incrementQuestProgress(user, 'pvpTop3', 1);
+        if (p.place === 1) incrementQuestProgress(user, 'pvpWins', 1);
         await user.save();
       } catch {
         // гравець лишиться без нагороди цього разу — не блокуємо завершення матчу
@@ -228,12 +474,15 @@ export class Room {
   }
 
   hasRealPlayers(): boolean {
-    return [...this.participants.values()].some((p) => !p.isBot);
+    return [...this.participants.values()].some((p) => !p.isBot && this.sockets.has(p.id));
   }
 
   destroy(): void {
+    this.ended = true;
     if (this.tickHandle) clearInterval(this.tickHandle);
     this.participants.clear();
     this.sockets.clear();
+    this.onClose();
+    this.onClose = () => {};
   }
 }

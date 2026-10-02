@@ -34,3 +34,25 @@ export function tierUpCost(price: number, tier: number): { coins: number; crysta
     crystals: crystalsByTier[tier] ?? 300,
   };
 }
+
+/** Бойові характеристики PvP. Тримати синхронізовано з src/game/planes.ts (combat + planeCombat). */
+const PLANE_COMBAT: Record<PlaneId, { hp: number; damage: number }> = {
+  falcon: { hp: 100, damage: 1.0 },
+  phantom: { hp: 90, damage: 1.05 },
+  blaze: { hp: 110, damage: 1.15 },
+  wasp: { hp: 80, damage: 1.0 },
+  collector: { hp: 105, damage: 0.95 },
+  swift: { hp: 95, damage: 1.05 },
+  titan: { hp: 140, damage: 0.95 },
+  chronos: { hp: 100, damage: 1.05 },
+  thunder: { hp: 105, damage: 1.15 },
+  ufo: { hp: 100, damage: 1.1 },
+  phoenix: { hp: 115, damage: 1.2 },
+};
+
+export function planeCombat(planeId: string, tier: number, level: number): { hp: number; damageMul: number } {
+  const base = isPlaneId(planeId) ? PLANE_COMBAT[planeId] : PLANE_COMBAT.falcon;
+  const t = Math.min(MAX_TIER, Math.max(1, tier));
+  const l = Math.min(MAX_LEVEL_IN_TIER, Math.max(1, level));
+  return { hp: base.hp + (t - 1) * 20 + (l - 1) * 5, damageMul: base.damage * (1 + 0.08 * (t - 1) + 0.02 * (l - 1)) };
+}

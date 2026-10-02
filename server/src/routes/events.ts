@@ -43,6 +43,7 @@ eventsRouter.post('/level-complete', async (req: AuthedRequest, res) => {
 
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'levelsCompleted', 1);
+  if (st >= 3) incrementQuestProgress(user, 'threeStarLevels', 1);
   incrementQuestProgress(user, 'crystalsCollected', cry);
   addBp(user, bpForLevelComplete(lvl, st));
 

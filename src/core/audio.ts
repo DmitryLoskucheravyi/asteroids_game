@@ -90,6 +90,20 @@ class SoundFx {
     this.tone(300, 0.18, 'square', 0.1, 1200);
     this.noise(0.15, 0.12, 4000, 800);
   }
+  /** Короткий постріл кулемета */
+  shot(): void {
+    this.noise(0.05, 0.07, 6000, 1800);
+    this.tone(900, 0.04, 'square', 0.025, 500);
+  }
+  /** Влучання по цілі */
+  hitMark(): void {
+    this.tone(1500, 0.05, 'square', 0.05, 1100);
+  }
+  /** Відстріл теплових пасток */
+  flares(): void {
+    this.noise(0.5, 0.18, 5000, 600);
+    [0, 0.08, 0.16].forEach((d) => this.tone(1200, 0.12, 'triangle', 0.06, 700, d));
+  }
   shieldHit(): void {
     this.tone(220, 0.3, 'square', 0.15, 110);
     this.noise(0.25, 0.25, 3000, 300);

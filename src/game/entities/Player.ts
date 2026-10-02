@@ -38,9 +38,14 @@ export class Player {
    * тому швидкість залежала від FPS (і реально була ~100 px/s замість 320).
    * Тут — експоненційне згасання, однакове за будь-якої частоти кадрів.
    */
-  update(dt: number, axis: { x: number; y: number }, w: number, h: number): void {
+  /** Таймери анімації/невразливості — коли рух рахує зовнішня фізика (PvP). */
+  tick(dt: number): void {
     this.time += dt;
     this.invulnerable = Math.max(0, this.invulnerable - dt);
+  }
+
+  update(dt: number, axis: { x: number; y: number }, w: number, h: number): void {
+    this.tick(dt);
 
     const accel = this.spec.accel * this.speedMultiplier;
     this.vel.x += axis.x * accel * dt;

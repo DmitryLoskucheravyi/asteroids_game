@@ -1429,6 +1429,9 @@ input[type='range'] {
   bottom: 5px;
   left: 0;
   right: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
   font-size: 9px;
   font-family: var(--font-ui);
   text-transform: uppercase;
@@ -1531,7 +1534,7 @@ input[type='range'] {
   grid-template-areas:
     'shield freeze'
     'boost jump'
-    'none item';
+    'flare item';
   gap: 10px;
 }
 
@@ -1551,6 +1554,12 @@ input[type='range'] {
 }
 .game.touch .sk-item {
   grid-area: item;
+}
+.game.touch .sk-flare {
+  grid-area: flare;
+}
+.game.touch .sk-passive {
+  display: none;
 }
 
 .fire-btn {
@@ -3453,4 +3462,712 @@ input[type='range'] {
   display: flex;
   justify-content: center;
   gap: 12px;
+}
+
+/* ===================== предмети: зовнішній вигляд і рідкість ===================== */
+
+.item-pic {
+  --rc: var(--rarity-common);
+  width: 64px;
+  height: 64px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  border-radius: 14px;
+  border: 2px solid var(--rc);
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--rc) 28%, transparent), rgba(10, 9, 24, 0.8) 70%);
+  box-shadow: 0 0 18px -6px var(--rc);
+}
+
+.item-pic svg {
+  width: 100%;
+  height: 100%;
+}
+
+.item-pic.small {
+  width: 42px;
+  height: 42px;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.item-pic.tiny {
+  width: 26px;
+  height: 26px;
+  padding: 2px;
+  border-radius: 7px;
+  border-width: 1.5px;
+}
+
+.item-pic.empty {
+  border-style: dashed;
+  color: var(--muted);
+  font-size: 22px;
+  font-weight: 700;
+  box-shadow: none;
+  background: rgba(10, 9, 24, 0.5);
+}
+
+.rarity-frame-common {
+  --rc: var(--rarity-common);
+}
+.rarity-frame-rare {
+  --rc: var(--rarity-rare);
+}
+.rarity-frame-epic {
+  --rc: var(--rarity-epic);
+}
+.rarity-frame-mythic {
+  --rc: var(--rarity-mythic);
+}
+.rarity-frame-legendary {
+  --rc: var(--rarity-legendary);
+}
+.rarity-frame-weapon {
+  --rc: #ff9a5a;
+}
+
+.item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+}
+
+.item-card + .item-card {
+  margin-top: 0;
+}
+
+.rarity-card-rare {
+  border-color: color-mix(in srgb, var(--rarity-rare) 45%, transparent);
+}
+.rarity-card-epic {
+  border-color: color-mix(in srgb, var(--rarity-epic) 50%, transparent);
+}
+.rarity-card-mythic {
+  border-color: color-mix(in srgb, var(--rarity-mythic) 55%, transparent);
+}
+.rarity-card-legendary {
+  border-color: color-mix(in srgb, var(--rarity-legendary) 60%, transparent);
+  box-shadow: 0 0 30px -14px var(--rarity-legendary);
+}
+
+.item-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.item-head h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.item-kind {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.item-kind.rarity-common {
+  color: var(--rarity-common);
+}
+
+.item-card .plane-desc {
+  min-height: 0;
+}
+
+.item-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13px;
+}
+
+.item-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.item-stat b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.item-card > .btn,
+.item-card > .owned-tag {
+  margin-top: auto;
+  align-self: stretch;
+  display: flex;
+  justify-content: center;
+}
+
+.owned-tag {
+  padding: 8px;
+  border-radius: 10px;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--ok);
+  background: rgba(80, 240, 140, 0.08);
+  border: 1px solid rgba(80, 240, 140, 0.3);
+}
+
+/* ===================== ангар: картки-посилання ===================== */
+
+.hangar-card {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+
+.hangar-card:hover,
+.hangar-card:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.hangar-card-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hangar-card .plane-pic {
+  display: grid;
+}
+
+.hangar-name {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hangar-feat {
+  color: var(--muted);
+  font-size: 13px;
+  min-height: 2.6em;
+}
+
+.hangar-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 26px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hangar-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hangar-meta .ico {
+  color: var(--muted);
+}
+
+.hangar-items {
+  margin-left: auto;
+  gap: 6px !important;
+}
+
+.hangar-selected {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a1200;
+  background: var(--gold);
+}
+
+/* ===================== сторінка літака ===================== */
+
+.plane-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 16px;
+  margin: 12px 0 16px;
+}
+
+.plane-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.plane-col .card + .card {
+  margin-top: 0;
+}
+
+.plane-page .card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.plane-hero {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 20px;
+  align-items: center;
+}
+
+.plane-hero-pic {
+  height: 200px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: radial-gradient(circle, rgba(120, 140, 255, 0.22), transparent 68%);
+}
+
+.plane-hero-pic img {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  animation: hover-float 3s ease-in-out infinite;
+}
+
+@keyframes hover-float {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.plane-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plane-page .plane-hero-info h3 {
+  font-size: 24px;
+  margin: 0;
+}
+
+.plane-hero-info .btn {
+  align-self: flex-start;
+}
+
+.stat-line {
+  display: grid;
+  grid-template-columns: 120px 1fr 64px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 7px;
+}
+
+.stat-line b {
+  color: var(--text);
+  text-align: right;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.sub-title {
+  margin: 16px 0 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.muted.small {
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.slot-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.slot-btn {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(10, 9, 24, 0.5);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.slot-btn:hover,
+.slot-btn:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.slot-btn.on {
+  border-color: var(--gold);
+  background: rgba(255, 210, 74, 0.07);
+}
+
+.slot-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slot-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.slot-text small {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.slot-text b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.inv-tile {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(10, 9, 24, 0.55);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    transform 0.15s;
+}
+
+.inv-tile:hover,
+.inv-tile:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.inv-tile.on {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 1px rgba(80, 240, 140, 0.25) inset;
+}
+
+.inv-tile.shop {
+  border-style: dashed;
+}
+
+.inv-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+}
+
+.inv-inner > small {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.inv-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.inv-state {
+  margin-top: auto;
+  padding-top: 6px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.inv-tile.on .inv-state {
+  color: var(--ok);
+}
+
+@media (max-width: 900px) {
+  .plane-layout {
+    grid-template-columns: 1fr;
+  }
+  .plane-hero {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+  .plane-hero-info .btn {
+    align-self: center;
+  }
+  .slot-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===================== HUD: картинки предметів і зброї ===================== */
+
+.skill.sk-art {
+  --rc: var(--line-strong);
+  border-color: var(--rc);
+}
+
+.skill.sk-art .ico {
+  width: 36px;
+  height: 36px;
+}
+
+.skill.sk-art .ico svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sk-flare .ico {
+  color: #ffb36b;
+}
+
+.sk-wide {
+  width: 92px;
+}
+
+.sk-ammo {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 18px;
+  height: 3px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.sk-ammo i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffb020, #ffe27a);
+}
+
+.skill.reloading .sk-ammo i {
+  background: linear-gradient(90deg, #ff4a5a, #ff8a7a);
+}
+
+.skill.sk-passive {
+  cursor: default;
+  width: 60px;
+  height: 60px;
+}
+
+.skill.sk-passive .ico {
+  width: 30px;
+  height: 30px;
+}
+
+.skill.sk-none {
+  opacity: 0.3;
+}
+
+/* ===================== PvP HUD ===================== */
+
+.game.pvp .skill {
+  pointer-events: none;
+}
+
+.pvp .hud-tl.pvp-self {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  min-width: 0;
+}
+
+.pvp-avatar {
+  width: 46px;
+  height: 46px;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.pvp-self-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pvp-nick {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.hp-num {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 74px;
+}
+
+.pvp-top {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 99px;
+  background: rgba(10, 9, 24, 0.6);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+}
+
+.pvp-timer {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pvp-timer.urgent {
+  color: var(--danger);
+  animation: pulse 0.6s ease-in-out infinite;
+}
+
+.pvp-counters {
+  display: flex;
+  gap: 8px;
+}
+
+.pvp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pvp-chip .ico {
+  color: var(--muted);
+}
+
+.frag-row.mine {
+  border-color: rgba(255, 210, 74, 0.6);
+  color: var(--gold);
+}
+
+.pvp-dead {
+  position: absolute;
+  top: 26%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 28px;
+  border-radius: 16px;
+  background: rgba(10, 9, 24, 0.7);
+  border: 1px solid rgba(255, 74, 90, 0.5);
+}
+
+.pvp-dead[hidden] {
+  display: none;
+}
+
+.pvp-dead b {
+  font-family: var(--font-ui);
+  font-size: 22px;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+.pvp-dead span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.pvp .radar-box {
+  bottom: 26px;
+}
+
+.pvp .radar-canvas {
+  border: 1px solid var(--line);
+}
+
+/* у бою підпис версії не налазить на радар */
+#app:has(.screen.game.active) .version-tag {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .pvp .radar-box {
+    transform: scale(0.75);
+    transform-origin: bottom right;
+  }
+  .pvp-skills .skill {
+    width: 58px;
+    height: 58px;
+  }
+  .pvp-skills .sk-wide {
+    width: 74px;
+  }
+}
+
+.item-head > div {
+  min-width: 0;
+}
+
+.item-head h3 {
+  overflow-wrap: anywhere;
 }

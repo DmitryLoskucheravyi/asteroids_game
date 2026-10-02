@@ -1,220 +1,57 @@
-import { Sfx } from '../../core/audio';
+import type { App } from '../../app/App';
 import { t, type TKey } from '../../core/i18n';
-import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
-import { getItemDef } from '../../game/items';
+import { getItemDef, loadoutDamageBonus } from '../../game/items';
 import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
-import { effectivePlaneSpec, levelUpCost, tierUpCost, MAX_TIER, MAX_LEVEL_IN_TIER, PLANES, planeStats, type PlaneSpec } from '../../game/planes';
-import { WEAPON_DEFS, getWeaponDef } from '../../game/weapons';
+import { MAX_LEVEL_IN_TIER, PLANES, planeCombat, type PlaneId } from '../../game/planes';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
-import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
+import { itemPic } from './ItemsScreen';
 import { screenHeader, starsRow } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
+import { PlaneScreen } from './PlaneScreen';
 
-/** Ангар-магазин (аналог PlaneSelectForm): літаки купуються за коінс, у кожного своя фіча. */
+/** Ангар: сітка літаків; кожен відкриває власну сторінку з характеристиками, прокачкою й екіпіровкою. */
 export class HangarScreen extends Screen {
-  private refocus(i: number): void {
-    this.el.querySelectorAll<HTMLElement>('.plane-card')[i]?.querySelector<HTMLElement>('.btn')?.focus();
-  }
-
-  private actionFor(p: PlaneSpec, i: number): HTMLElement {
-    const coins = Save.data.coins;
-    if (Save.owns(p.id)) {
-      const selected = Save.data.plane === p.id;
-      return button(selected ? t('planes.selected') : t('planes.select'), async () => {
-        const { profile } = await Server.selectPlane(p.id);
-        Save.applyProfile(profile);
-        this.render();
-        this.refocus(i);
-      }, `btn${selected ? ' btn-on' : ''}`, selected ? { 'data-autofocus': true } : {});
-    }
-    const affordable = coins >= p.price;
-    return h(
-      'div',
-      { class: 'buy-row' },
-      button(
-        h('span', { class: 'buy-label' }, t('planes.buy'), coinBadge(p.price, 'coin-badge small')),
-        async () => {
-          try {
-            const { profile } = await Server.buyPlane(p.id);
-            Save.applyProfile(profile);
-            Sfx.powerup();
-            toast(t('planes.bought'));
-            this.render();
-            this.refocus(i);
-          } catch {
-            Sfx.warning();
-          }
-        },
-        `btn buy${affordable ? ' affordable' : ' locked'}`,
-        affordable ? {} : { 'aria-disabled': 'true' },
-      ),
-      affordable ? null : h('span', { class: 'need' }, t('planes.notEnough', { n: p.price - coins })),
-    );
-  }
-
-  /** Модалка підтвердження прокачки з порівнянням статів "до/після". */
-  private confirmUpgrade(p: PlaneSpec, i: number, kind: 'level' | 'tier'): void {
-    const progress = Save.progressFor(p.id);
-    const before = effectivePlaneSpec(p, progress);
-    const nextProgress = kind === 'level' ? { ...progress, level: progress.level + 1 } : { ...progress, tier: progress.tier + 1, level: 1 };
-    const after = effectivePlaneSpec(p, nextProgress);
-
-    const row = (label: string, b: number, a: number, fmt: (n: number) => string = (n) => Math.round(n).toString()) =>
-      h('div', { class: 'stat-compare-row' }, h('span', {}, label), h('span', { class: 'muted' }, fmt(b)), icon(Icons.dash, 'ico tiny'), h('span', { class: 'stat-after' }, fmt(a)));
-
-    const m = new Modal({
-      title: t('planes.upgradeTitle'),
-      body: [row(t('planes.accelStat'), before.accel, after.accel), row(t('planes.speed'), before.maxSpeed, after.maxSpeed), row(t('planes.dragStat'), before.drag, after.drag, (n) => n.toFixed(1))],
-      actions: [
-        button(t('common.cancel'), () => m.close(), 'btn', { 'data-autofocus': true }),
-        button(t('planes.confirm'), async () => {
-          try {
-            if (kind === 'level') {
-              const { profile } = await Server.levelUpPlane(p.id);
-              Save.applyProfile(profile);
-            } else {
-              const { profile } = await Server.tierUpPlane(p.id);
-              Save.applyProfile(profile);
-            }
-            Sfx.powerup();
-            m.close();
-            this.render();
-            this.refocus(i);
-          } catch {
-            Sfx.warning();
-            m.close();
-          }
-        }, 'btn primary'),
-      ],
-      onEscape: () => m.close(),
-    }).open();
-  }
-
-  private upgradeBlock(p: PlaneSpec, i: number): HTMLElement {
-    const progress = Save.progressFor(p.id);
-    const tierColor = TIER_COLORS[progress.tier] || undefined;
-    const maxed = progress.tier >= MAX_TIER && progress.level >= MAX_LEVEL_IN_TIER;
-    const canLevelUp = progress.level < MAX_LEVEL_IN_TIER;
-    const canTierUp = progress.tier < MAX_TIER && progress.level >= MAX_LEVEL_IN_TIER;
-    const lvlCost = levelUpCost(p.price, progress.tier, progress.level);
-    const tCost = tierUpCost(p.price, progress.tier);
-
-    const levelBtn = canLevelUp
-      ? button(
-          h('span', { class: 'buy-label' }, t('planes.levelUp'), coinBadge(lvlCost, 'coin-badge small')),
-          () => this.confirmUpgrade(p, i, 'level'),
-          `btn small${Save.data.coins >= lvlCost ? '' : ' locked'}`,
-        )
-      : null;
-    const tierBtn = canTierUp
-      ? button(
-          h('span', { class: 'buy-label' }, t('planes.tierUp'), coinBadge(tCost.coins, 'coin-badge small'), crystalBadge(tCost.crystals, 'coin-badge small crystal-badge')),
-          () => this.confirmUpgrade(p, i, 'tier'),
-          `btn small${Save.data.coins >= tCost.coins && Save.data.crystals >= tCost.crystals ? '' : ' locked'}`,
-        )
-      : null;
-
-    return h(
-      'div',
-      { class: 'upgrade-block' },
-      h('div', { class: 'upgrade-head' }, h('span', { class: 'tier-chip', style: tierColor ? `color:${tierColor};border-color:${tierColor}` : undefined }, `${t('planes.tier')} ${progress.tier}`), starsRow(progress.level, MAX_LEVEL_IN_TIER, tierColor)),
-      maxed ? h('span', { class: 'muted' }, t('planes.maxTier')) : h('div', { class: 'upgrade-actions' }, levelBtn, tierBtn),
-    );
-  }
-
-  /** Модалка вибору предмета (actіve/passive) або зброї зі свого інвентарю в заданий слот. */
-  private pickItem(p: PlaneSpec, slot: 'active' | 'passive' | 'weapon'): void {
-    const loadout = Save.loadoutFor(p.id);
-    const current = loadout[slot];
-
-    const apply = async (value: string | null): Promise<void> => {
-      try {
-        const next = { active: loadout.active, passive: loadout.passive, weapon: loadout.weapon, [slot]: value };
-        const { profile } = await Server.setLoadout(p.id, next.active, next.passive, next.weapon);
-        Save.applyProfile(profile);
-        Sfx.pickup();
-        m.close();
-        this.render();
-      } catch {
-        Sfx.warning();
-      }
-    };
-
-    const rows: HTMLElement[] = [];
-    if (slot === 'weapon') {
-      for (const w of WEAPON_DEFS) {
-        if (!Save.ownsWeapon(w.id)) continue;
-        rows.push(button(t(w.nameKey), () => void apply(w.id), `btn${current === w.id ? ' btn-on' : ''}`, { 'data-autofocus': current === w.id }));
-      }
-    } else {
-      const owned = Save.data.items.filter((it) => getItemDef(it.defId)?.slot === slot);
-      rows.push(button(t('items.empty'), () => void apply(null), `btn${current === null ? ' btn-on' : ''}`, { 'data-autofocus': current === null }));
-      for (const it of owned) {
-        const def = getItemDef(it.defId);
-        rows.push(button(h('span', {}, t(def!.nameKey), h('span', { class: `rarity-dot rarity-${it.rarity}` })), () => void apply(it.id), `btn${current === it.id ? ' btn-on' : ''}`));
-      }
-    }
-
-    const titleKey = slot === 'active' ? 'items.slotActive' : slot === 'passive' ? 'items.slotPassive' : 'items.slotWeapon';
-    const m = new Modal({
-      title: t(titleKey),
-      body: rows.length ? [] : [h('p', { class: 'muted' }, t('items.empty'))],
-      actions: rows,
-      onEscape: () => m.close(),
-    }).open();
-  }
-
-  private loadoutBlock(p: PlaneSpec): HTMLElement {
-    const loadout = Save.loadoutFor(p.id);
-    const chip = (slot: 'active' | 'passive' | 'weapon', labelKey: TKey, label: string) =>
-      h(
-        'div',
-        { class: 'loadout-row' },
-        h('span', { class: 'set-label' }, t(labelKey)),
-        button(label, () => this.pickItem(p, slot), 'btn small'),
-      );
-    const itemLabel = (itemId: string | null): string => {
-      const owned = Save.data.items.find((it) => it.id === itemId);
-      const def = owned ? getItemDef(owned.defId) : undefined;
-      return def ? t(def.nameKey) : t('items.empty');
-    };
-    const weaponLabel = (id: string | null): string => {
-      const def = getWeaponDef(id ?? undefined);
-      return def ? t(def.nameKey) : t('weapon.machineGun');
-    };
-    return h(
-      'div',
-      { class: 'loadout-block' },
-      chip('active', 'items.slotActive', itemLabel(loadout.active)),
-      chip('passive', 'items.slotPassive', itemLabel(loadout.passive)),
-      chip('weapon', 'items.slotWeapon', weaponLabel(loadout.weapon)),
-    );
+  constructor(
+    app: App,
+    private readonly focusId?: PlaneId,
+  ) {
+    super(app);
   }
 
   protected build(): HTMLElement {
-    const bar = (label: string, v: number) =>
-      h('div', { class: 'stat-bar' }, h('span', {}, label), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(Math.max(0.1, Math.min(1, v)) * 100)}%` })));
-
-    const cards = PLANES.map((p, i) => {
+    const cards = PLANES.map((p) => {
       const owned = Save.owns(p.id);
       const selected = owned && Save.data.plane === p.id;
       const progress = Save.progressFor(p.id);
-      const st = planeStats(p);
-      return h(
-        'div',
-        { class: `plane-card${selected ? ' selected' : ''}${owned ? '' : ' locked'}` },
-        h('div', { class: 'plane-pic' }, h('img', { src: planeIconUrl(p.id, progress.tier, progress.level), alt: '' }), owned ? null : h('span', { class: 'price-tag' }, icon(Icons.lock))),
-        h('h3', {}, t(`plane.${p.id}` as TKey)),
-        h('p', { class: 'plane-desc' }, t(`planeDesc.${p.id}` as TKey)),
-        h('div', { class: 'feature' }, h('span', { class: 'feature-tag' }, t('planes.shipSkill')), t(`feat.${p.id}` as TKey)),
-        bar(t('planes.speed'), st.speed),
-        bar(t('planes.agility'), st.agility),
-        bar(t('planes.size'), st.size),
-        this.actionFor(p, i),
-        owned ? this.upgradeBlock(p, i) : null,
-        owned ? this.loadoutBlock(p) : null,
+      const tierColor = TIER_COLORS[progress.tier] || undefined;
+      const combat = planeCombat(p, progress);
+      const loadout = Save.loadoutFor(p.id);
+      const equippedDefs = [loadout.active, loadout.passive].map((id) => getItemDef(Save.itemById(id)?.defId ?? ''));
+      const damageMul = combat.damageMul * (1 + loadoutDamageBonus(...equippedDefs));
+      const equipped = [loadout.active, loadout.passive]
+        .map((id) => Save.itemById(id))
+        .filter((it) => it && getItemDef(it.defId))
+        .map((it) => itemPic(it!.defId, 'item-pic tiny'));
+      const autofocus = this.focusId ? this.focusId === p.id : selected;
+
+      return button(
+        h(
+          'span',
+          { class: 'hangar-card-inner' },
+          h('span', { class: 'plane-pic' }, h('img', { src: planeIconUrl(p.id, progress.tier, progress.level), alt: '' }), owned ? null : h('span', { class: 'price-tag' }, icon(Icons.lock))),
+          h('span', { class: 'hangar-name' }, t(`plane.${p.id}` as TKey)),
+          owned
+            ? h('span', { class: 'upgrade-head' }, h('span', { class: 'tier-chip', style: tierColor ? `color:${tierColor};border-color:${tierColor}` : undefined }, `${t('planes.tier')} ${progress.tier}`), starsRow(progress.level, MAX_LEVEL_IN_TIER, tierColor))
+            : coinBadge(p.price, 'coin-badge small'),
+          h('span', { class: 'hangar-feat' }, t(`feat.${p.id}` as TKey)),
+          h('span', { class: 'hangar-meta' }, h('span', {}, icon(Icons.heart, 'ico'), String(combat.hp)), h('span', {}, icon(Icons.bolt, 'ico'), `×${damageMul.toFixed(2)}`), equipped.length ? h('span', { class: 'hangar-items' }, ...equipped) : null),
+          selected ? h('span', { class: 'hangar-selected' }, t('planes.selected')) : null,
+        ),
+        () => this.app.show(new PlaneScreen(this.app, p)),
+        `plane-card hangar-card${selected ? ' selected' : ''}${owned ? '' : ' locked'}`,
+        autofocus ? { 'data-autofocus': true } : {},
       );
     });
 

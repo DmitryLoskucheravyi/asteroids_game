@@ -2,17 +2,18 @@ import { Router } from 'express';
 import { User } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
-import { getItemDef, isRarity, itemPrice } from '../content/items.js';
+import { getItemDef } from '../content/items.js';
 import { isPlaneId } from '../content/planes.js';
 import { getWeaponDef } from '../content/weapons.js';
 
 export const itemsRouter = Router();
 itemsRouter.use(requireAuth);
 
+/** Купівля предмета: рідкість задана самим предметом, кожен предмет купується один раз. */
 itemsRouter.post('/buy', async (req: AuthedRequest, res) => {
-  const { defId, rarity } = req.body ?? {};
+  const { defId } = req.body ?? {};
   const def = typeof defId === 'string' ? getItemDef(defId) : undefined;
-  if (!def || typeof rarity !== 'string' || !isRarity(rarity)) {
+  if (!def) {
     res.status(400).json({ error: 'bad_item' });
     return;
   }
@@ -21,13 +22,16 @@ itemsRouter.post('/buy', async (req: AuthedRequest, res) => {
     res.status(404).json({ error: 'not_found' });
     return;
   }
-  const price = itemPrice(def, rarity);
-  if (user.coins < price) {
+  if (user.items.some((it) => it.defId === def.id)) {
+    res.status(409).json({ error: 'already_owned' });
+    return;
+  }
+  if (user.coins < def.price) {
     res.status(402).json({ error: 'not_enough_coins' });
     return;
   }
-  user.coins -= price;
-  user.items.push({ defId: def.id, rarity });
+  user.coins -= def.price;
+  user.items.push({ defId: def.id, rarity: def.rarity });
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });

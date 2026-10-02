@@ -5,6 +5,10 @@ export const BOOST_DURATION = 2.5;
 export const BOOST_MULTIPLIER = 1.6;
 export const JUMP_COOLDOWN = 4;
 export const MAX_CHARGES = 5;
+/** Теплові пастки (flares) — базова навичка кожного літака: відстрілюються назад і збивають кулі/ракети. */
+export const FLARE_COOLDOWN = 9;
+export const FLARE_DURATION = 1.4;
+export const FLARE_RADIUS = 95;
 
 /** Навички гравця: заморозка, форсаж, ривок. Параметри залежать від літака. */
 export class SkillSystem {
@@ -23,15 +27,22 @@ export class SkillSystem {
   jumpCooldownMax = JUMP_COOLDOWN;
   jumpChargesMax = 1;
 
+  flareLeft = 0;
+  flareCooldown = 0;
+  flareCooldownMax = FLARE_COOLDOWN;
+
   /** Перезарядка активного предмета (0 — предмет не екіпіровано, слот неактивний) */
   itemCooldown = 0;
   itemCooldownMax = 0;
 
   /** Налаштовує навички під літак і видає стартові заряди. itemCooldownMax=0, якщо активний предмет не екіпіровано. */
-  reset(feature: PlaneFeature, itemCooldownMax = 0): void {
+  reset(feature: PlaneFeature, itemCooldownMax = 0, cooldownMul = 1): void {
     this.freezeDuration = FREEZE_DURATION * (feature.freezeDurationMul ?? 1);
     this.boostDuration = BOOST_DURATION * (feature.boostDurationMul ?? 1);
-    this.jumpCooldownMax = JUMP_COOLDOWN * (feature.jumpCooldownMul ?? 1);
+    this.jumpCooldownMax = JUMP_COOLDOWN * (feature.jumpCooldownMul ?? 1) * cooldownMul;
+    this.flareCooldownMax = FLARE_COOLDOWN * cooldownMul;
+    this.flareCooldown = 0;
+    this.flareLeft = 0;
     this.jumpChargesMax = feature.jumpCharges ?? 1;
     this.freezeCharges = 1 + (feature.extraFreeze ?? 0);
     this.boostCharges = 2 + (feature.extraBoost ?? 0);
@@ -39,7 +50,7 @@ export class SkillSystem {
     this.freezeLeft = 0;
     this.boostLeft = 0;
     this.jumpCooldown = 0;
-    this.itemCooldownMax = itemCooldownMax;
+    this.itemCooldownMax = itemCooldownMax * cooldownMul;
     this.itemCooldown = 0;
     this.used = 0;
   }
@@ -48,6 +59,8 @@ export class SkillSystem {
     this.freezeLeft = Math.max(0, this.freezeLeft - dt);
     this.boostLeft = Math.max(0, this.boostLeft - dt);
     this.itemCooldown = Math.max(0, this.itemCooldown - dt);
+    this.flareLeft = Math.max(0, this.flareLeft - dt);
+    this.flareCooldown = Math.max(0, this.flareCooldown - dt);
     if (this.jumpCharges < this.jumpChargesMax) {
       this.jumpCooldown -= dt;
       if (this.jumpCooldown <= 0) {
@@ -87,6 +100,18 @@ export class SkillSystem {
     this.jumpCharges--;
     this.used++;
     return true;
+  }
+
+  tryFlare(): boolean {
+    if (this.flareCooldown > 0) return false;
+    this.flareCooldown = this.flareCooldownMax;
+    this.flareLeft = FLARE_DURATION;
+    this.used++;
+    return true;
+  }
+
+  get isFlaring(): boolean {
+    return this.flareLeft > 0;
   }
 
   itemEquipped(): boolean {

@@ -3,7 +3,7 @@ import type { PlaneId } from '../game/planes';
 import type { ItemRarity } from '../game/items';
 
 export type CrateType = 'common' | 'rare' | 'legendary';
-export type QuestKind = 'levelsCompleted' | 'crystalsCollected' | 'survivalSeconds' | 'cratesOpened';
+export type QuestKind = 'levelsCompleted' | 'crystalsCollected' | 'survivalSeconds' | 'cratesOpened' | 'pvpMatches' | 'pvpKills' | 'pvpTop3' | 'pvpWins' | 'threeStarLevels' | 'planeUpgrades';
 
 export interface QuestView {
   questId: string;
@@ -113,7 +113,7 @@ export const Server = {
 
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; reward: CrateReward }>(`/crates/${crateId}/open`),
 
-  buyItem: (defId: string, rarity: ItemRarity) => api.post<{ profile: ServerProfile }>('/items/buy', { defId, rarity }),
+  buyItem: (defId: string) => api.post<{ profile: ServerProfile }>('/items/buy', { defId }),
   buyWeapon: (weaponId: string) => api.post<{ profile: ServerProfile }>('/items/buy-weapon', { weaponId }),
   setLoadout: (planeId: PlaneId, active: string | null, passive: string | null, weapon: string | null) =>
     api.post<{ profile: ServerProfile }>('/items/loadout', { planeId, active, passive, weapon }),
