@@ -1,4 +1,52 @@
+import { Save } from './storage';
+
 export type Action = 'freeze' | 'boost' | 'jump' | 'pause';
+export type BindAction = 'up' | 'down' | 'left' | 'right' | Action;
+
+/** Дефолтні клавіші (декілька варіантів на дію) — використовуються, доки гравець не перебʼє дію своєю. */
+export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
+  up: ['ArrowUp', 'KeyW'],
+  down: ['ArrowDown', 'KeyS'],
+  left: ['ArrowLeft', 'KeyA'],
+  right: ['ArrowRight', 'KeyD'],
+  freeze: ['Digit1', 'Numpad1', 'KeyE'],
+  boost: ['Digit2', 'Numpad2', 'KeyQ'],
+  jump: ['Space', 'ShiftLeft', 'ShiftRight'],
+  pause: ['Escape', 'KeyP'],
+};
+
+export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'freeze', 'boost', 'jump', 'pause'];
+
+/** Коди клавіш для дії: кастомний бінд гравця (якщо є) замінює дефолтний набір повністю. */
+function codesFor(action: BindAction): string[] {
+  const custom = Save.data.keybinds[action];
+  return custom ? [custom] : DEFAULT_KEYBINDS[action];
+}
+
+/** Перша клавіша дії — для показу в UI (HUD-підказки, екран керування). */
+export function primaryKeyFor(action: BindAction): string {
+  return codesFor(action)[0];
+}
+
+const CODE_LABELS: Record<string, string> = {
+  Space: 'SPC',
+  ShiftLeft: 'SHIFT',
+  ShiftRight: 'SHIFT',
+  Escape: 'ESC',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+};
+
+/** Коротка людська назва KeyboardEvent.code для HUD/кнопок керування. */
+export function displayKey(code: string): string {
+  if (CODE_LABELS[code]) return CODE_LABELS[code];
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return `NUM${code.slice(6)}`;
+  return code;
+}
 
 /**
  * Стан керування (аналог InputState).
@@ -16,7 +64,7 @@ export class InputState {
       // затиснута клавіша має знову запрацювати без повторного натискання
       this.keys.add(e.code);
       if (e.repeat) return;
-      const action = InputState.actionFor(e.code);
+      const action = this.actionFor(e.code);
       if (action) this.emit(action);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -30,26 +78,12 @@ export class InputState {
     });
   }
 
-  private static actionFor(code: string): Action | null {
-    switch (code) {
-      case 'Digit1':
-      case 'Numpad1':
-      case 'KeyE':
-        return 'freeze';
-      case 'Digit2':
-      case 'Numpad2':
-      case 'KeyQ':
-        return 'boost';
-      case 'Space':
-      case 'ShiftLeft':
-      case 'ShiftRight':
-        return 'jump';
-      case 'Escape':
-      case 'KeyP':
-        return 'pause';
-      default:
-        return null;
-    }
+  private actionFor(code: string): Action | null {
+    if (codesFor('freeze').includes(code)) return 'freeze';
+    if (codesFor('boost').includes(code)) return 'boost';
+    if (codesFor('jump').includes(code)) return 'jump';
+    if (codesFor('pause').includes(code)) return 'pause';
+    return null;
   }
 
   onAction(fn: (a: Action) => void): () => void {
@@ -61,18 +95,18 @@ export class InputState {
     this.listeners.forEach((fn) => fn(a));
   }
 
-  private down(...codes: string[]): boolean {
-    return codes.some((c) => this.keys.has(c));
+  private down(action: BindAction): boolean {
+    return codesFor(action).some((c) => this.keys.has(c));
   }
 
   axis(): { x: number; y: number } {
     if (this.touchAxis) return this.touchAxis;
     let x = 0;
     let y = 0;
-    if (this.down('ArrowLeft', 'KeyA')) x -= 1;
-    if (this.down('ArrowRight', 'KeyD')) x += 1;
-    if (this.down('ArrowUp', 'KeyW')) y -= 1;
-    if (this.down('ArrowDown', 'KeyS')) y += 1;
+    if (this.down('left')) x -= 1;
+    if (this.down('right')) x += 1;
+    if (this.down('up')) y -= 1;
+    if (this.down('down')) y += 1;
     if (x !== 0 && y !== 0) {
       // діагональ не повинна бути швидшою
       x *= Math.SQRT1_2;

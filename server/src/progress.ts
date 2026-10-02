@@ -57,11 +57,17 @@ export function grantReward(user: Doc, reward: Reward, source: string): RewardRe
   return { coins, xp: xpAmount, leveledUp: level > before, newLevel: level, crateAwarded };
 }
 
+/** Якщо сезон у профілі застарів — скидає очки/клейми/преміум на новий сезон. */
+export function ensureSeason(user: Doc): void {
+  if (user.passSeasonId === SEASON_ID) return;
+  user.passSeasonId = SEASON_ID;
+  user.passBpPoints = 0;
+  user.passPremium = false;
+  user.passClaimedFree.splice(0, user.passClaimedFree.length);
+  user.passClaimedPremium.splice(0, user.passClaimedPremium.length);
+}
+
 export function addBp(user: Doc, amount: number): void {
-  if (user.passSeasonId !== SEASON_ID) {
-    user.passSeasonId = SEASON_ID;
-    user.passBpPoints = 0;
-    user.passClaimedTiers = [];
-  }
+  ensureSeason(user);
   user.passBpPoints += Math.max(0, Math.floor(amount));
 }

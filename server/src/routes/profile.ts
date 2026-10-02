@@ -62,6 +62,29 @@ profileRouter.post('/buy-plane', async (req: AuthedRequest, res) => {
   res.json({ profile: serializeProfile(user) });
 });
 
+const BINDABLE_ACTIONS = ['up', 'down', 'left', 'right', 'freeze', 'boost', 'jump', 'pause'];
+
+profileRouter.post('/keybinds', async (req: AuthedRequest, res) => {
+  const { keybinds } = req.body ?? {};
+  const user = await User.findById(req.userId);
+  if (!user) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  if (typeof keybinds !== 'object' || keybinds === null) {
+    res.status(400).json({ error: 'bad_request' });
+    return;
+  }
+  const clean: Record<string, string> = {};
+  for (const action of BINDABLE_ACTIONS) {
+    const v = (keybinds as Record<string, unknown>)[action];
+    if (typeof v === 'string' && v.length > 0 && v.length < 40) clean[action] = v;
+  }
+  user.keybinds = clean;
+  await user.save();
+  res.json({ profile: serializeProfile(user) });
+});
+
 /** Одноразове перенесення прогресу, накопиченого до реєстрації (localStorage), в акаунт. */
 profileRouter.post('/import-local', async (req: AuthedRequest, res) => {
   const { coins, owned, stars, unlocked, survivalTop } = req.body ?? {};
@@ -118,7 +141,9 @@ profileRouter.post('/reset', async (req: AuthedRequest, res) => {
   user.quests.splice(0, user.quests.length);
   user.passSeasonId = '';
   user.passBpPoints = 0;
-  user.passClaimedTiers = [];
+  user.passPremium = false;
+  user.passClaimedFree.splice(0, user.passClaimedFree.length);
+  user.passClaimedPremium.splice(0, user.passClaimedPremium.length);
   user.crates.splice(0, user.crates.length);
   await user.save();
   res.json({ profile: serializeProfile(user) });

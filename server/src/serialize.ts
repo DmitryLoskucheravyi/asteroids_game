@@ -32,7 +32,9 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
     pass: {
       seasonId: user.passSeasonId,
       bpPoints: user.passBpPoints,
-      claimedTiers: user.passClaimedTiers,
+      premium: user.passPremium,
+      claimedFree: user.passClaimedFree,
+      claimedPremium: user.passClaimedPremium,
     },
     crates: user.crates.map((c) => ({
       id: (c as unknown as { _id: { toString(): string } })._id.toString(),
@@ -41,5 +43,6 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       acquiredAt: c.acquiredAt,
       openedAt: c.openedAt,
     })),
+    keybinds: (user.keybinds ?? {}) as Record<string, string>,
   };
 }

@@ -27,6 +27,8 @@ export interface SaveData {
   quests: QuestView[];
   pass: PassView;
   crates: CrateView[];
+  /** Кастомне керування: дія → KeyboardEvent.code; відсутня дія = дефолт. */
+  keybinds: Record<string, string>;
   settings: {
     lang: Lang;
     volume: number;
@@ -51,8 +53,9 @@ const defaults = (): SaveData => ({
   xp: 0,
   level: 1,
   quests: [],
-  pass: { seasonId: '', bpPoints: 0, claimedTiers: [] },
+  pass: { seasonId: '', bpPoints: 0, premium: false, claimedFree: [], claimedPremium: [] },
   crates: [],
+  keybinds: {},
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
@@ -82,6 +85,7 @@ class SaveStore {
         quests: Array.isArray(parsed.quests) ? parsed.quests : [],
         crates: Array.isArray(parsed.crates) ? parsed.crates : [],
         pass: { ...base.pass, ...(parsed.pass ?? {}) },
+        keybinds: { ...(parsed.keybinds ?? {}) },
       };
     } catch {
       return base;
@@ -113,6 +117,7 @@ class SaveStore {
       quests: p.quests,
       pass: p.pass,
       crates: p.crates,
+      keybinds: p.keybinds,
     };
     this.save();
   }

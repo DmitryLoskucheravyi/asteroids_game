@@ -2,7 +2,7 @@ import type { App } from '../../app/App';
 import { toggleFullscreen } from '../../app/App';
 import { Sfx } from '../../core/audio';
 import { levelName, t } from '../../core/i18n';
-import type { Action } from '../../core/input';
+import { displayKey, primaryKeyFor, type Action } from '../../core/input';
 import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
 import { Server, type RewardResult } from '../../core/server';
@@ -71,9 +71,9 @@ export class GameScreen extends Screen {
       return { el, count };
     };
     this.slots = {
-      freeze: slot('freeze', Icons.snow, '1'),
-      boost: slot('boost', Icons.bolt, '2'),
-      jump: slot('jump', Icons.dash, 'SPC'),
+      freeze: slot('freeze', Icons.snow, displayKey(primaryKeyFor('freeze'))),
+      boost: slot('boost', Icons.bolt, displayKey(primaryKeyFor('boost'))),
+      jump: slot('jump', Icons.dash, displayKey(primaryKeyFor('jump'))),
     };
     this.featIcon = h('span', { class: 'ico' });
     this.featText = h('span', { class: 'sk-label' });

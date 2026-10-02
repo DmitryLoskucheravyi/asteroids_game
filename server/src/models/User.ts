@@ -48,9 +48,13 @@ const UserSchema = new Schema({
 
   passSeasonId: { type: String, default: '' },
   passBpPoints: { type: Number, default: 0 },
-  passClaimedTiers: { type: [Number], default: [] },
+  passPremium: { type: Boolean, default: false },
+  passClaimedFree: { type: [Number], default: [] },
+  passClaimedPremium: { type: [Number], default: [] },
 
   crates: { type: [CrateSchema], default: [] },
+
+  keybinds: { type: Schema.Types.Mixed, default: {} },
 
   createdAt: { type: Date, default: () => new Date() },
   lastLoginAt: { type: Date, default: () => new Date() },

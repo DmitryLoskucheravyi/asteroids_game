@@ -18,7 +18,9 @@ export interface QuestView {
 export interface PassView {
   seasonId: string;
   bpPoints: number;
-  claimedTiers: number[];
+  premium: boolean;
+  claimedFree: number[];
+  claimedPremium: number[];
 }
 
 export interface CrateView {
@@ -45,6 +47,7 @@ export interface ServerProfile {
   quests: QuestView[];
   pass: PassView;
   crates: CrateView[];
+  keybinds: Record<string, string>;
 }
 
 export interface RewardResult {
@@ -61,6 +64,7 @@ export interface PassTierView {
   tier: number;
   bpRequired: number;
   reward: { coins: number; xp: number; crate?: CrateType };
+  premiumReward: { coins: number; xp: number; crate?: CrateType };
 }
 
 export const Server = {
@@ -73,6 +77,7 @@ export const Server = {
   importLocal: (data: { coins: number; owned: string[]; stars: number[]; unlocked: number; survivalTop: { time: number; date: string }[] }) =>
     api.post<{ profile: ServerProfile }>('/profile/import-local', data),
   resetProgress: () => api.post<{ profile: ServerProfile }>('/profile/reset'),
+  setKeybinds: (keybinds: Record<string, string>) => api.post<{ profile: ServerProfile }>('/profile/keybinds', { keybinds }),
 
   levelComplete: (level: number, stars: number, crystals: number) =>
     api.post<{ profile: ServerProfile; reward: RewardResult & { firstClear: boolean } }>('/events/level-complete', { level, stars, crystals }),
@@ -85,8 +90,16 @@ export const Server = {
   quests: () => api.get<{ profile: ServerProfile }>('/quests'),
   claimQuest: (questId: string, periodKey: string) => api.post<{ profile: ServerProfile; reward: RewardResult }>(`/quests/${questId}/claim`, { periodKey }),
 
-  pass: () => api.get<{ season: { id: string; startsAt: string; endsAt: string; tiers: PassTierView[] }; bpPoints: number; claimedTiers: number[] }>('/pass'),
-  claimTier: (tier: number) => api.post<{ profile: ServerProfile; reward: RewardResult }>(`/pass/claim/${tier}`),
+  pass: () =>
+    api.get<{
+      season: { id: string; startsAt: string; endsAt: string; tiers: PassTierView[]; premiumPrice: number };
+      bpPoints: number;
+      premium: boolean;
+      claimedFree: number[];
+      claimedPremium: number[];
+    }>('/pass'),
+  claimTier: (tier: number, track: 'free' | 'premium') => api.post<{ profile: ServerProfile; reward: RewardResult }>(`/pass/claim/${tier}`, { track }),
+  buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
 
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; reward: CrateReward }>(`/crates/${crateId}/open`),
 };

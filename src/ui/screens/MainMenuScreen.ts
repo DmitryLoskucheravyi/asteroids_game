@@ -6,7 +6,6 @@ import { dailyState } from '../../game/economy';
 import { MAX_LEVEL } from '../../game/levels';
 import { planeIconUrl } from '../../game/PlaneArt';
 import { getPlane } from '../../game/planes';
-import { xpToNext } from '../../game/progression';
 import { toggleFullscreen } from '../../app/App';
 import { openDailyModal } from '../DailyModal';
 import { Icons, button, coinBadge, h, icon } from '../dom';
@@ -17,9 +16,8 @@ import { GameScreen } from './GameScreen';
 import { HangarScreen } from './HangarScreen';
 import { HowToScreen } from './HowToScreen';
 import { LevelSelectScreen } from './LevelSelectScreen';
+import { ProfileScreen } from './ProfileScreen';
 import { QuestsScreen } from './QuestsScreen';
-import { RecordsScreen } from './RecordsScreen';
-import { SettingsScreen } from './SettingsScreen';
 
 /** Щоденну нагороду пропонуємо автоматично лише раз за сесію. */
 let dailyOffered = false;
@@ -53,6 +51,10 @@ export class MainMenuScreen extends Screen {
       'aria-label': t('menu.crates'),
       title: t('menu.crates'),
     });
+    const profileBtn = button(h('span', {}, icon(Icons.gear), Save.data.nickname, h('span', { class: 'level-badge small' }, `${Save.data.level}`)), go(new ProfileScreen(this.app)), 'profile-btn', {
+      'aria-label': t('menu.profile'),
+      title: t('menu.profile'),
+    });
 
     const items: [string, () => void, boolean?][] = [
       [t('menu.play'), go(new LevelSelectScreen(this.app)), true],
@@ -60,9 +62,7 @@ export class MainMenuScreen extends Screen {
       [t('menu.planes'), go(new HangarScreen(this.app))],
       [t('menu.quests'), go(new QuestsScreen(this.app))],
       [t('menu.pass'), go(new BattlePassScreen(this.app))],
-      [t('menu.records'), go(new RecordsScreen(this.app))],
       [t('menu.howto'), go(new HowToScreen(this.app))],
-      [t('menu.settings'), go(new SettingsScreen(this.app))],
     ];
 
     const soundBtn = button(icon(Save.data.settings.volume > 0 ? Icons.sound : Icons.mute), () => {
@@ -74,28 +74,12 @@ export class MainMenuScreen extends Screen {
       this.el.querySelector<HTMLElement>('.icon-btn')?.focus();
     }, 'icon-btn', { 'aria-label': 'sound' });
 
-    const xpNeed = xpToNext(Save.data.level);
-    const xpPct = Math.min(100, Math.round((Save.data.xp / xpNeed) * 100));
-
     return h(
       'div',
       { class: 'menu' },
       h('div', { class: 'wallet' }, coinBadge(Save.data.coins, 'coin-badge big'), cratesBtn, dailyBtn),
-      h('div', { class: 'corner-actions' }, soundBtn, button(icon(Icons.fullscreen), toggleFullscreen, 'icon-btn', { 'aria-label': 'fullscreen' })),
-      h(
-        'div',
-        { class: 'menu-head' },
-        h('h1', { class: 'logo' }, 'ASTEROIDS'),
-        h('p', { class: 'menu-sub' }, t('menu.subtitle')),
-        h(
-          'div',
-          { class: 'pilot-row' },
-          h('span', { class: 'pilot-nick' }, Save.data.nickname),
-          h('span', { class: 'level-badge' }, t('menu.level', { n: Save.data.level })),
-          h('div', { class: 'xp-bar' }, h('i', { style: `width:${xpPct}%` })),
-          h('small', { class: 'xp-label' }, `${Save.data.xp} / ${xpNeed} XP`),
-        ),
-      ),
+      h('div', { class: 'corner-actions' }, profileBtn, soundBtn, button(icon(Icons.fullscreen), toggleFullscreen, 'icon-btn', { 'aria-label': 'fullscreen' })),
+      h('div', { class: 'menu-head' }, h('h1', { class: 'logo' }, 'ASTEROIDS'), h('p', { class: 'menu-sub' }, t('menu.subtitle'))),
       h(
         'nav',
         { class: 'menu-list' },

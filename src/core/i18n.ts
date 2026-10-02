@@ -273,6 +273,31 @@ const uk = {
 
   'reward.crateWon': 'Випав ящик!',
   'reward.levelUp': 'Новий рівень пілота: {n}!',
+
+  'menu.profile': 'Профіль',
+  'profile.title': 'Профіль',
+  'profile.pilot': 'Пілот',
+  'profile.records': 'Рекорди',
+  'profile.controls': 'Керування',
+  'profile.settings': 'Налаштування',
+  'controls.bind': 'Призначити',
+  'controls.listening': 'Натисни клавішу…',
+  'controls.reset': 'Скинути керування',
+  'controls.conflict': 'Ця клавіша вже зайнята іншою дією',
+  'control.up': 'Рух вгору',
+  'control.down': 'Рух вниз',
+  'control.left': 'Рух ліворуч',
+  'control.right': 'Рух праворуч',
+  'control.freeze': 'Заморозка',
+  'control.boost': 'Форсаж',
+  'control.jump': 'Ривок',
+  'control.pause': 'Пауза',
+
+  'pass.free': 'Безкоштовно',
+  'pass.premium': 'Преміум',
+  'pass.buyPremium': 'Купити преміум-пропуск',
+  'pass.premiumOwned': 'Преміум активовано',
+  'pass.premiumLocked': 'Потрібен преміум-пропуск',
 };
 
 type Dict = Record<keyof typeof uk, string>;
@@ -548,6 +573,31 @@ const en: Dict = {
 
   'reward.crateWon': 'A crate dropped!',
   'reward.levelUp': 'Pilot level up: {n}!',
+
+  'menu.profile': 'Profile',
+  'profile.title': 'Profile',
+  'profile.pilot': 'Pilot',
+  'profile.records': 'Records',
+  'profile.controls': 'Controls',
+  'profile.settings': 'Settings',
+  'controls.bind': 'Bind',
+  'controls.listening': 'Press a key…',
+  'controls.reset': 'Reset controls',
+  'controls.conflict': 'This key is already used by another action',
+  'control.up': 'Move up',
+  'control.down': 'Move down',
+  'control.left': 'Move left',
+  'control.right': 'Move right',
+  'control.freeze': 'Freeze',
+  'control.boost': 'Boost',
+  'control.jump': 'Dash',
+  'control.pause': 'Pause',
+
+  'pass.free': 'Free',
+  'pass.premium': 'Premium',
+  'pass.buyPremium': 'Buy premium pass',
+  'pass.premiumOwned': 'Premium active',
+  'pass.premiumLocked': 'Premium pass required',
 };
 
 export type TKey = keyof typeof uk;
