@@ -62,7 +62,7 @@ export const ITEM_DEFS: readonly ItemDef[] = [
   { id: 'emp_pulse', slot: 'active', rarity: 'rare', nameKey: 'item.empPulse', descKey: 'itemDesc.empPulse', active: { kind: 'emp', cooldown: 16, duration: 2.5, radius: 260, power: 20 }, combat: { damage: 0.3 }, price: 1000, color: '#9fe3ff' },
   { id: 'decoy_flare', slot: 'active', rarity: 'epic', nameKey: 'item.phaseShift', descKey: 'itemDesc.phaseShift', active: { kind: 'phase', cooldown: 18, duration: 2 }, combat: { damage: 0.4 }, price: 2400, color: '#c9a7ff' },
   { id: 'overdrive', slot: 'active', rarity: 'mythic', nameKey: 'item.overdrive', descKey: 'itemDesc.overdrive', active: { kind: 'overdrive', cooldown: 22, duration: 4 }, combat: { damage: 0.55 }, price: 4500, color: '#ff5a3a' },
-  { id: 'missile_swarm', slot: 'active', rarity: 'legendary', nameKey: 'item.missileSwarm', descKey: 'itemDesc.missileSwarm', active: { kind: 'swarm', cooldown: 18, power: 20 }, combat: { damage: 0.75 }, price: 8000, color: '#ffd24a' },
+  { id: 'missile_swarm', slot: 'active', rarity: 'legendary', nameKey: 'item.missileSwarm', descKey: 'itemDesc.missileSwarm', active: { kind: 'swarm', cooldown: 24, power: 10 }, combat: { damage: 0.75 }, price: 8000, color: '#ffd24a' },
 ];
 
 export const getItemDef = (id: string): ItemDef | undefined => ITEM_DEFS.find((i) => i.id === id);

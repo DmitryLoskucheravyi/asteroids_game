@@ -6,8 +6,9 @@ export const BOOST_MULTIPLIER = 1.6;
 export const JUMP_COOLDOWN = 4;
 export const MAX_CHARGES = 5;
 /** Теплові пастки (flares) — базова навичка кожного літака: відстрілюються назад і збивають кулі/ракети. */
-export const FLARE_COOLDOWN = 9;
-export const FLARE_DURATION = 1.4;
+export const FLARE_COOLDOWN = 1.5;
+/** Коротке вікно захисту — пастки треба відстрілювати вчасно, а не тримати щит постійно. */
+export const FLARE_DURATION = 0.5;
 export const FLARE_RADIUS = 95;
 
 /** Навички гравця: заморозка, форсаж, ривок. Параметри залежать від літака. */

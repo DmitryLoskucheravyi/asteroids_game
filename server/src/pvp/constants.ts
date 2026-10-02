@@ -17,8 +17,8 @@ export const PICKUP_RADIUS = 38;
 export const CRYSTAL_CHANCE = 0.18;
 
 /** Теплові пастки — дзеркалить FLARE_* у src/game/systems/SkillSystem.ts */
-export const FLARE_COOLDOWN_MS = 9000;
-export const FLARE_DURATION_MS = 1400;
+export const FLARE_COOLDOWN_MS = 1500;
+export const FLARE_DURATION_MS = 500;
 export const FLARE_RADIUS = 95;
 
 import type { CrateType } from '../content/crates.js';

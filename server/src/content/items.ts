@@ -31,7 +31,7 @@ export const ITEM_DEFS: readonly ItemMeta[] = [
   { id: 'emp_pulse', slot: 'active', rarity: 'rare', combat: { damage: 0.3 }, price: 1000, active: { kind: 'emp', cooldown: 16, duration: 2.5, radius: 260, power: 20 } },
   { id: 'decoy_flare', slot: 'active', rarity: 'epic', combat: { damage: 0.4 }, price: 2400, active: { kind: 'phase', cooldown: 18, duration: 2 } },
   { id: 'overdrive', slot: 'active', rarity: 'mythic', combat: { damage: 0.55 }, price: 4500, active: { kind: 'overdrive', cooldown: 22, duration: 4 } },
-  { id: 'missile_swarm', slot: 'active', rarity: 'legendary', combat: { damage: 0.75 }, price: 8000, active: { kind: 'swarm', cooldown: 18, power: 20 } },
+  { id: 'missile_swarm', slot: 'active', rarity: 'legendary', combat: { damage: 0.75 }, price: 8000, active: { kind: 'swarm', cooldown: 24, power: 10 } },
 ];
 
 export const getItemDef = (id: string): ItemMeta | undefined => ITEM_DEFS.find((i) => i.id === id);

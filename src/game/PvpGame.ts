@@ -21,7 +21,9 @@ const SEND_EVERY = 0.05;
 const HIT_RADIUS = 20;
 const JUMP_DISTANCE = 210;
 const SLOW_MUL = 0.45;
-const MISSILE_SPEED = 560;
+const MISSILE_SPEED = 520;
+/** Поворот ракети, рад/с — помірний, щоб від неї можна було ухилитись маневром */
+const MISSILE_TURN = 2.2;
 
 interface Ring {
   x: number;
@@ -345,7 +347,7 @@ export class PvpGame {
         for (let i = 0; i < 6; i++) {
           const ang = this.aim + (i - 2.5) * 0.28;
           const pos = this.nose();
-          this.missiles.push({ pos, angle: ang, life: 2.6, remote: false, ownerId: this.selfId, source: 'swarm' });
+          this.missiles.push({ pos, angle: ang, life: 2.2, remote: false, ownerId: this.selfId, source: 'swarm' });
           this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle: ang, kind: 'missile' });
         }
         break;
@@ -358,7 +360,7 @@ export class PvpGame {
     if (s.ownerId === this.selfId) return;
     const pos = new Vec2(s.x, s.y);
     if (s.kind === 'missile') {
-      this.missiles.push({ pos, angle: s.angle, life: 2.6, remote: true, ownerId: s.ownerId, source: 'weapon' });
+      this.missiles.push({ pos, angle: s.angle, life: 2.2, remote: true, ownerId: s.ownerId, source: 'weapon' });
       return;
     }
     if (s.kind === 'laser') {
@@ -565,7 +567,7 @@ export class PvpGame {
       const n = this.weapon.salvo ?? 3;
       for (let i = 0; i < n; i++) {
         const a = angle + (i - (n - 1) / 2) * 0.32;
-        this.missiles.push({ pos: pos.clone(), angle: a, life: 2.6, remote: false, ownerId: this.selfId, source: 'weapon' });
+        this.missiles.push({ pos: pos.clone(), angle: a, life: 2.2, remote: false, ownerId: this.selfId, source: 'weapon' });
         this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle: a, kind: 'missile' });
       }
       this.muzzle(pos.x, pos.y, angle, true);
@@ -720,9 +722,9 @@ export class PvpGame {
           best = rp;
         }
       }
-      if (best && m.life < 2.4) {
+      if (best && m.life < 2.2) {
         const want = Math.atan2(best.y - m.pos.y, best.x - m.pos.x);
-        m.angle += clamp(angleDiff(m.angle, want), -4 * dt, 4 * dt);
+        m.angle += clamp(angleDiff(m.angle, want), -MISSILE_TURN * dt, MISSILE_TURN * dt);
       }
       m.pos.add(Vec2.fromAngle(m.angle), MISSILE_SPEED * dt);
       this.particles.emit(m.pos.x, m.pos.y, { count: 1, speed: [10, 40], angle: m.angle + Math.PI, spread: 0.4, life: [0.2, 0.4], size: [2, 4], colors: ['#fff1a8', '#ff8a3a', '#9a9aa8'], drag: 2 });

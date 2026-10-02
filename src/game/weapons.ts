@@ -59,7 +59,7 @@ export const WEAPON_DEFS: readonly WeaponDef[] = [
     burst: { shots: 48, cooldown: 2.4 },
     price: 1200,
   },
-  { id: 'homing_salvo', kind: 'missile', nameKey: 'weapon.homingSalvo', descKey: 'weaponDesc.homingSalvo', fireRate: 1.5, projectileSpeed: 560, damage: 12, salvo: 3, ammo: 5, reloadTime: 3.2, price: 1800 },
+  { id: 'homing_salvo', kind: 'missile', nameKey: 'weapon.homingSalvo', descKey: 'weaponDesc.homingSalvo', fireRate: 1.5, projectileSpeed: 520, damage: 7, salvo: 3, ammo: 4, reloadTime: 3.8, price: 1800 },
 ];
 
 export const getWeaponDef = (id: string | null | undefined): WeaponDef | undefined => WEAPON_DEFS.find((w) => w.id === id);
