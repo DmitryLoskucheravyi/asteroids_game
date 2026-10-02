@@ -1,8 +1,10 @@
 import { Assets } from '../../core/assets';
+import { AuthStore } from '../../core/auth';
 import { Sfx } from '../../core/audio';
 import { t } from '../../core/i18n';
 import { h } from '../dom';
 import { Screen } from '../Screen';
+import { AuthScreen } from './AuthScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
 const MIN_DURATION = 1400;
@@ -31,13 +33,14 @@ export class IntroScreen extends Screen {
     requestAnimationFrame(tick);
     void Assets.loadAll((p) => (progress = p));
 
-    const go = (): void => {
+    const go = async (): Promise<void> => {
       if (!this.ready) return;
       window.removeEventListener('keydown', go);
       window.removeEventListener('pointerdown', go);
       Sfx.unlock();
       Sfx.click();
-      this.app.show(new MainMenuScreen(this.app));
+      const ok = await AuthStore.restore();
+      this.app.show(ok ? new MainMenuScreen(this.app) : new AuthScreen(this.app));
     };
     window.addEventListener('keydown', go);
     window.addEventListener('pointerdown', go);

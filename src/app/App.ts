@@ -3,6 +3,7 @@ import { Sfx } from '../core/audio';
 import { t } from '../core/i18n';
 import { InputState } from '../core/input';
 import { clamp } from '../core/math';
+import { APP_VERSION } from '../core/version';
 import type { Game, Viewport } from '../game/Game';
 import { Modal } from '../ui/Modal';
 import { moveFocus } from '../ui/nav';
@@ -46,6 +47,11 @@ export class App {
     this.resize();
     this.bindGlobalKeys();
     document.getElementById('rotate-hint')!.textContent = t('rotate');
+
+    const versionTag = document.createElement('div');
+    versionTag.className = 'version-tag';
+    versionTag.textContent = `v${APP_VERSION}`;
+    document.getElementById('app')!.append(versionTag);
   }
 
   onResize(fn: () => void): () => void {
@@ -119,6 +125,9 @@ export class App {
       }
       const inGame = this.game && !Modal.top();
       if (inGame) return;
+      const active = document.activeElement;
+      // у текстовому полі стрілки рухають курсор, а не фокус між кнопками
+      if (active instanceof HTMLInputElement && ['text', 'email', 'password', 'search', 'tel', 'url', 'number'].includes(active.type)) return;
       const dirs: Record<string, [number, number]> = {
         ArrowUp: [0, -1],
         ArrowDown: [0, 1],

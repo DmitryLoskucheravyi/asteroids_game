@@ -1,5 +1,6 @@
 import type { PlaneId } from '../game/planes';
 import type { Lang } from './i18n';
+import type { CrateView, PassView, QuestView, ServerProfile } from './server';
 
 export interface SurvivalRecord {
   time: number;
@@ -7,7 +8,8 @@ export interface SurvivalRecord {
 }
 
 export interface SaveData {
-  version: 2;
+  version: 3;
+  nickname: string;
   unlocked: number;
   /** Найкраща кількість зірок по кожному рівню (індекс = рівень - 1). */
   stars: number[];
@@ -19,6 +21,12 @@ export interface SaveData {
   owned: PlaneId[];
   /** Щоденна нагорода: дата останнього отримання (YYYY-MM-DD) і довжина серії */
   daily: { last: string; streak: number };
+  /** Досвід і рівень пілота (акаунтний прогрес, окремо від рівнів кампанії) */
+  xp: number;
+  level: number;
+  quests: QuestView[];
+  pass: PassView;
+  crates: CrateView[];
   settings: {
     lang: Lang;
     volume: number;
@@ -26,10 +34,13 @@ export interface SaveData {
   };
 }
 
-const KEY = 'asteroids.save.v2';
+const KEY = 'asteroids.save.v3';
+/** Ключ попередньої, доакаунтної версії — звідси одноразово мігруємо прогрес при реєстрації. */
+export const LEGACY_KEY = 'asteroids.save.v2';
 
 const defaults = (): SaveData => ({
-  version: 2,
+  version: 3,
+  nickname: '',
   unlocked: 1,
   stars: [],
   survivalTop: [],
@@ -37,6 +48,11 @@ const defaults = (): SaveData => ({
   coins: 0,
   owned: ['falcon'],
   daily: { last: '', streak: 0 },
+  xp: 0,
+  level: 1,
+  quests: [],
+  pass: { seasonId: '', bpPoints: 0, claimedTiers: [] },
+  crates: [],
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
@@ -44,7 +60,7 @@ const defaults = (): SaveData => ({
   },
 });
 
-/** Збереження прогресу, рекордів і налаштувань (замість progress.txt / records.txt). */
+/** Кеш акаунтного профілю (джерело правди — сервер) + локальні налаштування. */
 class SaveStore {
   data: SaveData = this.load();
 
@@ -63,6 +79,9 @@ class SaveStore {
         coins: Math.max(0, Math.floor(Number(parsed.coins) || 0)),
         owned: Array.isArray(parsed.owned) && parsed.owned.length ? parsed.owned : ['falcon'],
         daily: { ...base.daily, ...(parsed.daily ?? {}) },
+        quests: Array.isArray(parsed.quests) ? parsed.quests : [],
+        crates: Array.isArray(parsed.crates) ? parsed.crates : [],
+        pass: { ...base.pass, ...(parsed.pass ?? {}) },
       };
     } catch {
       return base;
@@ -77,22 +96,73 @@ class SaveStore {
     }
   }
 
+  /** Перезаписує кеш свіжим профілем із сервера (єдина точка правди для прогресу). */
+  applyProfile(p: ServerProfile): void {
+    this.data = {
+      ...this.data,
+      nickname: p.nickname,
+      coins: p.coins,
+      xp: p.xp,
+      level: p.level,
+      plane: p.selectedPlane,
+      owned: p.ownedPlanes,
+      stars: p.stars,
+      unlocked: p.unlocked,
+      survivalTop: p.survivalTop,
+      daily: p.daily,
+      quests: p.quests,
+      pass: p.pass,
+      crates: p.crates,
+    };
+    this.save();
+  }
+
+  /** Перед реєстрацією/логіном — те, що набрав гравець локально ще без акаунту. */
+  hasLegacyProgress(): boolean {
+    try {
+      const raw = localStorage.getItem(LEGACY_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw) as Partial<SaveData>;
+      return (parsed.coins ?? 0) > 0 || (parsed.owned?.length ?? 0) > 1 || (parsed.stars?.length ?? 0) > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  legacyProgress(): { coins: number; owned: string[]; stars: number[]; unlocked: number; survivalTop: SurvivalRecord[] } | null {
+    try {
+      const raw = localStorage.getItem(LEGACY_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<SaveData>;
+      return {
+        coins: Math.max(0, Math.floor(Number(parsed.coins) || 0)),
+        owned: Array.isArray(parsed.owned) ? parsed.owned : [],
+        stars: Array.isArray(parsed.stars) ? parsed.stars : [],
+        unlocked: Number(parsed.unlocked) || 1,
+        survivalTop: Array.isArray(parsed.survivalTop) ? parsed.survivalTop : [],
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  clearLegacyProgress(): void {
+    try {
+      localStorage.removeItem(LEGACY_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Виклик при виході з акаунту — залишаємо лише налаштування. */
+  clearProfile(): void {
+    const settings = this.data.settings;
+    this.data = { ...defaults(), settings };
+    this.save();
+  }
+
   owns(id: PlaneId): boolean {
     return this.data.owned.includes(id);
-  }
-
-  addCoins(n: number): void {
-    this.data.coins += Math.max(0, Math.floor(n));
-    this.save();
-  }
-
-  /** Купівля літака: true, якщо вистачило коінс. */
-  buy(id: PlaneId, price: number): boolean {
-    if (this.owns(id) || this.data.coins < price) return false;
-    this.data.coins -= price;
-    this.data.owned.push(id);
-    this.save();
-    return true;
   }
 
   get bestSurvival(): number {
@@ -107,29 +177,10 @@ class SaveStore {
     return this.data.stars[level - 1] ?? 0;
   }
 
-  completeLevel(level: number, stars: number, maxLevel: number): void {
-    this.data.stars[level - 1] = Math.max(this.starsFor(level), stars);
-    if (level < maxLevel) this.data.unlocked = Math.max(this.data.unlocked, level + 1);
-    this.save();
-  }
-
   /** Повертає місце в таблиці (0..4) або -1, якщо результат не потрапив у топ. */
-  addSurvival(time: number): number {
+  survivalPlace(time: number): number {
     const t = Math.floor(time);
-    const top = this.data.survivalTop;
-    const entry = { time: t, date: new Date().toISOString().slice(0, 10) };
-    top.push(entry);
-    top.sort((a, b) => b.time - a.time);
-    top.length = Math.min(top.length, 5);
-    this.save();
-    return top.indexOf(entry);
-  }
-
-  resetProgress(): void {
-    // коінс і куплені літаки теж скидаються, тож обраний літак повертається на стартовий
-    const settings = this.data.settings;
-    this.data = { ...defaults(), settings };
-    this.save();
+    return this.data.survivalTop.findIndex((e) => e.time === t);
   }
 }
 

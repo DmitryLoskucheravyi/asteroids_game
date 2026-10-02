@@ -732,6 +732,7 @@ button {
   width: 130px;
   height: 130px;
   object-fit: contain;
+  image-rendering: pixelated;
   transition: transform 0.3s;
 }
 
@@ -2064,5 +2065,808 @@ input[type='range'] {
   }
   .daily-card.big {
     grid-column: span 3;
+  }
+}
+
+/* ===================== версія гри ===================== */
+
+.version-tag {
+  position: fixed;
+  right: 10px;
+  bottom: max(6px, env(safe-area-inset-bottom));
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  opacity: 0.35;
+  pointer-events: none;
+  z-index: 5;
+  user-select: none;
+}
+
+/* ===================== пілот: нік, рівень, XP ===================== */
+
+.pilot-row {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pilot-nick {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  color: var(--cyan);
+}
+
+.level-badge {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 176, 32, 0.15);
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  color: var(--accent);
+  letter-spacing: 0.03em;
+}
+
+.xp-bar {
+  width: 140px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.xp-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cyan), #9fe3ff);
+  transition: width 0.4s ease;
+}
+
+.xp-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xp-badge {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  color: var(--cyan);
+  font-size: 13px;
+}
+
+.xp-badge.small {
+  font-size: 11px;
+}
+
+.xp-badge.big {
+  font-size: 22px;
+}
+
+.xp-badge.tiny {
+  font-size: 10px;
+}
+
+.crates-btn {
+  position: relative;
+}
+
+.crates-btn.ready {
+  color: var(--gold);
+  animation: gift-wiggle 2.4s ease-in-out infinite;
+}
+
+.badge-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 8px rgba(255, 74, 90, 0.6);
+}
+
+.crate-won {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(79, 180, 255, 0.12);
+  border: 1px solid rgba(79, 180, 255, 0.4);
+  font-weight: 700;
+}
+
+.crate-won .btn.small {
+  margin-left: auto;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* ===================== екран входу/реєстрації ===================== */
+
+.auth-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(10px);
+  padding: 28px 26px 24px;
+  text-align: center;
+}
+
+.auth-logo {
+  margin: 0;
+  font-size: clamp(28px, 6vw, 38px);
+}
+
+.auth-sub {
+  color: var(--muted);
+  margin: 6px 0 20px;
+}
+
+.auth-tabs {
+  margin: 0 auto 18px;
+  width: fit-content;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form input {
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(8, 7, 20, 0.6);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  outline: none;
+}
+
+.auth-form input:focus-visible {
+  border-color: var(--cyan);
+}
+
+.auth-form input::placeholder {
+  color: var(--muted);
+}
+
+.auth-submit {
+  margin-top: 4px;
+  width: 100%;
+}
+
+.auth-error {
+  margin: 0;
+  min-height: 0;
+  color: var(--danger);
+  font-size: 13px;
+  text-align: left;
+  display: none;
+}
+
+.auth-error.show {
+  display: block;
+}
+
+/* ===================== завдання ===================== */
+
+.quest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quest-group-title {
+  margin: 10px 0 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.quest-card {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.quest-card.ready {
+  border-color: rgba(255, 210, 74, 0.5);
+  box-shadow: 0 0 0 1px rgba(255, 210, 74, 0.15) inset;
+}
+
+.quest-card.claimed {
+  opacity: 0.55;
+}
+
+.quest-period {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+.quest-period.weekly {
+  color: var(--pink);
+  border-color: rgba(255, 79, 216, 0.4);
+}
+
+.quest-ico {
+  width: 26px;
+  height: 26px;
+  color: var(--cyan);
+}
+
+.quest-body {
+  min-width: 0;
+}
+
+.quest-desc {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.quest-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.quest-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  transition: width 0.4s ease;
+}
+
+.quest-progress {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quest-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.quest-done {
+  color: var(--gold);
+  width: 22px;
+  height: 22px;
+}
+
+/* ===================== сезонний пропуск ===================== */
+
+.bp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  color: var(--cyan);
+}
+
+.pass-progress {
+  max-width: 420px;
+  margin: 0 auto 20px;
+  text-align: center;
+}
+
+.pass-progress .quest-bar {
+  height: 8px;
+  margin-bottom: 6px;
+}
+
+.pass-progress span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tier-track {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 6px 4px 16px;
+  scroll-snap-type: x proximity;
+}
+
+.tier {
+  flex: 0 0 110px;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+.tier.locked {
+  opacity: 0.55;
+}
+
+.tier.current {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px rgba(88, 210, 255, 0.25) inset, 0 0 16px rgba(88, 210, 255, 0.2);
+}
+
+.tier.done {
+  border-color: rgba(255, 210, 74, 0.5);
+}
+
+.tier-n {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tier-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.tier-reward.crate-common .ico {
+  color: #bfd4e6;
+}
+.tier-reward.crate-rare .ico {
+  color: #4fb4ff;
+}
+.tier-reward.crate-legendary .ico {
+  color: #ffd24f;
+}
+
+.tier-lock {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+}
+
+.tier-done {
+  width: 20px;
+  height: 20px;
+  color: var(--gold);
+}
+
+/* ===================== ящики: інвентар ===================== */
+
+.crate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 14px;
+}
+
+.crate-tile-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.crate-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 10px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.crate-tile-btn:hover .crate-tile,
+.crate-tile-btn:focus-visible .crate-tile {
+  transform: translateY(-3px);
+  border-color: var(--line-strong);
+}
+
+.crate-tile-ico {
+  width: 46px;
+  height: 46px;
+}
+
+.crate-tile-ico.bob {
+  animation: crate-bob 2.6s ease-in-out infinite;
+}
+
+@keyframes crate-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-3deg);
+  }
+}
+
+.crate-common .crate-tile-ico {
+  color: #bfd4e6;
+}
+.crate-rare .crate-tile-ico {
+  color: #4fb4ff;
+  filter: drop-shadow(0 0 8px rgba(79, 180, 255, 0.6));
+}
+.crate-legendary .crate-tile-ico {
+  color: #ffd24f;
+  filter: drop-shadow(0 0 10px rgba(255, 210, 79, 0.7));
+}
+
+.crate-tile-label {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+/* ===================== ящик: модалка відкриття ===================== */
+
+.crate-modal .modal-panel {
+  width: min(380px, 100%);
+  text-align: center;
+}
+
+.crate-label {
+  margin: 0 0 8px;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.crate-wrap {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 14px;
+}
+
+.crate-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crate-ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.crate-ring.charging {
+  opacity: 1;
+}
+
+.crate-ring.done {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.crate-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 5;
+}
+
+.ring-fill {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 277;
+  stroke-dashoffset: 277;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset var(--dur, 0.9s) linear;
+}
+
+.crate-ring.charging .ring-fill {
+  stroke-dashoffset: 0;
+}
+
+.crate-flash {
+  position: absolute;
+  inset: -20%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(255, 255, 255, 0) 70%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.crate-flash.go {
+  animation: crate-flash 0.55s ease-out forwards;
+}
+
+@keyframes crate-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  30% {
+    opacity: 0.9;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+.crate-box {
+  position: relative;
+  width: 108px;
+  height: 108px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  border: 2px solid #bfd4e6;
+  box-shadow: 0 0 24px rgba(191, 212, 230, 0.35);
+}
+
+.crate-box .crate-icon {
+  width: 56px;
+  height: 56px;
+  color: #bfd4e6;
+}
+
+.crate-box.crate-rare {
+  border-color: #4fb4ff;
+  box-shadow: 0 0 28px rgba(79, 180, 255, 0.5);
+}
+.crate-box.crate-rare .crate-icon {
+  color: #4fb4ff;
+}
+
+.crate-box.crate-legendary {
+  border-color: #ffd24f;
+  box-shadow: 0 0 32px rgba(255, 210, 79, 0.6);
+}
+.crate-box.crate-legendary .crate-icon {
+  color: #ffd24f;
+}
+
+.crate-box.shaking {
+  animation: crate-shake 0.7s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes crate-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  10% {
+    transform: translate(-2px, 1px) rotate(-1deg);
+  }
+  25% {
+    transform: translate(3px, -1px) rotate(1.5deg);
+  }
+  40% {
+    transform: translate(-4px, 1px) rotate(-2deg);
+  }
+  55% {
+    transform: translate(5px, -2px) rotate(2.5deg);
+  }
+  70% {
+    transform: translate(-6px, 2px) rotate(-3deg);
+  }
+  85% {
+    transform: translate(6px, -2px) rotate(3deg);
+  }
+}
+
+.crate-box.bursting {
+  animation: crate-burst 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes crate-burst {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    filter: brightness(1);
+  }
+  40% {
+    transform: scale(1.25);
+    opacity: 1;
+    filter: brightness(2);
+  }
+  100% {
+    transform: scale(0.4);
+    opacity: 0;
+    filter: brightness(2.4);
+  }
+}
+
+.crate-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crate-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--size, 6px);
+  height: var(--size, 6px);
+  border-radius: 50%;
+  background: var(--c, #fff);
+  box-shadow: 0 0 6px var(--c, #fff);
+  transform: translate(-50%, -50%);
+  animation: crate-particle 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes crate-particle {
+  0% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(var(--angle)) translateX(var(--dist)) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.crate-reveal {
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crate-reward-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  animation: crate-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes crate-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.crate-reward-card .coin-badge.big {
+  font-size: 26px;
+}
+
+.plane-reward .reward-plane-img {
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.5));
+  animation: crate-plane-spin 2.4s ease-in-out infinite;
+}
+
+@keyframes crate-plane-spin {
+  0%,
+  100% {
+    transform: rotateY(0deg);
+  }
+  50% {
+    transform: rotateY(18deg);
+  }
+}
+
+.new-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--gold));
+  color: #1a1304;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.crate-open-btn {
+  margin-top: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crate-tile-ico.bob,
+  .gift-btn.ready,
+  .crates-btn.ready {
+    animation: none;
+  }
+  .crate-box.shaking {
+    animation: none;
+  }
+  .crate-box.bursting {
+    animation: crate-burst 0.35s ease-out forwards;
+  }
+}
+
+@media (max-width: 760px) {
+  .auth-card {
+    padding: 22px 18px 20px;
+  }
+  .quest-card {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: 'period reward' 'ico body';
+  }
+  .quest-period {
+    grid-area: period;
+    justify-self: end;
+  }
+  .quest-reward {
+    grid-area: reward;
+    align-items: flex-end;
+  }
+  .quest-ico {
+    grid-area: ico;
+  }
+  .quest-body {
+    grid-area: body;
   }
 }

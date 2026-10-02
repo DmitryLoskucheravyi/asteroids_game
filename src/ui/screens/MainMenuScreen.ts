@@ -6,14 +6,18 @@ import { dailyState } from '../../game/economy';
 import { MAX_LEVEL } from '../../game/levels';
 import { planeIconUrl } from '../../game/PlaneArt';
 import { getPlane } from '../../game/planes';
+import { xpToNext } from '../../game/progression';
 import { toggleFullscreen } from '../../app/App';
 import { openDailyModal } from '../DailyModal';
 import { Icons, button, coinBadge, h, icon } from '../dom';
 import { Screen } from '../Screen';
+import { BattlePassScreen } from './BattlePassScreen';
+import { CratesScreen } from './CratesScreen';
 import { GameScreen } from './GameScreen';
 import { HangarScreen } from './HangarScreen';
 import { HowToScreen } from './HowToScreen';
 import { LevelSelectScreen } from './LevelSelectScreen';
+import { QuestsScreen } from './QuestsScreen';
 import { RecordsScreen } from './RecordsScreen';
 import { SettingsScreen } from './SettingsScreen';
 
@@ -44,10 +48,18 @@ export class MainMenuScreen extends Screen {
     });
     const planeImg = h('img', { class: 'menu-plane', src: planeIconUrl(plane.id), alt: '' });
 
+    const unopenedCrates = Save.data.crates.filter((c) => !c.openedAt).length;
+    const cratesBtn = button(h('span', {}, icon(Icons.gift), unopenedCrates > 0 ? h('span', { class: 'badge-count' }, String(unopenedCrates)) : null), go(new CratesScreen(this.app)), `icon-btn crates-btn${unopenedCrates > 0 ? ' ready' : ''}`, {
+      'aria-label': t('menu.crates'),
+      title: t('menu.crates'),
+    });
+
     const items: [string, () => void, boolean?][] = [
       [t('menu.play'), go(new LevelSelectScreen(this.app)), true],
       [t('menu.survival'), () => this.app.show(new GameScreen(this.app, 'survival', 0))],
       [t('menu.planes'), go(new HangarScreen(this.app))],
+      [t('menu.quests'), go(new QuestsScreen(this.app))],
+      [t('menu.pass'), go(new BattlePassScreen(this.app))],
       [t('menu.records'), go(new RecordsScreen(this.app))],
       [t('menu.howto'), go(new HowToScreen(this.app))],
       [t('menu.settings'), go(new SettingsScreen(this.app))],
@@ -62,12 +74,28 @@ export class MainMenuScreen extends Screen {
       this.el.querySelector<HTMLElement>('.icon-btn')?.focus();
     }, 'icon-btn', { 'aria-label': 'sound' });
 
+    const xpNeed = xpToNext(Save.data.level);
+    const xpPct = Math.min(100, Math.round((Save.data.xp / xpNeed) * 100));
+
     return h(
       'div',
       { class: 'menu' },
-      h('div', { class: 'wallet' }, coinBadge(Save.data.coins, 'coin-badge big'), dailyBtn),
+      h('div', { class: 'wallet' }, coinBadge(Save.data.coins, 'coin-badge big'), cratesBtn, dailyBtn),
       h('div', { class: 'corner-actions' }, soundBtn, button(icon(Icons.fullscreen), toggleFullscreen, 'icon-btn', { 'aria-label': 'fullscreen' })),
-      h('div', { class: 'menu-head' }, h('h1', { class: 'logo' }, 'ASTEROIDS'), h('p', { class: 'menu-sub' }, t('menu.subtitle'))),
+      h(
+        'div',
+        { class: 'menu-head' },
+        h('h1', { class: 'logo' }, 'ASTEROIDS'),
+        h('p', { class: 'menu-sub' }, t('menu.subtitle')),
+        h(
+          'div',
+          { class: 'pilot-row' },
+          h('span', { class: 'pilot-nick' }, Save.data.nickname),
+          h('span', { class: 'level-badge' }, t('menu.level', { n: Save.data.level })),
+          h('div', { class: 'xp-bar' }, h('i', { style: `width:${xpPct}%` })),
+          h('small', { class: 'xp-label' }, `${Save.data.xp} / ${xpNeed} XP`),
+        ),
+      ),
       h(
         'nav',
         { class: 'menu-list' },

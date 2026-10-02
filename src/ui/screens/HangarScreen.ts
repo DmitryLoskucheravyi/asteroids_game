@@ -1,5 +1,6 @@
 import { Sfx } from '../../core/audio';
 import { t, type TKey } from '../../core/i18n';
+import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
 import { planeIconUrl } from '../../game/PlaneArt';
 import { PLANES, planeStats, type PlaneSpec } from '../../game/planes';
@@ -19,9 +20,9 @@ export class HangarScreen extends Screen {
     const coins = Save.data.coins;
     if (Save.owns(p.id)) {
       const selected = Save.data.plane === p.id;
-      return button(selected ? t('planes.selected') : t('planes.select'), () => {
-        Save.data.plane = p.id;
-        Save.save();
+      return button(selected ? t('planes.selected') : t('planes.select'), async () => {
+        const { profile } = await Server.selectPlane(p.id);
+        Save.applyProfile(profile);
         this.render();
         this.refocus(i);
       }, `btn${selected ? ' btn-on' : ''}`, selected ? { 'data-autofocus': true } : {});
@@ -32,17 +33,17 @@ export class HangarScreen extends Screen {
       { class: 'buy-row' },
       button(
         h('span', { class: 'buy-label' }, t('planes.buy'), coinBadge(p.price, 'coin-badge small')),
-        () => {
-          if (!Save.buy(p.id, p.price)) {
+        async () => {
+          try {
+            const { profile } = await Server.buyPlane(p.id);
+            Save.applyProfile(profile);
+            Sfx.powerup();
+            toast(t('planes.bought'));
+            this.render();
+            this.refocus(i);
+          } catch {
             Sfx.warning();
-            return;
           }
-          Save.data.plane = p.id;
-          Save.save();
-          Sfx.powerup();
-          toast(t('planes.bought'));
-          this.render();
-          this.refocus(i);
         },
         `btn buy${affordable ? ' affordable' : ' locked'}`,
         affordable ? {} : { 'aria-disabled': 'true' },

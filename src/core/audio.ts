@@ -126,6 +126,19 @@ class SoundFx {
   star(i: number): void {
     this.tone(784 + i * 196, 0.2, 'triangle', 0.22);
   }
+  crateCharge(): void {
+    this.tone(220, 0.9, 'sawtooth', 0.1, 900);
+  }
+  crateShake(): void {
+    this.noise(0.5, 0.2, 1200, 3000);
+  }
+  crateBurst(): void {
+    this.noise(0.4, 0.5, 5000, 400);
+    [392, 523, 659, 784].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.22, undefined, i * 0.03));
+  }
+  rareReward(): void {
+    [523, 659, 784, 988, 1318, 1568].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.22, undefined, i * 0.08));
+  }
 }
 
 export const Sfx = new SoundFx();

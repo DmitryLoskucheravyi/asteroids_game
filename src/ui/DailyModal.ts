@@ -1,6 +1,8 @@
 import { Sfx } from '../core/audio';
 import { t } from '../core/i18n';
-import { DAILY_REWARDS, claimDaily, dailyState } from '../game/economy';
+import { Server } from '../core/server';
+import { Save } from '../core/storage';
+import { DAILY_REWARDS, dailyState } from '../game/economy';
 import { Icons, button, coinBadge, h, icon } from './dom';
 import { Modal } from './Modal';
 
@@ -32,9 +34,10 @@ export function openDailyModal(onClaimed: () => void): Modal {
   });
 
   if (st.available) {
-    const claim = button(h('span', { class: 'claim-label' }, t('daily.claim', { n: st.reward }), icon(Icons.coin, 'ico coin')), () => {
-      const got = claimDaily();
-      if (!got) return;
+    const claim = button(h('span', { class: 'claim-label' }, t('daily.claim', { n: st.reward }), icon(Icons.coin, 'ico coin')), async () => {
+      const { profile, reward } = await Server.dailyClaim().catch(() => ({ profile: null, reward: null }));
+      if (!profile || !reward) return;
+      Save.applyProfile(profile);
       Sfx.win();
       const today = cards[st.day - 1];
       today.classList.add('done', 'claimed');

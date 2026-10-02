@@ -1,10 +1,13 @@
 import { Sfx } from '../../core/audio';
+import { AuthStore } from '../../core/auth';
 import { t, type Lang } from '../../core/i18n';
+import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
 import { toggleFullscreen } from '../../app/App';
 import { button, h } from '../dom';
 import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
+import { AuthScreen } from './AuthScreen';
 import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
@@ -84,14 +87,22 @@ export class SettingsScreen extends Screen {
               body: [h('p', {}, t('settings.resetConfirm'))],
               actions: [
                 button(t('common.cancel'), () => m.close(), 'btn', { 'data-autofocus': true }),
-                button(t('settings.reset'), () => {
-                  Save.resetProgress();
+                button(t('settings.reset'), async () => {
+                  const { profile } = await Server.resetProgress();
+                  Save.applyProfile(profile);
                   m.close();
                   toast(t('settings.resetDone'));
                 }, 'btn danger'),
               ],
               onEscape: () => m.close(),
             }).open();
+          }, 'btn danger'),
+        ),
+        row(
+          '',
+          button(t('settings.logout'), () => {
+            AuthStore.logout();
+            this.app.show(new AuthScreen(this.app));
           }, 'btn danger'),
         ),
       ),

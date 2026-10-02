@@ -5,13 +5,14 @@ import { levelName, t } from '../../core/i18n';
 import type { Action } from '../../core/input';
 import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
+import { Server, type RewardResult } from '../../core/server';
 import { Game, type GameMode, type GameResult } from '../../game/Game';
-import { levelReward, survivalReward } from '../../game/economy';
 import { MAX_LEVEL } from '../../game/levels';
 import { BOOST_DURATION, FREEZE_DURATION } from '../../game/systems/SkillSystem';
 import { Icons, button, h, icon } from '../dom';
-import { Modal } from '../Modal';
+import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
+import { CratesScreen } from './CratesScreen';
 import { LevelSelectScreen, starsRow } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
@@ -303,10 +304,9 @@ export class GameScreen extends Screen {
     this.game.start();
   }
 
-  /** Зараховує коінс і повертає блок із розбивкою нагороди та анімованим підсумком. */
-  private rewardBlock(lines: [string, number, string?][]): HTMLElement {
+  /** Блок із розбивкою нагороди, анімованим підсумком коінс і плюшкою XP/ящика (все вже нараховано сервером). */
+  private rewardBlock(lines: [string, number, string?][], xp: number, crateAwarded: string | null): HTMLElement {
     const total = lines.reduce((sum, [, n]) => sum + n, 0);
-    Save.addCoins(total);
     const totalEl = h('span', { class: 'coin-amount' }, '0');
     const block = h(
       'div',
@@ -314,9 +314,17 @@ export class GameScreen extends Screen {
       ...lines
         .filter(([, n]) => n > 0)
         .map(([label, n, note]) => h('div', { class: 'reward-line' }, h('span', {}, label, note ? h('small', {}, ` · ${note}`) : null), h('span', { class: 'reward-num' }, `+${n}`))),
-      h('div', { class: 'reward-total' }, h('span', {}, t('reward.total')), h('span', { class: 'coin-badge big' }, icon(Icons.coin, 'ico coin'), totalEl)),
+      h(
+        'div',
+        { class: 'reward-total' },
+        h('span', {}, t('reward.total')),
+        h('span', { class: 'coin-badge big' }, icon(Icons.coin, 'ico coin'), totalEl),
+        xp > 0 ? h('span', { class: 'xp-badge' }, `+${xp} XP`) : null,
+      ),
+      crateAwarded
+        ? h('div', { class: `crate-won crate-${crateAwarded}` }, icon(Icons.gift, 'ico'), t('reward.crateWon'), button(t('crates.open'), () => this.app.show(new CratesScreen(this.app)), 'btn small'))
+        : null,
     );
-    // відлік від 0 до суми
     const started = performance.now();
     const tick = (): void => {
       const k = Math.min(1, (performance.now() - started) / 900);
@@ -327,17 +335,21 @@ export class GameScreen extends Screen {
     return block;
   }
 
-  private showResult(r: GameResult): void {
+  private levelUpToast(reward: RewardResult): void {
+    if (reward.leveledUp) toast(t('reward.levelUp', { n: reward.newLevel }));
+  }
+
+  private async showResult(r: GameResult): Promise<void> {
     if (Modal.top()) Modal.closeAll();
     const toLevels = (): void => this.app.show(new LevelSelectScreen(this.app, r.won && r.level < MAX_LEVEL ? r.level + 1 : r.level));
     const toMenu = (): void => this.app.show(new MainMenuScreen(this.app));
 
     if (r.mode === 'survival') {
-      const place = Save.addSurvival(r.time);
-      const reward = this.rewardBlock([
-        [t('reward.survival'), survivalReward(r.time)],
-        [t('reward.crystals'), r.coins],
-      ]);
+      const { profile, reward } = await Server.survival(Math.floor(r.time), r.crystals);
+      Save.applyProfile(profile);
+      this.levelUpToast(reward);
+      const place = reward.place;
+      const rewardEl = this.rewardBlock([[t('reward.survival'), reward.coins]], reward.xp, reward.crateAwarded);
       new Modal({
         title: t('game.survivalOver'),
         cls: 'result',
@@ -346,7 +358,7 @@ export class GameScreen extends Screen {
           h('div', { class: 'res-big' }, formatTime(r.time)),
           place === 0 ? h('div', { class: 'res-badge' }, icon(Icons.trophy), t('game.newRecord')) : '',
           place > 0 ? h('div', { class: 'muted' }, t('game.place', { n: place + 1 })) : '',
-          reward,
+          rewardEl,
         ],
         actions: [button(t('game.retry'), () => this.restart(), 'btn primary', { 'data-autofocus': true }), button(t('game.toMenu'), toMenu, 'btn')],
       }).open();
@@ -354,12 +366,10 @@ export class GameScreen extends Screen {
     }
 
     if (r.won) {
-      const firstClear = Save.starsFor(r.level) === 0;
-      Save.completeLevel(r.level, r.stars, MAX_LEVEL);
-      const reward = this.rewardBlock([
-        [t('reward.level'), levelReward(r.level, r.stars, firstClear), firstClear ? t('reward.first') : undefined],
-        [t('reward.crystals'), r.coins],
-      ]);
+      const { profile, reward } = await Server.levelComplete(r.level, r.stars, r.crystals);
+      Save.applyProfile(profile);
+      this.levelUpToast(reward);
+      const rewardEl = this.rewardBlock([[t('reward.level'), reward.coins, reward.firstClear ? t('reward.first') : undefined]], reward.xp, reward.crateAwarded);
       const stars = starsRow(0);
       stars.classList.add('res-stars');
       const last = r.level >= MAX_LEVEL;
@@ -371,7 +381,7 @@ export class GameScreen extends Screen {
           stars,
           h('div', { class: 'res-crystals' }, icon(Icons.crystal), `${t('game.crystals')}: ${r.crystals} / ${r.crystalTarget}`),
           last ? h('p', { class: 'res-final' }, t('game.allDone', { n: MAX_LEVEL })) : '',
-          reward,
+          rewardEl,
         ],
         actions: [
           !last ? button(t('game.nextLevel'), () => this.app.show(new GameScreen(this.app, 'campaign', r.level + 1)), 'btn primary', { 'data-autofocus': true }) : null,
@@ -390,6 +400,14 @@ export class GameScreen extends Screen {
     }
 
     const pct = Math.min(100, (r.time / r.duration) * 100);
+    // кристали, зібрані до загибелі, все одно зараховуються — рівень не пройдено, тож без completeLevel
+    const rewardEl =
+      r.crystals > 0
+        ? await Server.crystalsOnly(r.crystals).then(({ profile, reward }) => {
+            Save.applyProfile(profile);
+            return this.rewardBlock([[t('reward.crystals'), reward.coins]], reward.xp, reward.crateAwarded);
+          })
+        : '';
     new Modal({
       title: t('game.lost'),
       cls: 'result lose',
@@ -397,8 +415,7 @@ export class GameScreen extends Screen {
         h('div', { class: 'res-label' }, `${t('levels.level')} ${r.level} · ${levelName(r.level)}`),
         h('div', { class: 'res-sub' }, t('game.lostSub', { t: formatTime(r.time), total: formatTime(r.duration) })),
         h('div', { class: 'res-bar' }, h('i', { style: `width:${pct}%` })),
-        // кристали, зібрані до загибелі, все одно зараховуються
-        r.coins > 0 ? this.rewardBlock([[t('reward.crystals'), r.coins]]) : '',
+        rewardEl,
       ],
       actions: [button(t('game.retry'), () => this.restart(), 'btn primary', { 'data-autofocus': true }), button(t('game.toLevels'), toLevels, 'btn'), button(t('game.toMenu'), toMenu, 'btn')],
     }).open();

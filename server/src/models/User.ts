@@ -1,0 +1,61 @@
+import { Schema, model, type InferSchemaType, Types } from 'mongoose';
+
+const QuestProgressSchema = new Schema(
+  {
+    questId: { type: String, required: true },
+    periodKey: { type: String, required: true },
+    progress: { type: Number, default: 0 },
+    claimed: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
+const CrateSchema = new Schema({
+  crateType: { type: String, enum: ['common', 'rare', 'legendary'], required: true },
+  source: { type: String, required: true },
+  acquiredAt: { type: Date, default: () => new Date() },
+  openedAt: { type: Date, default: null },
+});
+
+const SurvivalEntrySchema = new Schema(
+  {
+    time: { type: Number, required: true },
+    date: { type: String, required: true },
+  },
+  { _id: false },
+);
+
+const UserSchema = new Schema({
+  nickname: { type: String, required: true, unique: true, minlength: 3, maxlength: 20, trim: true },
+  nicknameLower: { type: String, required: true, unique: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  passwordHash: { type: String, required: true },
+
+  coins: { type: Number, default: 0 },
+  xp: { type: Number, default: 0 },
+  level: { type: Number, default: 1 },
+
+  selectedPlane: { type: String, default: 'falcon' },
+  ownedPlanes: { type: [String], default: ['falcon'] },
+  stars: { type: [Number], default: [] },
+  unlocked: { type: Number, default: 1 },
+  survivalTop: { type: [SurvivalEntrySchema], default: [] },
+
+  dailyLast: { type: String, default: '' },
+  dailyStreak: { type: Number, default: 0 },
+
+  quests: { type: [QuestProgressSchema], default: [] },
+
+  passSeasonId: { type: String, default: '' },
+  passBpPoints: { type: Number, default: 0 },
+  passClaimedTiers: { type: [Number], default: [] },
+
+  crates: { type: [CrateSchema], default: [] },
+
+  createdAt: { type: Date, default: () => new Date() },
+  lastLoginAt: { type: Date, default: () => new Date() },
+});
+
+export type UserDoc = InferSchemaType<typeof UserSchema> & { _id: Types.ObjectId };
+
+export const User = model('User', UserSchema);
