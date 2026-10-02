@@ -154,6 +154,7 @@ export const Server = {
   claimAllPass: () => api.post<{ profile: ServerProfile; total: { coins: number; xp: number; crystals: number; crates: number; tiers: number } }>('/pass/claim-all'),
   buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
 
+  openAllCrates: () => api.post<{ profile: ServerProfile; results: { crateId: string; crateType: CrateType; rewards: CrateReward[] }[] }>('/crates/open-all'),
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; rewards: CrateReward[] }>(`/crates/${crateId}/open`),
 
   buyItem: (defId: string) => api.post<{ profile: ServerProfile }>('/items/buy', { defId }),

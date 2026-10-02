@@ -69,7 +69,7 @@ export class PvpScreen extends Screen {
     this.hpText = h('span', { class: 'hp-num' }, '');
     this.hpFill = h('i');
     this.timer = h('div', { class: 'pvp-timer' }, '4:00');
-    this.alive = h('span', {}, '5');
+    this.alive = h('span', {}, '10');
     this.kills = h('span', {}, '0');
     this.lootCoins = h('span', {}, '0');
     this.lootCrystals = h('span', {}, '0');
@@ -105,7 +105,8 @@ export class PvpScreen extends Screen {
         h('img', { class: 'pvp-avatar', src: planeIconUrl(plane, progress.tier, progress.level), alt: '' }),
         h('div', { class: 'pvp-self-info' }, h('div', { class: 'pvp-nick' }, Save.data.nickname || t(`plane.${plane}` as TKey)), h('div', { class: 'hp-bar' }, h('div', { class: 'hp-track' }, this.hpFill), this.hpText)),
       ),
-      h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t('pvp.alive') }, icon(Icons.heart, 'ico'), this.alive), h('span', { class: 'pvp-chip', title: t('matchresult.kills') }, icon(Icons.boss, 'ico'), this.kills)), h('div', { class: 'pvp-loot', title: t('pvp.lootHint') }, h('span', { class: 'pvp-chip loot-coin' }, icon(Icons.coin, 'ico'), this.lootCoins), h('span', { class: 'pvp-chip loot-crystal' }, icon(Icons.crystal, 'ico'), this.lootCrystals))),
+      h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t('pvp.alive') }, icon(Icons.heart, 'ico'), this.alive)), h('div', { class: 'pvp-loot', title: t('pvp.lootHint') }, h('span', { class: 'pvp-chip loot-coin' }, icon(Icons.coin, 'ico'), this.lootCoins), h('span', { class: 'pvp-chip loot-crystal' }, icon(Icons.crystal, 'ico'), this.lootCrystals))),
+      h('div', { class: 'pvp-kills', title: t('matchresult.kills') }, h('span', { class: 'pvp-kills-ico', html: Icons.boss }), this.kills, h('small', {}, t('pvp.killsLabel'))),
       h('div', { class: 'hud-tr' }, leaveBtn),
       this.feed,
       this.dead,
@@ -223,7 +224,15 @@ export class PvpScreen extends Screen {
     this.set(this.timer, g.state === 'countdown' ? t('pvp.countdown') : formatTime(Math.ceil(g.timeLeft)));
     this.timer.classList.toggle('urgent', g.state === 'active' && g.timeLeft < 30);
     this.set(this.alive, String(g.aliveCount));
-    this.set(this.kills, String(g.self?.kills ?? 0));
+    const kills = String(g.self?.kills ?? 0);
+    if (this.cache.has(this.kills) && this.cache.get(this.kills) !== kills) {
+      // коротка анімація, коли збив когось
+      const box = this.kills.parentElement!;
+      box.classList.remove('bump');
+      void box.offsetWidth;
+      box.classList.add('bump');
+    }
+    this.set(this.kills, kills);
     this.set(this.lootCoins, String(g.lootCoins));
     this.set(this.lootCrystals, String(g.lootCrystals));
     this.dead.hidden = g.selfAlive || g.state === 'ended';

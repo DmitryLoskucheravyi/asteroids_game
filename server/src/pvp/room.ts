@@ -50,7 +50,7 @@ function randPos(): { x: number; y: number } {
 
 function makeObstacles(): Obstacle[] {
   const list: Obstacle[] = [];
-  for (let i = 0; i < 46; i++) list.push({ ...randPos(), r: 30 + Math.random() * 70 });
+  for (let i = 0; i < 70; i++) list.push({ ...randPos(), r: 30 + Math.random() * 70 });
   return list;
 }
 

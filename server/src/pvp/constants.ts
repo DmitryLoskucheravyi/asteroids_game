@@ -1,7 +1,7 @@
-export const ROOM_SIZE = 5;
+export const ROOM_SIZE = 10;
 export const QUEUE_WAIT_MS = 15000;
-export const WORLD_W = 6400;
-export const WORLD_H = 3600;
+export const WORLD_W = 8000;
+export const WORLD_H = 4500;
 export const TICK_MS = 50; // 20Hz
 export const COUNTDOWN_MS = 3000;
 export const MATCH_TIME_LIMIT_MS = 4 * 60 * 1000;
@@ -10,8 +10,8 @@ export const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
 export const HIT_RADIUS = 20;
 
 /** Лут на полі: монети й кристали спавняться весь матч, збитий літак лишає все зібране. */
-export const PICKUP_START = 30;
-export const PICKUP_MAX = 70;
+export const PICKUP_START = 45;
+export const PICKUP_MAX = 100;
 export const PICKUP_SPAWN_MS = 1500;
 export const PICKUP_RADIUS = 38;
 export const CRYSTAL_CHANCE = 0.18;
@@ -47,6 +47,6 @@ export function rollPlaceCrate(place: number): CrateType | null {
 
 /** Нагорода за місце в матчі: монети + XP сезонного пропуску. */
 export function matchReward(place: number, kills: number): { coins: number; bpXp: number } {
-  const placeBonus = [700, 450, 300, 200, 120][place - 1] ?? 100;
-  return { coins: placeBonus + kills * 60, bpXp: 60 + kills * 15 + Math.max(0, 6 - place) * 20 };
+  const placeBonus = [800, 550, 400, 300, 230, 180, 140, 110, 90, 70][place - 1] ?? 60;
+  return { coins: placeBonus + kills * 50, bpXp: 50 + kills * 12 + Math.max(0, 11 - place) * 12 };
 }

@@ -18,7 +18,8 @@ export function divisionIndex(rp: number): number {
  * На високих рангах перемога дає трохи менше.
  */
 export function rankDelta(place: number, kills: number, rp: number): number {
-  const base = [35, 20, 8, -10, -20][place - 1] ?? -20;
+  // 10 місць: топ-4 у плюсі, далі мінус наростає
+  const base = [35, 25, 16, 8, -2, -6, -10, -14, -17, -20][place - 1] ?? -20;
   const killBonus = Math.min(15, kills * 3);
   const idx = divisionIndex(rp);
   let delta = base + killBonus;

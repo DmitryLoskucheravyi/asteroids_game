@@ -6274,3 +6274,547 @@ input[type='range'] {
 .online-go {
   white-space: nowrap;
 }
+
+
+/* ---- PvP: великий лічильник фрагів під таймером ---- */
+
+.pvp-kills {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px 6px 12px;
+  background: rgba(10, 9, 24, 0.7);
+  box-shadow: inset 0 0 0 1px rgba(255, 74, 90, 0.45);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+.pvp-kills-ico {
+  width: 22px;
+  height: 22px;
+  color: var(--danger);
+}
+
+.pvp-kills-ico svg {
+  width: 100%;
+  height: 100%;
+}
+
+.pvp-kills > span:nth-child(2) {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pvp-kills small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pvp-kills.bump {
+  animation: kill-bump 0.6s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+
+@keyframes kill-bump {
+  0% {
+    transform: translateX(-50%) scale(1.6);
+    box-shadow: inset 0 0 0 2px var(--danger), 0 0 30px rgba(255, 74, 90, 0.8);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* =====================================================================
+   Ящики v2: товщина кришки, падіння, заряд, промені, постаменти, "відкрити всі"
+   ===================================================================== */
+
+/* пояс кришки — дає їй товщину збоку */
+.c3-face.lip {
+  inset: auto;
+  left: 0;
+  top: -1px;
+  width: 100%;
+  height: calc(var(--s) * 0.16);
+  backface-visibility: visible;
+}
+
+.c3-face.lip-front {
+  transform: translateZ(calc(var(--h) + 1px));
+}
+
+.c3-face.lip-right {
+  transform: rotateY(90deg) translateZ(calc(var(--h) + 1px));
+  filter: brightness(0.75);
+}
+
+.c3-face.lip-left {
+  transform: rotateY(-90deg) translateZ(calc(var(--h) + 1px));
+  filter: brightness(0.75);
+}
+
+/* заряд: тривалість залежить від рідкості (--charge) */
+.crate3d.charging .c3-body {
+  animation-duration: var(--charge, 1.1s);
+}
+
+.crate3d.charging {
+  animation-duration: var(--charge, 1.1s);
+}
+
+/* падіння згори */
+.crate3d.dropping .c3-body {
+  animation: crate-drop 0.65s cubic-bezier(0.5, 0, 0.75, 0) both;
+}
+
+@keyframes crate-drop {
+  0% {
+    transform: translateY(-260px) rotateX(-24deg) rotateY(-120deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotateX(-24deg) rotateY(-34deg);
+  }
+}
+
+.crate-dust {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 120px);
+  width: 260px;
+  height: 40px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.crate-dust.go::before,
+.crate-dust.go::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  width: 26px;
+  height: 14px;
+  background: rgba(200, 200, 220, 0.5);
+  box-shadow:
+    18px 6px 0 -2px rgba(200, 200, 220, 0.4),
+    36px 2px 0 -4px rgba(200, 200, 220, 0.3);
+  animation: dust-l 0.7s ease-out forwards;
+}
+
+.crate-dust.go::before {
+  left: 80px;
+}
+
+.crate-dust.go::after {
+  right: 80px;
+  animation-name: dust-r;
+}
+
+@keyframes dust-l {
+  to {
+    transform: translateX(-70px) translateY(-10px);
+    opacity: 0;
+  }
+}
+
+@keyframes dust-r {
+  to {
+    transform: translateX(70px) translateY(-10px) scaleX(-1);
+    opacity: 0;
+  }
+}
+
+/* під час заряду фон темнішає, світло фокусується на ящику */
+.crate-stage::before {
+  content: '';
+  position: absolute;
+  inset: -60px;
+  background: radial-gradient(circle at 50% 62%, transparent 18%, rgba(0, 0, 0, 0.75) 60%);
+  opacity: 0;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+
+.crate-stage.charging::before {
+  opacity: 1;
+}
+
+.crate-suck {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: var(--c);
+  box-shadow: 0 0 6px var(--c);
+  opacity: 0;
+  animation: suck-in var(--d) ease-in var(--delay) forwards;
+}
+
+@keyframes suck-in {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateX(170px);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(var(--angle)) translateX(0);
+  }
+}
+
+/* обертові промені позаду після відкриття */
+.crate-rays {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  width: 520px;
+  height: 520px;
+  margin: -260px 0 0 -260px;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--glow) 40%, transparent) 0 9deg, transparent 9deg 24deg);
+  mask: radial-gradient(circle, #000 0%, transparent 65%);
+  -webkit-mask: radial-gradient(circle, #000 0%, transparent 65%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.crate-stage.opened .crate-rays {
+  opacity: 1;
+  animation: rays-spin 9s linear infinite;
+  transition: opacity 0.4s;
+}
+
+.crate-stage.tier-0 .crate-rays {
+  display: none;
+}
+
+@keyframes rays-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ударна хвиля */
+.crate-shock {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  border: 4px solid var(--glow);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.crate-stage.opened .crate-shock {
+  animation: shock 0.7s ease-out forwards;
+}
+
+@keyframes shock {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(9, 4);
+  }
+}
+
+/* кришка рідкісних ящиків вибиває сильніше */
+.crate-stage.tier-3 .crate3d.open .c3-lid,
+.crate-stage.tier-4 .crate3d.open .c3-lid {
+  transform: rotateX(132deg);
+}
+
+.modal.shake-hard .modal-panel {
+  animation: panel-shake 0.45s;
+}
+
+@keyframes panel-shake {
+  20% {
+    transform: translate(-8px, 4px);
+  }
+  40% {
+    transform: translate(7px, -5px);
+  }
+  60% {
+    transform: translate(-5px, 3px);
+  }
+  80% {
+    transform: translate(3px, -2px);
+  }
+}
+
+/* картки вилітають дугою з ящика */
+@keyframes card-rise {
+  0% {
+    opacity: 0;
+    transform: translate(calc((var(--i) - 2) * -40px), -170px) scale(0.2) rotate(-20deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-18px) scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* відблиск, що пробігає по картці */
+.reward-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.35) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: shine 2.4s ease-in-out 0.8s infinite;
+  pointer-events: none;
+}
+
+.reward-card.tier-common .reward-shine,
+.reward-card.tier-rare .reward-shine {
+  display: none;
+}
+
+@keyframes shine {
+  0% {
+    background-position: 150% 0;
+  }
+  60%,
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.crate-open-btn {
+  display: inline-flex;
+  align-self: center;
+  margin: 16px auto 0;
+}
+
+.crate-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------- інвентар: постаменти ---------- */
+
+.crate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.crate-tile-btn {
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.crate-pedestal {
+  --glow: #fff;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 12px 16px;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glow) 40%, transparent);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  transition: background 0.15s, transform 0.15s;
+}
+
+.crate-tile-btn:hover .crate-pedestal,
+.crate-tile-btn:focus-visible .crate-pedestal {
+  background: var(--plate-hi);
+  transform: translateY(-4px);
+  box-shadow: inset 0 0 0 2px var(--glow);
+}
+
+.crate-tile-btn:hover .c3-body,
+.crate-tile-btn:focus-visible .c3-body {
+  animation-duration: 1.4s;
+}
+
+.pedestal-glow {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 170px;
+  height: 170px;
+  margin: -85px 0 0 -85px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow) 35%, transparent), transparent 65%);
+  pointer-events: none;
+}
+
+.pedestal-base {
+  width: 130px;
+  height: 14px;
+  margin-top: -8px;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--glow) 60%, #000), #0b0a18);
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+}
+
+.crate-pedestal .crate-tile-3d {
+  height: 140px;
+}
+
+.crate-count {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  padding: 2px 10px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 16px;
+  color: #1a1200;
+  background: var(--glow);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+
+.crate-pedestal.crate-legendary .crate3d,
+.crate-pedestal.crate-mythic .crate3d {
+  filter: drop-shadow(0 0 14px var(--glow));
+}
+
+/* ---------- "відкрити всі" ---------- */
+
+.all-modal .modal-panel {
+  width: min(1000px, 96vw);
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.all-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--cell), 1fr));
+  gap: 6px;
+  width: 100%;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 8px 4px 18px;
+}
+
+.all-cell {
+  --glow: #fff;
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--cell);
+}
+
+.all-cell .crate-particles {
+  top: 50%;
+}
+
+.all-cell.opened::after {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow) 45%, transparent), transparent 70%);
+  animation: cell-pop 0.6s ease-out;
+  pointer-events: none;
+}
+
+@keyframes cell-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* у клітинці, де випало щось рідкісне, лишається світний маркер */
+.all-cell.found-epic,
+.all-cell.found-mythic,
+.all-cell.found-legendary {
+  box-shadow: inset 0 0 0 2px var(--rc, var(--rarity-epic));
+}
+
+.all-cell.found-epic {
+  --rc: var(--rarity-epic);
+}
+
+.all-cell.found-mythic {
+  --rc: var(--rarity-mythic);
+}
+
+.all-cell.found-legendary {
+  --rc: var(--rarity-legendary);
+  animation: claim-pulse 1.4s ease-in-out infinite;
+}
+
+.all-summary {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: crate-pop 0.4s ease-out;
+}
+
+.all-totals {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+
+.all-summary .reward-row {
+  max-height: 34vh;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+@media (max-height: 560px) {
+  .crate-pedestal .crate-tile-3d {
+    height: 100px;
+  }
+  .all-grid {
+    max-height: 40vh;
+  }
+}
+
+
+.crate-open-btn[hidden] {
+  display: none !important;
+}
+
+.crate-open-btn .launch-inner b {
+  font-size: 20px;
+}
+
+.crate-modal .crate-stage {
+  width: 100%;
+}
+
+.all-grid {
+  row-gap: 14px;
+  padding-top: 34px;
+}
+
+.all-cell {
+  height: calc(var(--cell) + 24px);
+  align-items: end;
+  padding-bottom: 6px;
+}

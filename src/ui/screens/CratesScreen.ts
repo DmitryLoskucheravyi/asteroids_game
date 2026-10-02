@@ -1,14 +1,16 @@
 import { t, type TKey } from '../../core/i18n';
-import { Server } from '../../core/server';
+import { Server, type CrateType } from '../../core/server';
 import { Save } from '../../core/storage';
-import { button, h } from '../dom';
-import { crate3d } from '../../game/CrateArt';
-import { openCrateModal } from '../CrateModal';
+import { crate3d, CRATE_GLOW } from '../../game/CrateArt';
+import { Icons, button, h, icon } from '../dom';
+import { openAllCratesModal, openCrateModal } from '../CrateModal';
 import { Screen } from '../Screen';
 import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
-/** Інвентар ящиків: клік відкриває модалку з повною анімацією розіграшу нагороди. */
+const ORDER: readonly CrateType[] = ['legendary', 'mythic', 'epic', 'rare', 'common'];
+
+/** Інвентар ящиків: стоси за рідкістю на світних постаментах; клік — відкрити один, кнопка — відкрити всі. */
 export class CratesScreen extends Screen {
   private loading = true;
 
@@ -27,28 +29,35 @@ export class CratesScreen extends Screen {
     }
   }
 
-  private crateCard(crate: (typeof Save.data.crates)[number]): HTMLElement {
+  private stack(type: CrateType, ids: string[]): HTMLElement {
     const inner = h(
       'span',
-      { class: `crate-tile crate-${crate.crateType}` },
-      h('span', { class: 'crate-tile-3d' }, crate3d(crate.crateType, 84, 'tile-crate idle')),
-      h('span', { class: `crate-tile-label rarity-${crate.crateType}` }, t(`crate.${crate.crateType}` as TKey)),
+      { class: `crate-pedestal crate-${type}`, style: `--glow:${CRATE_GLOW[type]}` },
+      h('span', { class: 'pedestal-glow' }),
+      h('span', { class: 'crate-tile-3d' }, crate3d(type, 96, 'tile-crate idle')),
+      h('span', { class: 'pedestal-base' }),
+      h('span', { class: `crate-tile-label rarity-${type}` }, t(`crate.${type}` as TKey)),
+      ids.length > 1 ? h('span', { class: 'crate-count' }, `×${ids.length}`) : null,
     );
-    return button(inner, () => openCrateModal(crate.id, crate.crateType, () => this.render()), 'crate-tile-btn');
+    return button(inner, () => openCrateModal(ids[0], type, () => this.render()), 'crate-tile-btn');
   }
 
   protected build(): HTMLElement {
-    const order = ['legendary', 'mythic', 'epic', 'rare', 'common'];
-    const crates = Save.data.crates.filter((c) => !c.openedAt).sort((a, b) => order.indexOf(a.crateType) - order.indexOf(b.crateType));
+    const unopened = Save.data.crates.filter((c) => !c.openedAt);
+    const groups = ORDER.map((type) => ({ type, ids: unopened.filter((c) => c.crateType === type).map((c) => c.id) })).filter((g) => g.ids.length);
+    const openAll =
+      unopened.length > 1
+        ? button(h('span', { class: 'buy-label' }, icon(Icons.gift, 'ico'), t('crates.openAll'), h('span', { class: 'rail-badge inline' }, String(unopened.length))), () => openAllCratesModal(unopened.map((c) => ({ id: c.id, crateType: c.crateType })), () => this.render()), 'btn primary claim-all-btn')
+        : null;
     return h(
       'div',
       { class: 'page crates' },
-      screenHeader(t('crates.title'), () => this.onBack()),
+      screenHeader(t('crates.title'), () => this.onBack(), openAll ?? undefined),
       h('p', { class: 'page-sub' }, t('crates.subtitle')),
-      this.loading && !crates.length
+      this.loading && !unopened.length
         ? h('p', { class: 'muted' }, t('common.loading'))
-        : crates.length
-          ? h('div', { class: 'crate-grid' }, ...crates.map((c) => this.crateCard(c)))
+        : groups.length
+          ? h('div', { class: 'crate-grid' }, ...groups.map((g) => this.stack(g.type, g.ids)))
           : h('p', { class: 'muted' }, t('crates.empty')),
     );
   }
