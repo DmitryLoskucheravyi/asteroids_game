@@ -7400,3 +7400,214 @@ input[type='range'] {
   font-size: 12px;
   color: var(--muted);
 }
+
+
+/* ===================== таблиці лідерів ===================== */
+
+.lb-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.lb-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lb-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lb-group > small {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lb-tab {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 9px 14px;
+  border: 0;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--plate-edge);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  cursor: pointer;
+  outline: none;
+}
+
+.lb-tab:hover,
+.lb-tab:focus-visible {
+  background: var(--plate-hi);
+}
+
+.lb-tab.on {
+  box-shadow:
+    inset 0 0 0 1px var(--burn-2),
+    inset 3px 0 0 var(--burn-2);
+}
+
+.lb-tab-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.lb-tab .ico {
+  color: var(--burn-2);
+}
+
+.lb-board {
+  padding: 18px;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--plate-edge);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+
+.lb-board.loading {
+  opacity: 0.6;
+}
+
+.lb-board h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 12px;
+  font-family: var(--font-ui);
+}
+
+.lb-board h3 small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lb-row {
+  display: grid;
+  grid-template-columns: 48px 40px 1fr 36px auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lb-row.self {
+  background: rgba(88, 210, 255, 0.12);
+  box-shadow: inset 3px 0 0 var(--cyan);
+}
+
+.lb-row.podium.p1 {
+  background: rgba(255, 210, 74, 0.12);
+}
+
+.lb-row.podium.p1 .lb-place {
+  color: var(--gold);
+}
+
+.lb-row.podium.p2 .lb-place {
+  color: #d8e4ff;
+}
+
+.lb-row.podium.p3 .lb-place {
+  color: #e09a5a;
+}
+
+.lb-place {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.lb-plane {
+  width: 36px;
+  height: 36px;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.lb-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lb-name b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lb-name small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.lb-rank {
+  width: 32px;
+  height: 32px;
+}
+
+.lb-rank svg {
+  width: 100%;
+  height: 100%;
+}
+
+.lb-value {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.lb-sep {
+  text-align: center;
+  color: var(--muted);
+  letter-spacing: 0.3em;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stat-cell b {
+  font-family: var(--font-ui);
+  font-size: 20px;
+}
+
+.stat-cell small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .lb-layout {
+    grid-template-columns: 1fr;
+  }
+  .lb-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

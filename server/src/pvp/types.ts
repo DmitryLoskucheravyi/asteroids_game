@@ -57,6 +57,8 @@ export interface Participant {
   /** Анти-ферма: скільки пострілів і скільки пролетів за матч */
   shots: number;
   travelled: number;
+  /** Скільки урону завдав за матч (для статистики) */
+  damageDealt: number;
   /** Боти: поточний behavior-стан */
   botState?: 'patrol' | 'chase' | 'attack' | 'flee';
   botDir?: Vec;

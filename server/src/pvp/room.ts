@@ -98,6 +98,7 @@ function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'ni
     rankPoints: 0,
     shots: 0,
     travelled: 0,
+    damageDealt: 0,
   };
 }
 
@@ -398,6 +399,7 @@ export class Room {
     if (now < target.flareUntil - 80) return;
     // одне влучання не знімає більше половини максимального HP — ваншот неможливий
     damage = Math.min(damage, target.maxHp * 0.5);
+    attacker.damageDealt += Math.min(damage, target.hp);
     target.hp = Math.max(0, target.hp - damage);
     target.botLastHitAt = now;
     const died = target.hp <= 0;
@@ -617,6 +619,14 @@ export class Room {
         incrementQuestProgress(user, 'pvpKills', p.kills);
         if (p.place! <= 3) incrementQuestProgress(user, 'pvpTop3', 1);
         if (p.place === 1) incrementQuestProgress(user, 'pvpWins', 1);
+        const st = user.stats!;
+        st.pvpMatches += 1;
+        st.pvpKills += p.kills;
+        st.pvpDamage += Math.round(p.damageDealt);
+        st.bestKills = Math.max(st.bestKills, p.kills);
+        if (p.place === 1) st.pvpWins += 1;
+        if (p.place! <= 3) st.pvpTop3 += 1;
+        if (!p.alive) st.pvpDeaths += 1;
         const rank = rankOf(p);
         if (rank) {
           user.rankPoints = rank.after;
@@ -639,6 +649,9 @@ export class Room {
       if (!user) return;
       user.rankPoints = Math.max(0, (user.rankPoints ?? 0) + rankDelta(ROOM_SIZE, p.kills, p.rankPoints));
       user.rankedMatches = (user.rankedMatches ?? 0) + 1;
+      user.stats!.pvpMatches += 1;
+      user.stats!.pvpDeaths += 1;
+      user.stats!.pvpKills += p.kills;
       await user.save();
     } catch {
       // не блокуємо вихід

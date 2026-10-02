@@ -49,6 +49,25 @@ const LoadoutSchema = new Schema(
   { _id: false },
 );
 
+/** Накопичена статистика гравця — для таблиць лідерів. */
+const StatsSchema = new Schema(
+  {
+    pvpMatches: { type: Number, default: 0 },
+    pvpWins: { type: Number, default: 0 },
+    pvpTop3: { type: Number, default: 0 },
+    pvpKills: { type: Number, default: 0 },
+    pvpDeaths: { type: Number, default: 0 },
+    pvpDamage: { type: Number, default: 0 },
+    bestKills: { type: Number, default: 0 },
+    cratesOpened: { type: Number, default: 0 },
+    coinsEarned: { type: Number, default: 0 },
+    levelsCompleted: { type: Number, default: 0 },
+    stars: { type: Number, default: 0 },
+    survivalBest: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
 const UserSchema = new Schema({
   nickname: { type: String, required: true, unique: true, minlength: 3, maxlength: 20, trim: true },
   nicknameLower: { type: String, required: true, unique: true },
@@ -94,6 +113,8 @@ const UserSchema = new Schema({
   rankLastSeason: { type: Schema.Types.Mixed, default: null },
   /** Одноразова компенсація за перебалансування предметів (v2) */
   balanceV2Comp: { type: Boolean, default: false },
+
+  stats: { type: StatsSchema, default: () => ({}) },
 
   keybinds: { type: Schema.Types.Mixed, default: {} },
 

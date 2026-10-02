@@ -55,6 +55,7 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       .map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: getItemDef(it.defId)!.rarity })),
     loadouts: user.loadouts,
     ownedWeapons: user.ownedWeapons,
+    stats: { pvpMatches: user.stats?.pvpMatches ?? 0, pvpWins: user.stats?.pvpWins ?? 0, pvpTop3: user.stats?.pvpTop3 ?? 0, pvpKills: user.stats?.pvpKills ?? 0, pvpDeaths: user.stats?.pvpDeaths ?? 0, pvpDamage: user.stats?.pvpDamage ?? 0, bestKills: user.stats?.bestKills ?? 0, cratesOpened: user.stats?.cratesOpened ?? 0, coinsEarned: user.stats?.coinsEarned ?? 0, levelsCompleted: user.stats?.levelsCompleted ?? 0, stars: user.stats?.stars ?? 0, survivalBest: user.stats?.survivalBest ?? 0 },
     ranked: {
       points: user.rankPoints ?? 0,
       best: user.rankBest ?? 0,

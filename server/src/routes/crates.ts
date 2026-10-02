@@ -54,6 +54,7 @@ function openOne(user: Doc, crate: Doc['crates'][number]): CrateReward[] {
   }
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'cratesOpened', 1);
+  user.stats!.cratesOpened += 1;
   return rewards;
 }
 

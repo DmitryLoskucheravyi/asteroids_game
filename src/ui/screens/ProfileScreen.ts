@@ -165,6 +165,39 @@ export class ProfileScreen extends Screen {
     );
   }
 
+  /** Особиста статистика: PvP, прогрес, економіка. */
+  private statsCard(): HTMLElement | null {
+    const s = Save.data.stats;
+    if (!s) return null;
+    const kd = s.pvpKills / Math.max(1, s.pvpDeaths);
+    const wr = s.pvpMatches ? (s.pvpWins / s.pvpMatches) * 100 : 0;
+    const cell = (label: TKey, value: string) => h('div', { class: 'stat-cell' }, h('b', {}, value), h('small', {}, t(label)));
+    const n = (v: number) => v.toLocaleString('uk-UA');
+    return h(
+      'section',
+      { class: 'card stats-card' },
+      h('h3', {}, icon(Icons.trophy, 'ico gold'), t('profile.stats')),
+      h(
+        'div',
+        { class: 'stat-grid' },
+        cell('lb.matches', n(s.pvpMatches)),
+        cell('lb.wins', n(s.pvpWins)),
+        cell('lb.winrate', `${wr.toFixed(1)}%`),
+        cell('lb.top3', n(s.pvpTop3)),
+        cell('lb.kills', n(s.pvpKills)),
+        cell('profile.deaths', n(s.pvpDeaths)),
+        cell('lb.kd', kd.toFixed(2)),
+        cell('lb.bestKills', n(s.bestKills)),
+        cell('lb.damage', n(s.pvpDamage)),
+        cell('lb.stars', n(s.stars)),
+        cell('profile.levelsDone', n(s.levelsCompleted)),
+        cell('lb.survival', formatTime(s.survivalBest)),
+        cell('lb.coins', n(s.coinsEarned)),
+        cell('lb.crates', n(s.cratesOpened)),
+      ),
+    );
+  }
+
   /** Найближчі нагороди за рівні пілота. */
   private levelRewards(): HTMLElement | null {
     const from = Save.data.level + 1;
@@ -204,6 +237,7 @@ export class ProfileScreen extends Screen {
       { class: 'page profile' },
       screenHeader(t('profile.title'), () => this.onBack()),
       pilotCard,
+      this.statsCard(),
       this.recordsCard(),
       this.controlsCard(),
       this.settingsCard(),

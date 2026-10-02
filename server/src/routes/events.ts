@@ -47,6 +47,8 @@ eventsRouter.post('/level-complete', async (req: AuthedRequest, res) => {
 
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'levelsCompleted', 1);
+  user.stats!.levelsCompleted += 1;
+  user.stats!.stars = user.stars.reduce((s, v) => s + (v || 0), 0);
   if (st >= 3) incrementQuestProgress(user, 'threeStarLevels', 1);
   incrementQuestProgress(user, 'crystalsCollected', cry);
   addBp(user, bpForLevelComplete(lvl, st));
@@ -102,6 +104,7 @@ eventsRouter.post('/survival', async (req: AuthedRequest, res) => {
 
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'survivalSeconds', activeSecs);
+  user.stats!.survivalBest = Math.max(user.stats!.survivalBest, secs);
   incrementQuestProgress(user, 'survivalRuns', 1);
   incrementQuestProgress(user, 'crystalsCollected', cry);
   addBp(user, bpForSurvival(activeSecs));

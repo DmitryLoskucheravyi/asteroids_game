@@ -22,6 +22,7 @@ import { CratesScreen } from './CratesScreen';
 import { GameScreen } from './GameScreen';
 import { HangarScreen } from './HangarScreen';
 import { HowToScreen } from './HowToScreen';
+import { LeaderboardScreen } from './LeaderboardScreen';
 import { ItemsScreen } from './ItemsScreen';
 import { LevelSelectScreen, starsRow } from './LevelSelectScreen';
 import { OnlineScreen } from './OnlineScreen';
@@ -193,6 +194,7 @@ export class MainMenuScreen extends Screen {
         this.railBtn(Icons.dash, t('menu.planes'), `${Save.data.owned.length} / ${PLANES.length}`, go(() => new HangarScreen(this.app))),
         this.railBtn(Icons.shield, t('menu.items'), `${new Set(Save.data.items.map((i) => i.defId)).size}`, go(() => new ItemsScreen(this.app))),
         this.railBtn(Icons.gift, t('menu.crates'), unopened ? t('menu.cratesWaiting', { n: unopened }) : null, go(() => new CratesScreen(this.app)), unopened),
+        this.railBtn(Icons.trophy, t('lb.title'), t('lb.railSub'), go(() => new LeaderboardScreen(this.app))),
         this.railBtn(Icons.homing, t('menu.howto'), null, go(() => new HowToScreen(this.app))),
       ),
       this.stage(),

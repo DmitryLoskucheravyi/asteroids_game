@@ -1,7 +1,7 @@
 import { defaultProgress, type PlaneId, type PlaneProgress } from '../game/planes';
 import type { ItemRarity } from '../game/items';
 import type { Lang } from './i18n';
-import type { CrateView, PassView, QuestView, RankedView, ServerProfile } from './server';
+import type { CrateView, PassView, PlayerStats, QuestView, RankedView, ServerProfile } from './server';
 
 export interface OwnedItem {
   id: string;
@@ -51,6 +51,7 @@ export interface SaveData {
   loadouts: Loadout[];
   ownedWeapons: string[];
   ranked: RankedView;
+  stats: PlayerStats | null;
   settings: {
     lang: Lang;
     volume: number;
@@ -88,6 +89,7 @@ const defaults = (): SaveData => ({
   loadouts: [],
   ownedWeapons: ['machine_gun'],
   ranked: { points: 0, best: 0, matches: 0, wins: 0 },
+  stats: null,
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
@@ -163,6 +165,7 @@ class SaveStore {
       loadouts: p.loadouts,
       ownedWeapons: p.ownedWeapons,
       ranked: p.ranked ?? { points: 0, best: 0, matches: 0, wins: 0 },
+      stats: p.stats ?? null,
     };
     this.save();
   }

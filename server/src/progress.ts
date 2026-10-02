@@ -53,6 +53,7 @@ export function grantReward(user: Doc, reward: Reward, source: string): RewardRe
   ensureQuestSlots(user);
   // нагороди за самі квести не рахуються в "заробити монети" — інакше квести закривали б одне одного
   if (source !== 'quest') incrementQuestProgress(user, 'coinsEarned', coins);
+  if (user.stats) user.stats.coinsEarned += coins;
   const sourceQuest = SOURCE_QUEST[source];
   if (sourceQuest) incrementQuestProgress(user, sourceQuest, 1);
   const xpAmount = Math.max(0, Math.floor(reward.xp ?? 0));
@@ -125,4 +126,13 @@ export function addXp(user: Doc, amount: number): number {
     if (r.crate) user.crates.push({ crateType: r.crate, source: 'pilotLevel', acquiredAt: new Date(), openedAt: null });
   }
   return level - before;
+}
+
+/** Старі акаунти: дозаповнюємо статистику з того, що вже збережено (зірки, рекорд, рейтингові перемоги). */
+export function backfillStats(user: Doc): void {
+  const st = user.stats!;
+  st.stars = Math.max(st.stars, user.stars.reduce((s, v) => s + (v || 0), 0));
+  st.survivalBest = Math.max(st.survivalBest, user.survivalTop[0]?.time ?? 0);
+  st.pvpWins = Math.max(st.pvpWins, user.rankedWins ?? 0);
+  st.pvpMatches = Math.max(st.pvpMatches, user.rankedMatches ?? 0);
 }

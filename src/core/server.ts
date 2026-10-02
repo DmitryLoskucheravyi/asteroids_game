@@ -73,6 +73,17 @@ export interface ServerProfile {
   loadouts: { planeId: PlaneId; active: string | null; passive: string | null; weapon: string | null }[];
   ownedWeapons: string[];
   ranked?: RankedView;
+  stats?: PlayerStats;
+}
+
+export type PlayerStats = Record<'pvpMatches' | 'pvpWins' | 'pvpTop3' | 'pvpKills' | 'pvpDeaths' | 'pvpDamage' | 'bestKills' | 'cratesOpened' | 'coinsEarned' | 'levelsCompleted' | 'stars' | 'survivalBest', number>;
+
+export interface LeaderboardView {
+  by: string;
+  top: { place: number; id: string; nickname: string; level: number; rankPoints: number; plane?: string; value: number }[];
+  me: { place: number | null; value: number };
+  total: number;
+  minMatches: number;
 }
 
 export interface RankedView {
@@ -156,6 +167,7 @@ export const Server = {
   claimAllPass: () => api.post<{ profile: ServerProfile; total: { coins: number; xp: number; crystals: number; crates: number; tiers: number } }>('/pass/claim-all'),
   buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
 
+  leaderboard: (by: string) => api.get<LeaderboardView>(`/leaderboard/${by}`),
   openAllCrates: () => api.post<{ profile: ServerProfile; results: { crateId: string; crateType: CrateType; rewards: CrateReward[] }[] }>('/crates/open-all'),
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; rewards: CrateReward[] }>(`/crates/${crateId}/open`),
 
