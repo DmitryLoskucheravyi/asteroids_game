@@ -46,5 +46,7 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       openedAt: c.openedAt,
     })),
     keybinds: (user.keybinds ?? {}) as Record<string, string>,
+    items: user.items.map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: it.rarity })),
+    loadouts: user.loadouts,
   };
 }

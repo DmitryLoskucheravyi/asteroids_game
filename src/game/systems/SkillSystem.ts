@@ -23,8 +23,12 @@ export class SkillSystem {
   jumpCooldownMax = JUMP_COOLDOWN;
   jumpChargesMax = 1;
 
-  /** Налаштовує навички під літак і видає стартові заряди. */
-  reset(feature: PlaneFeature): void {
+  /** Перезарядка активного предмета (0 — предмет не екіпіровано, слот неактивний) */
+  itemCooldown = 0;
+  itemCooldownMax = 0;
+
+  /** Налаштовує навички під літак і видає стартові заряди. itemCooldownMax=0, якщо активний предмет не екіпіровано. */
+  reset(feature: PlaneFeature, itemCooldownMax = 0): void {
     this.freezeDuration = FREEZE_DURATION * (feature.freezeDurationMul ?? 1);
     this.boostDuration = BOOST_DURATION * (feature.boostDurationMul ?? 1);
     this.jumpCooldownMax = JUMP_COOLDOWN * (feature.jumpCooldownMul ?? 1);
@@ -35,12 +39,15 @@ export class SkillSystem {
     this.freezeLeft = 0;
     this.boostLeft = 0;
     this.jumpCooldown = 0;
+    this.itemCooldownMax = itemCooldownMax;
+    this.itemCooldown = 0;
     this.used = 0;
   }
 
   update(dt: number): void {
     this.freezeLeft = Math.max(0, this.freezeLeft - dt);
     this.boostLeft = Math.max(0, this.boostLeft - dt);
+    this.itemCooldown = Math.max(0, this.itemCooldown - dt);
     if (this.jumpCharges < this.jumpChargesMax) {
       this.jumpCooldown -= dt;
       if (this.jumpCooldown <= 0) {
@@ -78,6 +85,17 @@ export class SkillSystem {
     if (this.jumpCharges <= 0) return false;
     if (this.jumpCharges === this.jumpChargesMax) this.jumpCooldown = this.jumpCooldownMax;
     this.jumpCharges--;
+    this.used++;
+    return true;
+  }
+
+  itemEquipped(): boolean {
+    return this.itemCooldownMax > 0;
+  }
+
+  tryItem(): boolean {
+    if (!this.itemEquipped() || this.itemCooldown > 0) return false;
+    this.itemCooldown = this.itemCooldownMax;
     this.used++;
     return true;
   }

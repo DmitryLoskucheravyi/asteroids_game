@@ -11,6 +11,7 @@ import { Pickup, type PickupKind } from './entities/Pickup';
 import { Player } from './entities/Player';
 import { CRYSTAL_INTERVAL, SURVIVAL_BASE, getLevel, introducedHazard, type LevelConfig } from './levels';
 import { CRYSTAL_COINS } from './economy';
+import { applyItemPassive, effectiveActive, getItemDef, type ActiveKind } from './items';
 import { effectivePlaneSpec, getPlane, type PlaneFeature, type PlaneId } from './planes';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
@@ -150,6 +151,12 @@ export class Game {
 
   onEnd: (r: GameResult) => void = () => {};
 
+  /** Активний предмет екіпіровки (якщо є) — ефект масштабований рідкістю. */
+  private activeItem: { kind: ActiveKind; duration: number; radius: number } | null = null;
+  /** EMP: стаціонарне поле заморозки в точці каста на activeItem.duration секунд. */
+  private empTimer = 0;
+  private readonly empPos = new Vec2();
+
   constructor(
     readonly mode: GameMode,
     readonly levelId: number,
@@ -157,8 +164,26 @@ export class Game {
     private readonly input: InputState,
   ) {
     const progress = Save.progressFor(planeId);
-    this.player = new Player(effectivePlaneSpec(getPlane(planeId), progress), progress.tier, progress.level);
+    const loadout = Save.loadoutFor(planeId);
+    let spec = effectivePlaneSpec(getPlane(planeId), progress);
+
+    const passiveItem = Save.itemById(loadout.passive);
+    if (passiveItem) spec = applyItemPassive(spec, getItemDef(passiveItem.defId), passiveItem.rarity);
+
+    const activeItem = Save.itemById(loadout.active);
+    if (activeItem) {
+      const def = getItemDef(activeItem.defId);
+      if (def?.active) {
+        const eff = effectiveActive(def, activeItem.rarity);
+        this.activeItem = { kind: def.active.kind, duration: eff.duration, radius: eff.radius };
+        this.itemCooldownMax = eff.cooldown;
+      }
+    }
+
+    this.player = new Player(spec, progress.tier, progress.level);
   }
+
+  private itemCooldownMax = 0;
 
   get level(): LevelConfig {
     return this.mode === 'campaign' ? getLevel(this.levelId) : SURVIVAL_BASE;
@@ -196,7 +221,7 @@ export class Game {
     this.player.reset(this.width / 2, this.height * 0.62);
     this.player.invulnerable = 0;
     const feat = this.feature;
-    this.skills.reset(feat);
+    this.skills.reset(feat, this.itemCooldownMax);
     this.player.shield = !!feat.startShield;
     this.lives = feat.extraLives ?? 0;
     this.shieldRegenTimer = 0;
@@ -277,6 +302,30 @@ export class Game {
         size: [3, 6],
         colors: [inner, outer, '#ffffff'],
       });
+    }
+  }
+
+  useItem(): void {
+    if (this.state !== 'running' || !this.activeItem || !this.skills.tryItem()) return;
+    const item = this.activeItem;
+    switch (item.kind) {
+      case 'emp':
+        this.empTimer = item.duration;
+        this.empPos.set(this.player.pos.x, this.player.pos.y);
+        Sfx.freeze();
+        this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.5, r0: 10, r1: item.radius, color: '160,220,255' });
+        break;
+      case 'decoyFlare':
+        this.player.invulnerable = Math.max(this.player.invulnerable, item.duration);
+        Sfx.powerup();
+        this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.4, r0: 10, r1: 70, color: '255,226,122' });
+        this.particles.emit(this.player.pos.x, this.player.pos.y, { count: 20, speed: [40, 140], life: [0.3, 0.6], size: [2, 4], colors: ['#fff6c8', '#ffe27a'] });
+        break;
+      case 'nanoRepair':
+        this.player.shield = true;
+        Sfx.powerup();
+        this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.4, r0: 10, r1: 60, color: '80,255,160' });
+        break;
     }
   }
 
@@ -435,10 +484,13 @@ export class Game {
 
   private updateHazards(dt: number, collide: boolean): void {
     const frozen = this.frozen && this.state === 'running';
+    this.empTimer = Math.max(0, this.empTimer - dt);
+    const empActive = this.empTimer > 0 && this.activeItem?.kind === 'emp';
     const world = this.worldView();
     for (const a of this.asteroids) {
-      a.frozen = frozen;
-      if (!frozen) a.update(dt, world);
+      const empHit = empActive && circlesOverlap(a.pos, a.radius, this.empPos, this.activeItem!.radius);
+      a.frozen = frozen || empHit;
+      if (!frozen && !empHit) a.update(dt, world);
       if (a instanceof Comet && !a.warning && !frozen) {
         this.particles.emit(a.pos.x, a.pos.y, { count: 2, speed: [20, 80], life: [0.2, 0.45], size: [3, 6], colors: ['#ffd27a', '#ff7a2a', '#ff4a1a'], drag: 4 });
       }

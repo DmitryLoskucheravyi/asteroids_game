@@ -1,7 +1,7 @@
 import type { App } from '../../app/App';
 import { toggleFullscreen } from '../../app/App';
 import { Sfx } from '../../core/audio';
-import { levelName, t } from '../../core/i18n';
+import { levelName, t, type TKey } from '../../core/i18n';
 import { displayKey, primaryKeyFor, type Action } from '../../core/input';
 import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
@@ -35,7 +35,7 @@ export class GameScreen extends Screen {
   private hudCenter!: HTMLElement;
   private hudCoins!: HTMLElement;
   private hudCoinsText!: HTMLElement;
-  private slots!: Record<'freeze' | 'boost' | 'jump', SkillSlot>;
+  private slots!: Record<'freeze' | 'boost' | 'jump' | 'item', SkillSlot>;
   private shieldSlot!: HTMLElement;
   private featSlot!: HTMLElement;
   private featIcon!: HTMLElement;
@@ -59,10 +59,10 @@ export class GameScreen extends Screen {
     this.hudCoinsText = h('span', {}, String(Save.data.coins));
     this.hudCoins = h('div', { class: 'hud-coins' }, icon(Icons.coin, 'ico coin'), this.hudCoinsText);
 
-    const slot = (key: 'freeze' | 'boost' | 'jump', ic: string, hint: string): SkillSlot => {
+    const slot = (key: 'freeze' | 'boost' | 'jump' | 'item', ic: string, hint: string, labelKey = `hud.${key}`): SkillSlot => {
       const count = h('span', { class: 'sk-count' });
       const el = button(
-        h('span', { class: 'sk-inner' }, icon(ic), count, h('span', { class: 'sk-key' }, hint), h('span', { class: 'sk-label' }, t(`hud.${key}`))),
+        h('span', { class: 'sk-inner' }, icon(ic), count, h('span', { class: 'sk-key' }, hint), h('span', { class: 'sk-label' }, t(labelKey as TKey))),
         () => this.action(key),
         `skill sk-${key}`,
         { tabindex: -1 },
@@ -74,7 +74,9 @@ export class GameScreen extends Screen {
       freeze: slot('freeze', Icons.snow, displayKey(primaryKeyFor('freeze'))),
       boost: slot('boost', Icons.bolt, displayKey(primaryKeyFor('boost'))),
       jump: slot('jump', Icons.dash, displayKey(primaryKeyFor('jump'))),
+      item: slot('item', Icons.star, displayKey(primaryKeyFor('item')), 'hud.item'),
     };
+    this.slots.item.el.hidden = true;
     this.featIcon = h('span', { class: 'ico' });
     this.featText = h('span', { class: 'sk-label' });
     this.featSlot = h('div', { class: 'skill sk-feat', hidden: true }, h('span', { class: 'sk-inner' }, this.featIcon, this.featText));
@@ -93,7 +95,7 @@ export class GameScreen extends Screen {
       h('div', { class: 'hud-tl' }, h('div', { class: 'hud-label' }, label), this.hudTime, campaign ? h('div', { class: 'hud-bar' }, this.hudProgress) : null),
       this.hudCenter,
       h('div', { class: 'hud-tr' }, this.hudCoins, fsBtn, this.pauseBtn),
-      h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el),
+      h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el, this.slots.item.el),
       isTouch() ? this.buildJoystick() : null,
     );
     return el;
@@ -205,6 +207,9 @@ export class GameScreen extends Screen {
       case 'jump':
         this.game.useJump();
         break;
+      case 'item':
+        this.game.useItem();
+        break;
       case 'pause':
         this.pause();
         break;
@@ -261,6 +266,15 @@ export class GameScreen extends Screen {
     this.set(jp.count, multi ? `${sk.jumpCharges}/${sk.jumpChargesMax}` : sk.jumpCharges > 0 ? t('hud.ready') : sk.jumpCooldown.toFixed(1));
     jp.el.classList.toggle('empty', sk.jumpCharges === 0);
     jp.el.style.setProperty('--p', String(sk.jumpCharges < sk.jumpChargesMax ? sk.jumpCooldown / sk.jumpCooldownMax : 0));
+
+    const it = this.slots.item;
+    it.el.hidden = !sk.itemEquipped();
+    if (sk.itemEquipped()) {
+      const ready = sk.itemCooldown <= 0;
+      this.set(it.count, ready ? t('hud.ready') : sk.itemCooldown.toFixed(1));
+      it.el.classList.toggle('empty', !ready);
+      it.el.style.setProperty('--p', String(ready ? 0 : sk.itemCooldown / sk.itemCooldownMax));
+    }
 
     const fs = g.featureStatus();
     this.featSlot.hidden = !fs;

@@ -34,6 +34,20 @@ const PlaneProgressSchema = new Schema(
   { _id: false },
 );
 
+const OwnedItemSchema = new Schema({
+  defId: { type: String, required: true },
+  rarity: { type: String, enum: ['common', 'rare', 'epic', 'mythic', 'legendary'], required: true },
+});
+
+const LoadoutSchema = new Schema(
+  {
+    planeId: { type: String, required: true },
+    active: { type: String, default: null },
+    passive: { type: String, default: null },
+  },
+  { _id: false },
+);
+
 const UserSchema = new Schema({
   nickname: { type: String, required: true, unique: true, minlength: 3, maxlength: 20, trim: true },
   nicknameLower: { type: String, required: true, unique: true },
@@ -64,6 +78,9 @@ const UserSchema = new Schema({
   passClaimedPremium: { type: [Number], default: [] },
 
   crates: { type: [CrateSchema], default: [] },
+
+  items: { type: [OwnedItemSchema], default: [] },
+  loadouts: { type: [LoadoutSchema], default: [] },
 
   keybinds: { type: Schema.Types.Mixed, default: {} },
 

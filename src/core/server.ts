@@ -1,5 +1,6 @@
 import { api } from './api';
 import type { PlaneId } from '../game/planes';
+import type { ItemRarity } from '../game/items';
 
 export type CrateType = 'common' | 'rare' | 'legendary';
 export type QuestKind = 'levelsCompleted' | 'crystalsCollected' | 'survivalSeconds' | 'cratesOpened';
@@ -50,6 +51,8 @@ export interface ServerProfile {
   keybinds: Record<string, string>;
   crystals: number;
   planeProgress: { planeId: PlaneId; tier: number; level: number }[];
+  items: { id: string; defId: string; rarity: ItemRarity }[];
+  loadouts: { planeId: PlaneId; active: string | null; passive: string | null }[];
 }
 
 export interface RewardResult {
@@ -108,4 +111,7 @@ export const Server = {
   buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
 
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; reward: CrateReward }>(`/crates/${crateId}/open`),
+
+  buyItem: (defId: string, rarity: ItemRarity) => api.post<{ profile: ServerProfile }>('/items/buy', { defId, rarity }),
+  setLoadout: (planeId: PlaneId, active: string | null, passive: string | null) => api.post<{ profile: ServerProfile }>('/items/loadout', { planeId, active, passive }),
 };

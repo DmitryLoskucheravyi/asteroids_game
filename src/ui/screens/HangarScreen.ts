@@ -2,6 +2,7 @@ import { Sfx } from '../../core/audio';
 import { t, type TKey } from '../../core/i18n';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
+import { getItemDef } from '../../game/items';
 import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
 import { effectivePlaneSpec, levelUpCost, tierUpCost, MAX_TIER, MAX_LEVEL_IN_TIER, PLANES, planeStats, type PlaneSpec } from '../../game/planes';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
@@ -122,6 +123,60 @@ export class HangarScreen extends Screen {
     );
   }
 
+  /** Модалка вибору предмета зі свого інвентарю (або зняти) в заданий слот. */
+  private pickItem(p: PlaneSpec, slot: 'active' | 'passive'): void {
+    const loadout = Save.loadoutFor(p.id);
+    const owned = Save.data.items.filter((it) => getItemDef(it.defId)?.slot === slot);
+    const current = slot === 'active' ? loadout.active : loadout.passive;
+
+    const apply = async (itemId: string | null): Promise<void> => {
+      try {
+        const next = slot === 'active' ? { active: itemId, passive: loadout.passive } : { active: loadout.active, passive: itemId };
+        const { profile } = await Server.setLoadout(p.id, next.active, next.passive);
+        Save.applyProfile(profile);
+        Sfx.pickup();
+        m.close();
+        this.render();
+      } catch {
+        Sfx.warning();
+      }
+    };
+
+    const rows = [
+      button(t('items.empty'), () => void apply(null), `btn${current === null ? ' btn-on' : ''}`, { 'data-autofocus': current === null }),
+      ...owned.map((it) => {
+        const def = getItemDef(it.defId);
+        return button(
+          h('span', {}, t(def!.nameKey), h('span', { class: `rarity-dot rarity-${it.rarity}` })),
+          () => void apply(it.id),
+          `btn${current === it.id ? ' btn-on' : ''}`,
+        );
+      }),
+    ];
+
+    const m = new Modal({
+      title: t(slot === 'active' ? 'items.slotActive' : 'items.slotPassive'),
+      body: owned.length ? [] : [h('p', { class: 'muted' }, t('items.empty'))],
+      actions: rows,
+      onEscape: () => m.close(),
+    }).open();
+  }
+
+  private loadoutBlock(p: PlaneSpec): HTMLElement {
+    const loadout = Save.loadoutFor(p.id);
+    const chip = (slot: 'active' | 'passive', itemId: string | null) => {
+      const owned = Save.data.items.find((it) => it.id === itemId);
+      const def = owned ? getItemDef(owned.defId) : undefined;
+      return h(
+        'div',
+        { class: 'loadout-row' },
+        h('span', { class: 'set-label' }, t(slot === 'active' ? 'items.slotActive' : 'items.slotPassive')),
+        button(def ? h('span', {}, t(def.nameKey), h('span', { class: `rarity-dot rarity-${owned!.rarity}` })) : t('items.empty'), () => this.pickItem(p, slot), 'btn small'),
+      );
+    };
+    return h('div', { class: 'loadout-block' }, chip('active', loadout.active), chip('passive', loadout.passive));
+  }
+
   protected build(): HTMLElement {
     const bar = (label: string, v: number) =>
       h('div', { class: 'stat-bar' }, h('span', {}, label), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(Math.max(0.1, Math.min(1, v)) * 100)}%` })));
@@ -143,6 +198,7 @@ export class HangarScreen extends Screen {
         bar(t('planes.size'), st.size),
         this.actionFor(p, i),
         owned ? this.upgradeBlock(p, i) : null,
+        owned ? this.loadoutBlock(p) : null,
       );
     });
 

@@ -217,6 +217,8 @@ profileRouter.post('/reset', async (req: AuthedRequest, res) => {
   user.passClaimedFree.splice(0, user.passClaimedFree.length);
   user.passClaimedPremium.splice(0, user.passClaimedPremium.length);
   user.crates.splice(0, user.crates.length);
+  user.items.splice(0, user.items.length);
+  user.loadouts.splice(0, user.loadouts.length);
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });

@@ -9,6 +9,7 @@ import { dailyRouter } from './routes/daily.js';
 import { questsRouter } from './routes/quests.js';
 import { passRouter } from './routes/pass.js';
 import { cratesRouter } from './routes/crates.js';
+import { itemsRouter } from './routes/items.js';
 
 async function main(): Promise<void> {
   await connectDb();
@@ -25,6 +26,7 @@ async function main(): Promise<void> {
   app.use('/api/quests', questsRouter);
   app.use('/api/pass', passRouter);
   app.use('/api/crates', cratesRouter);
+  app.use('/api/items', itemsRouter);
 
   app.listen(env.port, () => console.log(`[server] слухає на :${env.port}`));
 }

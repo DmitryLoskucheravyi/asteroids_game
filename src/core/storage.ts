@@ -1,6 +1,19 @@
 import { defaultProgress, type PlaneId, type PlaneProgress } from '../game/planes';
+import type { ItemRarity } from '../game/items';
 import type { Lang } from './i18n';
 import type { CrateView, PassView, QuestView, ServerProfile } from './server';
+
+export interface OwnedItem {
+  id: string;
+  defId: string;
+  rarity: ItemRarity;
+}
+
+export interface Loadout {
+  planeId: PlaneId;
+  active: string | null;
+  passive: string | null;
+}
 
 export interface SurvivalRecord {
   time: number;
@@ -33,6 +46,8 @@ export interface SaveData {
   crates: CrateView[];
   /** Кастомне керування: дія → KeyboardEvent.code; відсутня дія = дефолт. */
   keybinds: Record<string, string>;
+  items: OwnedItem[];
+  loadouts: Loadout[];
   settings: {
     lang: Lang;
     volume: number;
@@ -62,6 +77,8 @@ const defaults = (): SaveData => ({
   pass: { seasonId: '', bpPoints: 0, premium: false, claimedFree: [], claimedPremium: [] },
   crates: [],
   keybinds: {},
+  items: [],
+  loadouts: [],
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
@@ -94,6 +111,8 @@ class SaveStore {
         crates: Array.isArray(parsed.crates) ? parsed.crates : [],
         pass: { ...base.pass, ...(parsed.pass ?? {}) },
         keybinds: { ...(parsed.keybinds ?? {}) },
+        items: Array.isArray(parsed.items) ? parsed.items : [],
+        loadouts: Array.isArray(parsed.loadouts) ? parsed.loadouts : [],
       };
     } catch {
       return base;
@@ -128,6 +147,8 @@ class SaveStore {
       pass: p.pass,
       crates: p.crates,
       keybinds: p.keybinds,
+      items: p.items,
+      loadouts: p.loadouts,
     };
     this.save();
   }
@@ -182,6 +203,14 @@ class SaveStore {
 
   progressFor(id: PlaneId): PlaneProgress {
     return this.data.planeProgress.find((p) => p.planeId === id) ?? defaultProgress(id);
+  }
+
+  loadoutFor(id: PlaneId): Loadout {
+    return this.data.loadouts.find((l) => l.planeId === id) ?? { planeId: id, active: null, passive: null };
+  }
+
+  itemById(id: string | null): OwnedItem | undefined {
+    return id ? this.data.items.find((i) => i.id === id) : undefined;
   }
 
   get bestSurvival(): number {
