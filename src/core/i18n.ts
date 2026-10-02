@@ -179,7 +179,7 @@ const uk = {
   'game.revive': 'ДРУГЕ ЖИТТЯ!',
   'game.bossWarn': 'БОС!',
   'game.meteorWarn': 'МЕТЕОРИТНИЙ ДОЩ!',
-  'planes.feature': 'Фіча',
+  'planes.shipSkill': 'Бортовий скіл',
   'plane.wasp': 'Оса',
   'plane.collector': 'Колектор',
   'plane.swift': 'Стриж',
@@ -298,6 +298,14 @@ const uk = {
   'pass.buyPremium': 'Купити преміум-пропуск',
   'pass.premiumOwned': 'Преміум активовано',
   'pass.premiumLocked': 'Потрібен преміум-пропуск',
+
+  'item.active': 'Актив',
+  'item.passive': 'Пасив',
+  'item.rarity.common': 'Звичайний',
+  'item.rarity.rare': 'Рідкісний',
+  'item.rarity.epic': 'Епічний',
+  'item.rarity.mythic': 'Міфічний',
+  'item.rarity.legendary': 'Легендарний',
 };
 
 type Dict = Record<keyof typeof uk, string>;
@@ -479,7 +487,7 @@ const en: Dict = {
   'game.revive': 'SECOND LIFE!',
   'game.bossWarn': 'BOSS!',
   'game.meteorWarn': 'METEOR SHOWER!',
-  'planes.feature': 'Feature',
+  'planes.shipSkill': 'Ship skill',
   'plane.wasp': 'Wasp',
   'plane.collector': 'Collector',
   'plane.swift': 'Swift',
@@ -598,6 +606,14 @@ const en: Dict = {
   'pass.buyPremium': 'Buy premium pass',
   'pass.premiumOwned': 'Premium active',
   'pass.premiumLocked': 'Premium pass required',
+
+  'item.active': 'Active',
+  'item.passive': 'Passive',
+  'item.rarity.common': 'Common',
+  'item.rarity.rare': 'Rare',
+  'item.rarity.epic': 'Epic',
+  'item.rarity.mythic': 'Mythic',
+  'item.rarity.legendary': 'Legendary',
 };
 
 export type TKey = keyof typeof uk;

@@ -19,6 +19,12 @@
   --pink: #ff4fd8;
   --danger: #ff4a5a;
   --ok: #50f08c;
+  /* рідкість предметів/зброї — стандартна гейм-дев конвенція */
+  --rarity-common: #9aa3b8;
+  --rarity-rare: #4fa8ff;
+  --rarity-epic: #b24fff;
+  --rarity-mythic: #ff3f7a;
+  --rarity-legendary: #ffd24a;
   --radius: 14px;
   --font-ui: 'Unbounded', 'Onest', system-ui, sans-serif;
   --font-body: 'Onest', system-ui, sans-serif;

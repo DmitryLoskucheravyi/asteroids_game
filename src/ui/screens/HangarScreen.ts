@@ -66,7 +66,7 @@ export class HangarScreen extends Screen {
         h('div', { class: 'plane-pic' }, h('img', { src: planeIconUrl(p.id), alt: '' }), owned ? null : h('span', { class: 'price-tag' }, icon(Icons.lock))),
         h('h3', {}, t(`plane.${p.id}` as TKey)),
         h('p', { class: 'plane-desc' }, t(`planeDesc.${p.id}` as TKey)),
-        h('div', { class: 'feature' }, h('span', { class: 'feature-tag' }, t('planes.feature')), t(`feat.${p.id}` as TKey)),
+        h('div', { class: 'feature' }, h('span', { class: 'feature-tag' }, t('planes.shipSkill')), t(`feat.${p.id}` as TKey)),
         bar(t('planes.speed'), st.speed),
         bar(t('planes.agility'), st.agility),
         bar(t('planes.size'), st.size),
