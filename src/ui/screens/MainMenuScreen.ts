@@ -17,6 +17,7 @@ import { HangarScreen } from './HangarScreen';
 import { HowToScreen } from './HowToScreen';
 import { ItemsScreen } from './ItemsScreen';
 import { LevelSelectScreen } from './LevelSelectScreen';
+import { OnlineScreen } from './OnlineScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { QuestsScreen } from './QuestsScreen';
 
@@ -61,6 +62,7 @@ export class MainMenuScreen extends Screen {
     const items: [string, () => void, boolean?][] = [
       [t('menu.play'), go(new LevelSelectScreen(this.app)), true],
       [t('menu.survival'), () => this.app.show(new GameScreen(this.app, 'survival', 0))],
+      [t('menu.online'), go(new OnlineScreen(this.app))],
       [t('menu.planes'), go(new HangarScreen(this.app))],
       [t('menu.items'), go(new ItemsScreen(this.app))],
       [t('menu.quests'), go(new QuestsScreen(this.app))],

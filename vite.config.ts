@@ -9,6 +9,9 @@ export default defineConfig({
   build: { target: 'es2020', assetsInlineLimit: 0 },
   define: { __APP_VERSION__: JSON.stringify(version) },
   server: {
-    proxy: { '/api': 'http://localhost:8787' },
+    proxy: {
+      '/api': 'http://localhost:8787',
+      '/socket.io': { target: 'ws://localhost:8787', ws: true },
+    },
   },
 });

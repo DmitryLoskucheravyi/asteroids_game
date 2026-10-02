@@ -4,7 +4,7 @@ import { t } from '../core/i18n';
 import { InputState } from '../core/input';
 import { clamp } from '../core/math';
 import { APP_VERSION } from '../core/version';
-import type { Game, Viewport } from '../game/Game';
+import type { Playable, Viewport } from '../game/Game';
 import { Modal } from '../ui/Modal';
 import { moveFocus } from '../ui/nav';
 import type { Screen } from '../ui/Screen';
@@ -26,7 +26,7 @@ export class App {
   private readonly backdrop = new MenuBackdrop();
   private current: Screen | null = null;
   /** Активна гра (керується GameScreen) */
-  game: Game | null = null;
+  game: Playable | null = null;
   viewport: Viewport = { scale: 1, ox: 0, oy: 0, cw: 1, ch: 1, dpr: 1 };
   worldW = 1600;
   worldH = WORLD_HEIGHT;

@@ -37,6 +37,13 @@ export interface GameResult {
   prisms: number;
 }
 
+/** Усе, що вміє жити в App.game-слоті гри: кампанія/виживання (Game) або онлайн-матч (PvpGame). */
+export interface Playable {
+  update(dt: number): void;
+  render(ctx: CanvasRenderingContext2D, vp: Viewport): void;
+  resize(w: number, h: number): void;
+}
+
 export interface Viewport {
   scale: number;
   ox: number;

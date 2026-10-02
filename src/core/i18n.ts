@@ -356,6 +356,25 @@ const uk = {
   'items.slotWeapon': 'Зброя',
   'hud.ammo': 'Патрони',
   'hud.reloading': 'Перезарядка',
+
+  'menu.online': 'Онлайн PvP',
+  'online.title': 'Онлайн PvP',
+  'online.subtitle': 'Матч на 5 пілотів — вільні місця займають боти.',
+  'online.search': 'Шукати гру',
+  'online.cancel': 'Скасувати пошук',
+  'online.searching': 'Пошук гри…',
+  'online.loadout': 'Твій лоадаут',
+  'pvp.hp': 'HP',
+  'pvp.leave': 'Покинути матч',
+  'pvp.leaveConfirm': 'Вийти з матчу? Прогрес цього бою буде втрачено.',
+  'pvp.countdown': 'Матч починається…',
+  'pvp.radar': 'Радар',
+  'matchresult.title': 'Матч завершено',
+  'matchresult.place': 'Місце',
+  'matchresult.kills': 'Фраги',
+  'matchresult.you': 'Ти',
+  'matchresult.again': 'Ще раз',
+  'matchresult.toMenu': 'У меню',
 };
 
 type Dict = Record<keyof typeof uk, string>;
@@ -714,6 +733,25 @@ const en: Dict = {
   'items.slotWeapon': 'Weapon',
   'hud.ammo': 'Ammo',
   'hud.reloading': 'Reloading',
+
+  'menu.online': 'Online PvP',
+  'online.title': 'Online PvP',
+  'online.subtitle': 'A 5-pilot match — bots fill any empty slots.',
+  'online.search': 'Search match',
+  'online.cancel': 'Cancel search',
+  'online.searching': 'Searching…',
+  'online.loadout': 'Your loadout',
+  'pvp.hp': 'HP',
+  'pvp.leave': 'Leave match',
+  'pvp.leaveConfirm': 'Leave the match? Progress in this fight will be lost.',
+  'pvp.countdown': 'Match starting…',
+  'pvp.radar': 'Radar',
+  'matchresult.title': 'Match over',
+  'matchresult.place': 'Place',
+  'matchresult.kills': 'Kills',
+  'matchresult.you': 'You',
+  'matchresult.again': 'Again',
+  'matchresult.toMenu': 'To menu',
 };
 
 export type TKey = keyof typeof uk;
