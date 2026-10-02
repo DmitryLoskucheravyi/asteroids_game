@@ -1,14 +1,15 @@
 // Тримати синхронізовано з src/game/economy.ts.
 export function levelReward(level: number, stars: number, firstClear: boolean): number {
+  // перше проходження — подвійна нагорода, повтор — половина (щоб кампанію не фармили замість PvP)
   const base = 20 + level * 5 + stars * 15;
-  return firstClear ? base * 2 : base;
+  return firstClear ? base * 2 : Math.round(base * 0.5);
 }
 
 export function survivalReward(seconds: number): number {
-  return Math.floor(seconds / 5);
+  return Math.floor(seconds / 2.5);
 }
 
-export const DAILY_REWARDS = [50, 75, 100, 150, 200, 300, 500] as const;
+export const DAILY_REWARDS = [40, 60, 80, 120, 160, 240, 400] as const;
 
 function localDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -45,10 +46,24 @@ export function applyXp(current: { xp: number; level: number }, amount: number):
   let { xp, level } = current;
   xp += Math.max(0, Math.floor(amount));
   let levelsGained = 0;
-  while (xp >= xpToNext(level)) {
+  while (level < MAX_PILOT_LEVEL && xp >= xpToNext(level)) {
     xp -= xpToNext(level);
     level += 1;
     levelsGained += 1;
   }
+  // на максимальному рівні досвід більше не накопичується
+  if (level >= MAX_PILOT_LEVEL) xp = 0;
   return { level, xp, levelsGained };
+}
+
+/** Максимальний рівень пілота. */
+export const MAX_PILOT_LEVEL = 50;
+
+const LEVEL_CRATES: Record<number, 'common' | 'rare' | 'epic' | 'mythic' | 'legendary'> = {
+  5: 'common', 10: 'rare', 15: 'rare', 20: 'epic', 25: 'epic', 30: 'mythic', 35: 'epic', 40: 'mythic', 45: 'epic', 50: 'legendary',
+};
+
+/** Нагорода за досягнення рівня пілота: монети щоразу, ящик кожні 5 рівнів, кристали кожні 10. */
+export function pilotLevelReward(level: number): { coins: number; crystals: number; crate?: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' } {
+  return { coins: 50 + level * 10, crystals: level % 10 === 0 ? 20 + level : 0, crate: LEVEL_CRATES[level] };
 }

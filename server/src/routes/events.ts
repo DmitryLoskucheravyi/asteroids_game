@@ -77,8 +77,10 @@ eventsRouter.post('/crystals', async (req: AuthedRequest, res) => {
 });
 
 eventsRouter.post('/survival', async (req: AuthedRequest, res) => {
-  const { seconds, crystals, prisms } = req.body ?? {};
+  const { seconds, crystals, prisms, active } = req.body ?? {};
   const secs = Math.max(0, Math.floor(Number(seconds) || 0));
+  // нагорода — лише за активні секунди (рекорд рахується за повним часом)
+  const activeSecs = Math.min(secs, Math.max(0, Math.floor(Number(active ?? seconds) || 0)));
   const cry = Math.max(0, Math.floor(Number(crystals) || 0));
   const prism = Math.max(0, Math.floor(Number(prisms) || 0));
 
@@ -93,16 +95,16 @@ eventsRouter.post('/survival', async (req: AuthedRequest, res) => {
   const place = top.findIndex((e) => e === entry || (e.time === entry.time && e.date === entry.date));
   user.survivalTop.splice(0, user.survivalTop.length, ...top);
 
-  const coins = survivalReward(secs) + cry * CRYSTAL_COINS;
-  const xp = Math.floor(secs / 4);
-  const crate = maybeDropCrate(Math.min(0.5, 0.1 + secs / 600));
+  const coins = survivalReward(activeSecs) + cry * CRYSTAL_COINS;
+  const xp = Math.floor(activeSecs / 4);
+  const crate = maybeDropCrate(Math.min(0.5, 0.1 + activeSecs / 1000));
   const result = grantReward(user, { coins, xp, crate, crystals: prism }, 'survival');
 
   ensureQuestSlots(user);
-  incrementQuestProgress(user, 'survivalSeconds', secs);
+  incrementQuestProgress(user, 'survivalSeconds', activeSecs);
   incrementQuestProgress(user, 'survivalRuns', 1);
   incrementQuestProgress(user, 'crystalsCollected', cry);
-  addBp(user, bpForSurvival(secs));
+  addBp(user, bpForSurvival(activeSecs));
 
   await user.save();
   res.json({ profile: serializeProfile(user), reward: { ...result, place } });

@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { User } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
-import { PASS_TIERS, SEASON_ID, SEASON_STARTS, SEASON_ENDS, PREMIUM_PASS_PRICE, type PassReward } from '../content/pass.js';
+import { PASS_TIERS, currentSeason, PREMIUM_PASS_PRICE, type PassReward } from '../content/pass.js';
 import { getItemDef } from '../content/items.js';
+import { duplicateCrystals } from '../content/compensation.js';
 import { getWeaponDef } from '../content/weapons.js';
 import { isPlaneId } from '../content/planes.js';
 import type { HydratedDocument } from 'mongoose';
@@ -19,12 +20,13 @@ passRouter.get('/', async (req: AuthedRequest, res) => {
     res.status(404).json({ error: 'not_found' });
     return;
   }
+  const season = currentSeason();
   res.json({
-    season: { id: SEASON_ID, startsAt: SEASON_STARTS, endsAt: SEASON_ENDS, tiers: PASS_TIERS, premiumPrice: PREMIUM_PASS_PRICE },
-    bpPoints: user.passSeasonId === SEASON_ID ? user.passBpPoints : 0,
-    premium: user.passSeasonId === SEASON_ID ? user.passPremium : false,
-    claimedFree: user.passSeasonId === SEASON_ID ? user.passClaimedFree : [],
-    claimedPremium: user.passSeasonId === SEASON_ID ? user.passClaimedPremium : [],
+    season: { id: season.id, startsAt: season.startsAt, endsAt: season.endsAt, tiers: PASS_TIERS, premiumPrice: PREMIUM_PASS_PRICE },
+    bpPoints: user.passSeasonId === season.id ? user.passBpPoints : 0,
+    premium: user.passSeasonId === season.id ? user.passPremium : false,
+    claimedFree: user.passSeasonId === season.id ? user.passClaimedFree : [],
+    claimedPremium: user.passSeasonId === season.id ? user.passClaimedPremium : [],
   });
 });
 
@@ -53,15 +55,15 @@ passRouter.post('/buy-premium', async (req: AuthedRequest, res) => {
 function grantExtras(user: HydratedDocument<UserDoc>, r: PassReward): number {
   let refund = 0;
   if (r.item && getItemDef(r.item)) {
-    if (user.items.some((i) => i.defId === r.item)) refund += 25;
+    if (user.items.some((i) => i.defId === r.item)) refund += duplicateCrystals('item', r.item);
     else user.items.push({ defId: r.item, rarity: getItemDef(r.item)!.rarity });
   }
   if (r.weapon && getWeaponDef(r.weapon)) {
-    if (user.ownedWeapons.includes(r.weapon)) refund += 40;
+    if (user.ownedWeapons.includes(r.weapon)) refund += duplicateCrystals('weapon', r.weapon);
     else user.ownedWeapons.push(r.weapon);
   }
   if (r.plane && isPlaneId(r.plane)) {
-    if (user.ownedPlanes.includes(r.plane)) refund += 80;
+    if (user.ownedPlanes.includes(r.plane)) refund += duplicateCrystals('plane', r.plane);
     else user.ownedPlanes.push(r.plane);
   }
   return refund;

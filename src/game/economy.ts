@@ -4,7 +4,7 @@ import { Save } from '../core/storage';
 export const CRYSTAL_COINS = 5;
 
 /** Щоденні нагороди за 7-денну серію; після 7-го дня цикл повторюється. */
-export const DAILY_REWARDS = [50, 75, 100, 150, 200, 300, 500] as const;
+export const DAILY_REWARDS = [40, 60, 80, 120, 160, 240, 400] as const;
 
 /** Локальна дата YYYY-MM-DD (а не UTC — інакше "день" змінювався б не опівночі). */
 function localDate(d: Date): string {

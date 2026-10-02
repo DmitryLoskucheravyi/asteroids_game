@@ -4,8 +4,7 @@ import { User, type UserDoc } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
 import { isCrateType, openCrate, type CrateReward } from '../content/crates.js';
-import { applyXp } from '../content/economy.js';
-import { ensureQuestSlots, incrementQuestProgress } from '../progress.js';
+import { addXp, ensureQuestSlots, incrementQuestProgress } from '../progress.js';
 
 export const cratesRouter = Router();
 cratesRouter.use(requireAuth);
@@ -39,9 +38,7 @@ function openOne(user: Doc, crate: Doc['crates'][number]): CrateReward[] {
         user.crystals += r.amount;
         break;
       case 'xp': {
-        const { level, xp } = applyXp({ xp: user.xp, level: user.level }, r.amount);
-        user.level = level;
-        user.xp = xp;
+        addXp(user, r.amount);
         break;
       }
       case 'plane':

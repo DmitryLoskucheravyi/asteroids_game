@@ -63,6 +63,13 @@ export class OnlineScreen extends Screen {
           h('span', {}, t('rank.wins'), h('b', {}, String(rk.wins))),
           h('span', {}, t('rank.best'), h('b', {}, `${t(best.nameKey)} ${best.roman}`)),
         ),
+        rk.seasonEndsAt ? h('span', { class: 'rank-season' }, t('rank.seasonEnds', { d: new Date(rk.seasonEndsAt).toLocaleDateString('uk-UA') })) : null,
+        rk.lastSeason
+          ? (() => {
+              const last = rankInfo(rk.lastSeason.points);
+              return h('span', { class: 'rank-season' }, t('rank.lastSeason', { rank: `${t(last.nameKey)} ${last.roman}`, crate: t(`crate.${rk.lastSeason.crate}` as TKey), c: rk.lastSeason.crystals }));
+            })()
+          : null,
       ),
     );
   }

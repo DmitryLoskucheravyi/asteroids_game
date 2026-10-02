@@ -22,37 +22,45 @@ export const isPlaneId = (id: string): id is PlaneId => (PLANE_IDS as readonly s
 export const MAX_TIER = 4;
 export const MAX_LEVEL_IN_TIER = 4;
 
-// Тримати синхронізовано з src/game/planes.ts (levelUpCost/tierUpCost).
+// Тримати синхронізовано з src/game/planes.ts (upgradeRate/levelUpCost/tierUpCost).
+export function upgradeRate(price: number): number {
+  if (price >= 3000) return 225;
+  if (price >= 2300) return 175;
+  if (price >= 1800) return 135;
+  if (price >= 1400) return 105;
+  if (price >= 1100) return 85;
+  return 60;
+}
+
 export function levelUpCost(price: number, tier: number, level: number): number {
-  return Math.max(20, Math.round((price || 60) * 0.08 * tier * level));
+  return upgradeRate(price) * tier * level;
 }
 
 export function tierUpCost(price: number, tier: number): { coins: number; crystals: number } {
-  const crystalsByTier = [0, 40, 120, 300];
-  return {
-    coins: levelUpCost(price, tier, MAX_LEVEL_IN_TIER) * 6,
-    crystals: crystalsByTier[tier] ?? 300,
-  };
+  const crystalsByTier = [0, 30, 80, 160];
+  return { coins: 24 * upgradeRate(price) * tier, crystals: crystalsByTier[tier] ?? 160 };
 }
 
 /** Бойові характеристики PvP. Тримати синхронізовано з src/game/planes.ts (combat + planeCombat). */
 const PLANE_COMBAT: Record<PlaneId, { hp: number; damage: number }> = {
   falcon: { hp: 100, damage: 1.0 },
-  phantom: { hp: 90, damage: 1.05 },
-  blaze: { hp: 110, damage: 1.15 },
+  phantom: { hp: 90, damage: 1.0 },
+  blaze: { hp: 105, damage: 1.08 },
   wasp: { hp: 80, damage: 1.0 },
-  collector: { hp: 105, damage: 0.95 },
-  swift: { hp: 95, damage: 1.05 },
-  titan: { hp: 140, damage: 0.95 },
+  collector: { hp: 108, damage: 1.05 },
+  swift: { hp: 98, damage: 1.05 },
+  titan: { hp: 136, damage: 0.95 },
   chronos: { hp: 100, damage: 1.05 },
-  thunder: { hp: 105, damage: 1.15 },
+  thunder: { hp: 105, damage: 1.12 },
   ufo: { hp: 100, damage: 1.1 },
-  phoenix: { hp: 115, damage: 1.2 },
+  phoenix: { hp: 105, damage: 1.1 },
 };
 
 export function planeCombat(planeId: string, tier: number, level: number): { hp: number; damageMul: number } {
   const base = isPlaneId(planeId) ? PLANE_COMBAT[planeId] : PLANE_COMBAT.falcon;
   const t = Math.min(MAX_TIER, Math.max(1, tier));
   const l = Math.min(MAX_LEVEL_IN_TIER, Math.max(1, level));
-  return { hp: base.hp + (t - 1) * 20 + (l - 1) * 5, damageMul: base.damage * (1 + 0.08 * (t - 1) + 0.02 * (l - 1)) };
+  // HP +4% від бази й урон +2% за крок прокачки, у PvP — наполовину (коефіцієнт 0.5)
+  const step = ((t - 1) * MAX_LEVEL_IN_TIER + (l - 1)) * 0.5;
+  return { hp: Math.round(base.hp * (1 + 0.04 * step)), damageMul: base.damage * (1 + 0.02 * step) };
 }

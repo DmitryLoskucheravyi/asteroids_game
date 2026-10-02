@@ -1,6 +1,13 @@
-export const SEASON_ID = 'season-1';
-export const SEASON_STARTS = new Date('2026-01-01T00:00:00Z');
-export const SEASON_ENDS = new Date('2026-12-31T23:59:59Z');
+/** Сезони по 90 днів; перший триває з 2026-10-01 (ідентифікатор лишився "season-1", щоб не скинути поточний прогрес). */
+export const SEASON_DAYS = 90;
+const SEASON_EPOCH = Date.UTC(2026, 9, 1);
+const DAY_MS = 86_400_000;
+
+export function currentSeason(now = Date.now()): { id: string; startsAt: Date; endsAt: Date } {
+  const index = Math.max(0, Math.floor((now - SEASON_EPOCH) / (SEASON_DAYS * DAY_MS)));
+  const start = SEASON_EPOCH + index * SEASON_DAYS * DAY_MS;
+  return { id: `season-${index + 1}`, startsAt: new Date(start), endsAt: new Date(start + SEASON_DAYS * DAY_MS - 1000) };
+}
 
 import type { CrateType } from './crates.js';
 
@@ -27,37 +34,37 @@ export interface PassTier {
 const TIER_COUNT = 100;
 
 /** BP на один тьєр росте поступово: перші йдуть швидко, останні — справжній марафон. */
-const bpStep = (tier: number): number => 100 + Math.floor(tier * 4);
+// ×2.5 до початкової кривої: регулярний гравець закриває пропуск приблизно за 75 днів 90-денного сезону
+const bpStep = (tier: number): number => Math.round((100 + tier * 4) * 2.5);
 const BP_REQUIRED: number[] = [];
 for (let t = 1, sum = 0; t <= TIER_COUNT; t++) BP_REQUIRED.push((sum += bpStep(t)));
 
 /** Ціна преміум-пропуску на сезон, у монетах (без реальних платежів). */
-export const PREMIUM_PASS_PRICE = 500;
+export const PREMIUM_PASS_PRICE = 2500;
 
 /** Особливі тьєри — рідкісні речі (предмети, зброя, літаки) як віхи сезону. */
+// У пропуску — не більше половини каталогу (6 із 12 предметів, 1 зброя, 2 літаки), без дублікатів між треками;
+// решта лишається в магазині, ящиках і нагородах за ранг.
 const FREE_SPECIAL: Record<number, Partial<PassReward>> = {
   8: { item: 'magnet_booster' },
-  16: { item: 'armor_plating' },
+  16: { crate: 'rare' },
   24: { item: 'targeting_cpu' },
-  32: { weapon: 'laser' },
+  32: { crate: 'rare' },
   50: { plane: 'swift' },
-  62: { item: 'nano_repair' },
-  74: { item: 'afterburner' },
+  62: { crate: 'rare' },
+  74: { crystals: 20 },
   86: { item: 'overclock_core' },
-  100: { plane: 'phoenix' },
 };
 const PREMIUM_SPECIAL: Record<number, Partial<PassReward>> = {
-  6: { item: 'nano_repair' },
-  14: { item: 'afterburner' },
+  6: { crate: 'rare' },
+  14: { crystals: 15 },
   20: { item: 'nano_coating' },
   28: { weapon: 'homing_salvo' },
-  40: { item: 'emp_pulse' },
-  50: { plane: 'thunder' },
+  40: { crate: 'epic' },
   64: { item: 'decoy_flare' },
-  75: { item: 'overdrive' },
-  88: { item: 'missile_swarm' },
+  75: { crystals: 40 },
   95: { item: 'phoenix_heart' },
-  100: { plane: 'ufo' },
+  100: { plane: 'thunder' },
 };
 
 function crateFor(tier: number, premium: boolean): CrateType {
@@ -77,7 +84,7 @@ export const PASS_TIERS: readonly PassTier[] = Array.from({ length: TIER_COUNT }
   if (tier % 5 === 0) free.crate = crateFor(tier, false);
   Object.assign(free, FREE_SPECIAL[tier] ?? {});
   // преміум: щедріше — ящик кожен 2-й, кристали кожен 2-й (через один), свої віхи
-  const prem: PassReward = { coins: 120 + tier * 18, xp: 45 + tier * 2 };
+  const prem: PassReward = { coins: 90 + 10 * (tier - 1), xp: 45 + tier * 2 };
   if (tier % 2 === 0) prem.crate = crateFor(tier, true);
   else prem.crystals = 6 + Math.floor(tier / 2);
   Object.assign(prem, PREMIUM_SPECIAL[tier] ?? {});

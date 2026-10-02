@@ -39,8 +39,8 @@ export interface CrateDef {
 // Предмети, зброя й особливо літаки — рідкісна удача: основу нагород складають монети, досвід і кристали.
 export const CRATES: Record<CrateType, CrateDef> = {
   common: { rolls: 2, jackpotChance: 0, weights: { coins: 60, xp: 28, crystals: 11, item: 0.8, weapon: 0, plane: 0.15 }, coins: [40, 150], xp: [20, 60], crystals: [1, 3], itemRarities: ['common'] },
-  rare: { rolls: 3, jackpotChance: 0, weights: { coins: 50, xp: 25, crystals: 22, item: 2.2, weapon: 0.3, plane: 0.4 }, coins: [150, 400], xp: [60, 140], crystals: [3, 8], itemRarities: ['common', 'rare'] },
-  epic: { rolls: 3, jackpotChance: 0, weights: { coins: 45, xp: 22, crystals: 28, item: 3.5, weapon: 0.6, plane: 0.8 }, coins: [300, 700], xp: [120, 260], crystals: [8, 20], itemRarities: ['rare', 'epic'] },
+  rare: { rolls: 3, jackpotChance: 0, weights: { coins: 50, xp: 25, crystals: 22, item: 2.2, weapon: 0.3, plane: 0.4 }, coins: [130, 320], xp: [60, 140], crystals: [3, 8], itemRarities: ['common', 'rare'] },
+  epic: { rolls: 3, jackpotChance: 0, weights: { coins: 45, xp: 22, crystals: 28, item: 3.5, weapon: 0.6, plane: 0.8 }, coins: [350, 750], xp: [120, 260], crystals: [8, 20], itemRarities: ['rare', 'epic'] },
   mythic: { rolls: 4, jackpotChance: 0.08, weights: { coins: 40, xp: 20, crystals: 32, item: 5, weapon: 0.9, plane: 1.2 }, coins: [600, 1200], xp: [220, 420], crystals: [15, 35], itemRarities: ['epic', 'mythic'] },
   legendary: { rolls: 5, jackpotChance: 0.2, weights: { coins: 36, xp: 18, crystals: 34, item: 7, weapon: 1.2, plane: 1.8 }, coins: [1000, 2500], xp: [350, 700], crystals: [25, 60], itemRarities: ['mythic', 'legendary'] },
 };

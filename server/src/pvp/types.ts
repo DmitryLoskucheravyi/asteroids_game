@@ -54,6 +54,9 @@ export interface Participant {
   lootCrystals: number;
   /** Рейтинг на початку матчу (лише для гравців у рейтинговому режимі) */
   rankPoints: number;
+  /** Анти-ферма: скільки пострілів і скільки пролетів за матч */
+  shots: number;
+  travelled: number;
   /** Боти: поточний behavior-стан */
   botState?: 'patrol' | 'chase' | 'attack' | 'flee';
   botDir?: Vec;

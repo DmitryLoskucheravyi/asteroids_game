@@ -132,7 +132,7 @@ export function updateBot(bot: Participant, others: readonly Participant[], obst
   const maxTurn = TURN_RATE * dt;
   bot.angle += Math.max(-maxTurn, Math.min(maxTurn, diff));
 
-  if (now < bot.slowUntil) targetSpeed *= 0.45;
+  if (now < bot.slowUntil) targetSpeed *= 0.6;
   const speed = bot.botSpeed ?? 250;
   bot.botSpeed = speed + Math.max(-400 * dt, Math.min(400 * dt, targetSpeed - speed));
   bot.pos.x = Math.max(30, Math.min(WORLD_W - 30, bot.pos.x + Math.cos(bot.angle) * bot.botSpeed * dt));

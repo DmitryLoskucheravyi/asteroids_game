@@ -6,7 +6,7 @@ import type { InputState } from '../core/input';
 import { Save } from '../core/storage';
 import { drawGlow } from './fx';
 import { drawPlane } from './PlaneArt';
-import { effectivePlaneSpec, getPlane, planeCombat, type PlaneId } from './planes';
+import { PVP_PROGRESS_SCALE, effectivePlaneSpec, getPlane, planeCombat, type PlaneId } from './planes';
 import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from './items';
 import { getWeaponDef, DEFAULT_WEAPON_ID, WeaponState, type WeaponDef } from './weapons';
 import { Player } from './entities/Player';
@@ -20,7 +20,7 @@ const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
 const SEND_EVERY = 0.05;
 const HIT_RADIUS = 20;
 const JUMP_DISTANCE = 210;
-const SLOW_MUL = 0.45;
+const SLOW_MUL = 0.6;
 const MISSILE_SPEED = 520;
 /** Поворот ракети, рад/с — помірний, щоб від неї можна було ухилитись маневром */
 const MISSILE_TURN = 2.2;
@@ -144,7 +144,7 @@ export class PvpGame {
     const base = getPlane(planeId);
     this.passiveDef = getItemDef(Save.itemById(loadout.passive)?.defId ?? '');
     this.activeDef = getItemDef(Save.itemById(loadout.active)?.defId ?? '');
-    const spec = applyItemPassive(effectivePlaneSpec(base, progress), this.passiveDef);
+    const spec = applyItemPassive(effectivePlaneSpec(base, progress, PVP_PROGRESS_SCALE), this.passiveDef);
     const cooldownMul = 1 - (this.passiveDef?.combat?.cooldown ?? 0);
     this.baseFireMul = 1 + (this.passiveDef?.combat?.fireRate ?? 0);
     this.active = this.activeDef?.active ?? null;
@@ -553,7 +553,8 @@ export class PvpGame {
   }
 
   private updateGun(dt: number): void {
-    this.gun.fireRateMul = this.baseFireMul * (this.overdrive > 0 ? 2 : 1);
+    // сумарний бонус скорострільності від предметів обмежено +80%
+    this.gun.fireRateMul = Math.min(1.8, this.baseFireMul + (this.overdrive > 0 ? 0.7 : 0));
     if (this.overdrive > 0 && this.gun.cooldown > 0) this.gun.reset();
     const shots = this.gun.update(dt, this.input.firing());
     if (!shots) return;

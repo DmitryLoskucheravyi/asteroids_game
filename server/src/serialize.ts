@@ -2,7 +2,7 @@ import type { HydratedDocument } from 'mongoose';
 import type { UserDoc } from './models/User.js';
 import { findQuestDef } from './content/quests.js';
 import { getItemDef } from './content/items.js';
-import { SEASON_ID, claimableCount } from './content/pass.js';
+import { currentSeason, claimableCount } from './content/pass.js';
 
 export function serializeProfile(user: HydratedDocument<UserDoc>) {
   return {
@@ -39,7 +39,7 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       premium: user.passPremium,
       claimedFree: user.passClaimedFree,
       claimedPremium: user.passClaimedPremium,
-      claimable: user.passSeasonId === SEASON_ID ? claimableCount(user.passBpPoints, user.passPremium, user.passClaimedFree, user.passClaimedPremium) : 0,
+      claimable: user.passSeasonId === currentSeason().id ? claimableCount(user.passBpPoints, user.passPremium, user.passClaimedFree, user.passClaimedPremium) : 0,
     },
     crates: user.crates.map((c) => ({
       id: (c as unknown as { _id: { toString(): string } })._id.toString(),
@@ -55,6 +55,13 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       .map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: getItemDef(it.defId)!.rarity })),
     loadouts: user.loadouts,
     ownedWeapons: user.ownedWeapons,
-    ranked: { points: user.rankPoints ?? 0, best: user.rankBest ?? 0, matches: user.rankedMatches ?? 0, wins: user.rankedWins ?? 0 },
+    ranked: {
+      points: user.rankPoints ?? 0,
+      best: user.rankBest ?? 0,
+      matches: user.rankedMatches ?? 0,
+      wins: user.rankedWins ?? 0,
+      seasonEndsAt: currentSeason().endsAt,
+      lastSeason: (user.rankLastSeason as { seasonId: string; points: number; division: number; crate: string; crystals: number } | null) ?? null,
+    },
   };
 }

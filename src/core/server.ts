@@ -80,6 +80,8 @@ export interface RankedView {
   best: number;
   matches: number;
   wins: number;
+  seasonEndsAt?: string;
+  lastSeason?: { seasonId: string; points: number; division: number; crate: CrateType; crystals: number } | null;
 }
 
 export interface RewardResult {
@@ -132,8 +134,8 @@ export const Server = {
 
   levelComplete: (level: number, stars: number, crystals: number, prisms: number) =>
     api.post<{ profile: ServerProfile; reward: RewardResult & { firstClear: boolean } }>('/events/level-complete', { level, stars, crystals, prisms }),
-  survival: (seconds: number, crystals: number, prisms: number) =>
-    api.post<{ profile: ServerProfile; reward: RewardResult & { place: number } }>('/events/survival', { seconds, crystals, prisms }),
+  survival: (seconds: number, crystals: number, prisms: number, active?: number) =>
+    api.post<{ profile: ServerProfile; reward: RewardResult & { place: number } }>('/events/survival', { seconds, crystals, prisms, active }),
   crystalsOnly: (crystals: number, prisms: number) => api.post<{ profile: ServerProfile; reward: RewardResult }>('/events/crystals', { crystals, prisms }),
 
   dailyState: () => api.get<{ state: { available: boolean; day: number; reward: number } }>('/daily'),

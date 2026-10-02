@@ -35,6 +35,8 @@ export interface GameResult {
   coins: number;
   /** Призми — рідкісна валюта тір-апів, зібрані за цей забіг */
   prisms: number;
+  /** Секунди, коли гравець справді грав (рух/дія за останні 5 с) — захист від AFK-ферми */
+  activeTime: number;
 }
 
 /** Усе, що вміє жити в App.game-слоті гри: кампанія/виживання (Game) або онлайн-матч (PvpGame). */
@@ -200,6 +202,8 @@ export class Game {
   }
 
   private itemCooldownMax = 0;
+  private activeTime = 0;
+  private lastInputAt = 0;
 
   get level(): LevelConfig {
     return this.mode === 'campaign' ? getLevel(this.levelId) : SURVIVAL_BASE;
@@ -242,6 +246,8 @@ export class Game {
     this.lives = feat.extraLives ?? 0;
     this.shieldRegenTimer = 0;
     this.elapsed = 0;
+    this.activeTime = 0;
+    this.lastInputAt = 0;
     this.crystals = 0;
     this.prisms = 0;
     this.coins = 0;
@@ -435,7 +441,10 @@ export class Game {
 
   private updatePlayer(dt: number): void {
     this.player.speedMultiplier = this.skills.isBoosted ? BOOST_MULTIPLIER : 1;
-    this.player.update(dt, this.input.axis(), this.width, this.height);
+    const axis = this.input.axis();
+    if (axis.x !== 0 || axis.y !== 0) this.lastInputAt = this.elapsed;
+    if (this.elapsed - this.lastInputAt <= 5) this.activeTime += dt;
+    this.player.update(dt, axis, this.width, this.height);
 
     const ex = this.player.exhaust();
     const [inner, outer] = this.player.spec.flame;
@@ -801,6 +810,7 @@ export class Game {
       level: this.levelId,
       won,
       time: this.elapsed,
+      activeTime: this.activeTime,
       duration: cfg.duration,
       crystals: this.crystals,
       crystalTarget: cfg.crystalTarget,

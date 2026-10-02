@@ -4,6 +4,7 @@ import { verifyToken } from '../utils/jwt.js';
 import { User } from '../models/User.js';
 import { enqueue, dequeue, roomFor, onDisconnect, leaveRoom } from './matchmaking.js';
 import { DEFAULT_WEAPON_ID } from '../content/weapons.js';
+import { ensureRankSeason } from '../progress.js';
 import type { SkillKind } from './types.js';
 
 export function attachPvp(server: HttpServer): void {
@@ -25,6 +26,8 @@ export function attachPvp(server: HttpServer): void {
       const mode = data?.mode === 'ranked' ? 'ranked' : 'casual';
       const user = await User.findById(socket.data.userId as string);
       if (!user) return;
+      ensureRankSeason(user);
+      if (user.isModified()) await user.save();
       const progress = user.planeProgress.find((p) => p.planeId === user.selectedPlane);
       const loadout = user.loadouts.find((l) => l.planeId === user.selectedPlane);
       const defIdOf = (itemId: string | null | undefined): string | null => {

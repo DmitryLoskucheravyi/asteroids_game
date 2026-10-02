@@ -1,8 +1,10 @@
 import type { HydratedDocument } from 'mongoose';
 import type { UserDoc } from './models/User.js';
-import { applyXp } from './content/economy.js';
+import { applyXp, pilotLevelReward } from './content/economy.js';
 import { currentQuestSlots, findQuestDef, type QuestKind } from './content/quests.js';
-import { SEASON_ID } from './content/pass.js';
+import { currentSeason } from './content/pass.js';
+import { divisionIndex, seasonReward } from './content/ranks.js';
+import { duplicateCrystals } from './content/compensation.js';
 import type { CrateType } from './content/crates.js';
 
 type Doc = HydratedDocument<UserDoc>;
@@ -58,9 +60,8 @@ export function grantReward(user: Doc, reward: Reward, source: string): RewardRe
   user.coins += coins;
   user.crystals += crystals;
   const before = user.level;
-  const { level, xp } = applyXp({ xp: user.xp, level: user.level }, xpAmount);
-  user.level = level;
-  user.xp = xp;
+  addXp(user, xpAmount);
+  const level = user.level;
   let crateAwarded: CrateType | null = null;
   if (reward.crate) {
     user.crates.push({ crateType: reward.crate, source, acquiredAt: new Date(), openedAt: null });
@@ -71,8 +72,9 @@ export function grantReward(user: Doc, reward: Reward, source: string): RewardRe
 
 /** Якщо сезон у профілі застарів — скидає очки/клейми/преміум на новий сезон. */
 export function ensureSeason(user: Doc): void {
-  if (user.passSeasonId === SEASON_ID) return;
-  user.passSeasonId = SEASON_ID;
+  const { id } = currentSeason();
+  if (user.passSeasonId === id) return;
+  user.passSeasonId = id;
   user.passBpPoints = 0;
   user.passPremium = false;
   user.passClaimedFree.splice(0, user.passClaimedFree.length);
@@ -82,4 +84,45 @@ export function ensureSeason(user: Doc): void {
 export function addBp(user: Doc, amount: number): void {
   ensureSeason(user);
   user.passBpPoints += Math.max(0, Math.floor(amount));
+}
+
+/**
+ * Новий сезон рейтингу: нагорода за підрівень, досягнутий у минулому сезоні (ящик за рангом + 💎 = 5 × номер підрівня),
+ * і мʼякий скид рейтингу ×0.8, щоб усі не обвалились на дно.
+ */
+export function ensureRankSeason(user: Doc): void {
+  const { id } = currentSeason();
+  if (user.rankSeasonId === id) return;
+  const played = !!user.rankSeasonId && (user.rankedMatches ?? 0) > 0;
+  if (played) {
+    const reward = seasonReward(user.rankPoints ?? 0);
+    grantReward(user, { crate: reward.crate, crystals: reward.crystals }, 'rankSeason');
+    user.rankLastSeason = { seasonId: user.rankSeasonId!, points: user.rankPoints ?? 0, division: divisionIndex(user.rankPoints ?? 0), crate: reward.crate, crystals: reward.crystals };
+    user.rankPoints = Math.round((user.rankPoints ?? 0) * 0.8);
+  }
+  user.rankSeasonId = id;
+}
+
+/** Перебалансування v2 урізало бонуси предметів — власникам одноразово повертаємо 💎 за кожен предмет. */
+export function applyBalanceCompensation(user: Doc): void {
+  if (user.balanceV2Comp) return;
+  user.balanceV2Comp = true;
+  const unique = [...new Set(user.items.map((i) => i.defId))];
+  const crystals = unique.reduce((sum, id) => sum + duplicateCrystals('item', id), 0);
+  if (crystals > 0) user.crystals += crystals;
+}
+
+/** Додає досвід пілота і видає нагороди за кожен здобутий рівень (монети, кристали, ящики). */
+export function addXp(user: Doc, amount: number): number {
+  const before = user.level;
+  const { level, xp } = applyXp({ xp: user.xp, level: user.level }, amount);
+  user.level = level;
+  user.xp = xp;
+  for (let l = before + 1; l <= level; l++) {
+    const r = pilotLevelReward(l);
+    user.coins += r.coins;
+    user.crystals += r.crystals;
+    if (r.crate) user.crates.push({ crateType: r.crate, source: 'pilotLevel', acquiredAt: new Date(), openedAt: null });
+  }
+  return level - before;
 }

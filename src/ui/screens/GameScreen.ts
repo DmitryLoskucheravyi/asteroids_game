@@ -387,7 +387,7 @@ export class GameScreen extends Screen {
     const toMenu = (): void => this.app.show(new MainMenuScreen(this.app));
 
     if (r.mode === 'survival') {
-      const { profile, reward } = await Server.survival(Math.floor(r.time), r.crystals, r.prisms);
+      const { profile, reward } = await Server.survival(Math.floor(r.time), r.crystals, r.prisms, Math.floor(r.activeTime));
       Save.applyProfile(profile);
       this.levelUpToast(reward);
       const place = reward.place;

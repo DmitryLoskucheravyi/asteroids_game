@@ -5,10 +5,10 @@ import { BINDABLE_ACTIONS, DEFAULT_KEYBINDS, displayKey, primaryKeyFor, type Bin
 import { formatTime } from '../../core/math';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
-import { xpToNext } from '../../game/progression';
+import { MAX_PILOT_LEVEL, pilotLevelReward, xpToNext } from '../../game/progression';
 import { LEVELS, MAX_LEVEL } from '../../game/levels';
 import { toggleFullscreen } from '../../app/App';
-import { Icons, button, h, icon } from '../dom';
+import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
 import { AuthScreen } from './AuthScreen';
@@ -165,6 +165,27 @@ export class ProfileScreen extends Screen {
     );
   }
 
+  /** Найближчі нагороди за рівні пілота. */
+  private levelRewards(): HTMLElement | null {
+    const from = Save.data.level + 1;
+    if (from > MAX_PILOT_LEVEL) return null;
+    const rows = [];
+    for (let l = from; l <= Math.min(MAX_PILOT_LEVEL, from + 4); l++) {
+      const r = pilotLevelReward(l);
+      rows.push(
+        h(
+          'div',
+          { class: `lvl-reward${r.crate ? ' big' : ''}` },
+          h('span', { class: 'level-badge small' }, String(l)),
+          coinBadge(r.coins, 'coin-badge small'),
+          r.crystals ? crystalBadge(r.crystals, 'coin-badge small crystal-badge') : null,
+          r.crate ? h('span', { class: `lvl-crate rarity-${r.crate}` }, icon(Icons.gift, 'ico'), t(`crate.${r.crate}` as TKey)) : null,
+        ),
+      );
+    }
+    return h('div', { class: 'lvl-rewards' }, h('small', { class: 'muted' }, t('profile.levelRewards', { n: MAX_PILOT_LEVEL })), ...rows);
+  }
+
   protected build(): HTMLElement {
     const xpNeed = xpToNext(Save.data.level);
     const xpPct = Math.min(100, Math.round((Save.data.xp / xpNeed) * 100));
@@ -174,7 +195,8 @@ export class ProfileScreen extends Screen {
       { class: 'card profile-head' },
       h('div', { class: 'profile-id' }, h('span', { class: 'pilot-nick big' }, Save.data.nickname), h('span', { class: 'level-badge' }, t('menu.level', { n: Save.data.level }))),
       h('div', { class: 'xp-bar' }, h('i', { style: `width:${xpPct}%` })),
-      h('small', { class: 'xp-label' }, `${Save.data.xp} / ${xpNeed} XP`),
+      h('small', { class: 'xp-label' }, Save.data.level >= MAX_PILOT_LEVEL ? t('profile.maxLevel') : `${Save.data.xp} / ${xpNeed} XP`),
+      this.levelRewards(),
     );
 
     return h(

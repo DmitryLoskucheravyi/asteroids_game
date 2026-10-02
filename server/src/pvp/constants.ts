@@ -46,7 +46,12 @@ export function rollPlaceCrate(place: number): CrateType | null {
 }
 
 /** Нагорода за місце в матчі: монети + XP сезонного пропуску. */
-export function matchReward(place: number, kills: number): { coins: number; bpXp: number } {
-  const placeBonus = [800, 550, 400, 300, 230, 180, 140, 110, 90, 70][place - 1] ?? 60;
-  return { coins: placeBonus + kills * 50, bpXp: 50 + kills * 12 + Math.max(0, 11 - place) * 12 };
+const PLACE_COINS = [640, 440, 320, 240, 200, 160, 120, 100, 80, 60];
+/** Рейтинговий матч — окрема таблиця цілих чисел (≈ ×1.25), без дробового округлення. */
+const PLACE_COINS_RANKED = [800, 550, 400, 300, 250, 200, 150, 125, 100, 75];
+
+export function matchReward(place: number, kills: number, ranked = false): { coins: number; bpXp: number } {
+  const table = ranked ? PLACE_COINS_RANKED : PLACE_COINS;
+  const placeBonus = table[place - 1] ?? table[table.length - 1];
+  return { coins: placeBonus + kills * (ranked ? 25 : 20), bpXp: 50 + kills * 12 + Math.max(0, 11 - place) * 12 };
 }

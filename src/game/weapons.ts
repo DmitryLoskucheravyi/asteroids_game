@@ -45,7 +45,7 @@ export const WEAPON_DEFS: readonly WeaponDef[] = [
     spread: 0.035,
     price: 0,
   },
-  { id: 'rocket_launcher', kind: 'rocket', nameKey: 'weapon.rocketLauncher', descKey: 'weaponDesc.rocketLauncher', fireRate: 1.6, projectileSpeed: 780, damage: 42, splashRadius: 125, ammo: 8, reloadTime: 2.6, price: 450 },
+  { id: 'rocket_launcher', kind: 'rocket', nameKey: 'weapon.rocketLauncher', descKey: 'weaponDesc.rocketLauncher', fireRate: 1.4, projectileSpeed: 780, damage: 34, splashRadius: 125, ammo: 8, reloadTime: 2.6, price: 450 },
   {
     id: 'laser',
     kind: 'laser',
@@ -53,13 +53,13 @@ export const WEAPON_DEFS: readonly WeaponDef[] = [
     descKey: 'weaponDesc.laser',
     fireRate: 12,
     projectileSpeed: 0,
-    damage: 4.5,
+    damage: 4,
     range: 760,
     ammo: 'infinite',
     burst: { shots: 48, cooldown: 2.4 },
     price: 1200,
   },
-  { id: 'homing_salvo', kind: 'missile', nameKey: 'weapon.homingSalvo', descKey: 'weaponDesc.homingSalvo', fireRate: 1.5, projectileSpeed: 520, damage: 7, salvo: 3, ammo: 4, reloadTime: 3.8, price: 1800 },
+  { id: 'homing_salvo', kind: 'missile', nameKey: 'weapon.homingSalvo', descKey: 'weaponDesc.homingSalvo', fireRate: 1.5, projectileSpeed: 520, damage: 11, salvo: 3, ammo: 4, reloadTime: 3.2, price: 1800 },
 ];
 
 export const getWeaponDef = (id: string | null | undefined): WeaponDef | undefined => WEAPON_DEFS.find((w) => w.id === id);

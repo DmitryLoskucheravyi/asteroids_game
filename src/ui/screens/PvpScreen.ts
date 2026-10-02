@@ -278,7 +278,7 @@ export class PvpScreen extends Screen {
     const gun = g.gun;
     this.weaponBar.style.width = `${Math.round(gun.fill * 100)}%`;
     this.slots.weapon.el.classList.toggle('reloading', gun.cooldown > 0);
-    this.set(this.slots.weapon.count, gun.cooldown > 0 ? gun.cooldown.toFixed(1) : g.overdriveLeft > 0 ? '×2' : String(Math.floor(gun.rounds)));
+    this.set(this.slots.weapon.count, gun.cooldown > 0 ? gun.cooldown.toFixed(1) : g.overdriveLeft > 0 ? '+70%' : String(Math.floor(gun.rounds)));
     this.slots.weapon.el.classList.toggle('active', g.overdriveLeft > 0);
 
     const bs = this.slots.boost;

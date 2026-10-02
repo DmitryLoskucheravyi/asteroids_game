@@ -44,6 +44,9 @@ export interface Entrant {
   rankPoints: number;
 }
 
+/** Гравець не стріляв і майже не рухався весь матч — ферма/AFK. */
+const isIdle = (p: Participant): boolean => !p.isBot && p.shots === 0 && p.travelled < 400;
+
 function randPos(): { x: number; y: number } {
   return { x: 200 + Math.random() * (WORLD_W - 400), y: 200 + Math.random() * (WORLD_H - 400) };
 }
@@ -93,6 +96,8 @@ function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'ni
     lootCoins: 0,
     lootCrystals: 0,
     rankPoints: 0,
+    shots: 0,
+    travelled: 0,
   };
 }
 
@@ -291,8 +296,11 @@ export class Room {
     const p = this.participants.get(socketId);
     if (!p || !p.alive || this.state !== 'active') return;
     if (typeof pos?.x !== 'number' || typeof pos?.y !== 'number' || !Number.isFinite(angle)) return;
-    p.pos.x = Math.max(0, Math.min(WORLD_W, pos.x));
-    p.pos.y = Math.max(0, Math.min(WORLD_H, pos.y));
+    const nx = Math.max(0, Math.min(WORLD_W, pos.x));
+    const ny = Math.max(0, Math.min(WORLD_H, pos.y));
+    p.travelled += Math.min(200, Math.hypot(nx - p.pos.x, ny - p.pos.y));
+    p.pos.x = nx;
+    p.pos.y = ny;
     p.angle = angle;
     p.firing = !!firing;
   }
@@ -304,6 +312,7 @@ export class Room {
     if (![data?.x, data?.y, data?.angle].every((n) => typeof n === 'number' && Number.isFinite(n))) return;
     const kind = data.kind === 'rocket' || data.kind === 'missile' || data.kind === 'laser' ? data.kind : 'bullet';
     p.lastFiredAt = Date.now();
+    p.shots++;
     const def = getWeaponDef(p.weaponId);
     this.relay(socketId, 'match:shot', { ownerId: p.id, x: data.x, y: data.y, angle: data.angle, kind, speed: kind === 'missile' ? 560 : def?.projectileSpeed ?? 900 });
   }
@@ -387,6 +396,8 @@ export class Room {
     if (!target.alive || now < target.phaseUntil) return;
     // під час пасток кулі й ракети збиваються (з невеликим допуском на затримку мережі)
     if (now < target.flareUntil - 80) return;
+    // одне влучання не знімає більше половини максимального HP — ваншот неможливий
+    damage = Math.min(damage, target.maxHp * 0.5);
     target.hp = Math.max(0, target.hp - damage);
     target.botLastHitAt = now;
     const died = target.hp <= 0;
@@ -552,19 +563,19 @@ export class Room {
     // ящик розігрується один раз на гравця — і для нарахування, і для екрана результатів
     const crates = new Map(ranked.map((p) => [p.id, rollPlaceCrate(p.place!)]));
     const rewardOf = (p: Participant) => {
-      const base = matchReward(p.place!, p.kills);
+      const base = matchReward(p.place!, p.kills, this.mode === 'ranked');
+      const idle = isIdle(p);
       const crate = crates.get(p.id) ?? null;
       const won = p.place === 1;
-      // рейтинговий матч дає на чверть більше монет
-      const mul = this.mode === 'ranked' ? 1.25 : 1;
       // досвід пілота: за місце й фраги
       const xp = 30 + p.kills * 8 + Math.max(0, ROOM_SIZE + 1 - p.place!) * 6;
-      return { coins: Math.round(base.coins * mul) + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, xp, crate };
+      return { coins: (idle ? Math.round(base.coins * 0.5) : base.coins) + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, xp, crate };
     };
 
     const rankOf = (p: Participant) => {
       if (this.mode !== 'ranked' || p.isBot) return null;
-      const delta = rankDelta(p.place!, p.kills, p.rankPoints);
+      // бездіяльний гравець отримує RP як за останнє місце
+      const delta = rankDelta(isIdle(p) ? ROOM_SIZE : p.place!, p.kills, p.rankPoints);
       return { before: p.rankPoints, after: Math.max(0, p.rankPoints + delta), delta };
     };
 

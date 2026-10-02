@@ -89,6 +89,11 @@ const UserSchema = new Schema({
   rankBest: { type: Number, default: 0 },
   rankedMatches: { type: Number, default: 0 },
   rankedWins: { type: Number, default: 0 },
+  rankSeasonId: { type: String, default: '' },
+  /** Підсумок минулого сезону рейтингу (для показу нагороди) */
+  rankLastSeason: { type: Schema.Types.Mixed, default: null },
+  /** Одноразова компенсація за перебалансування предметів (v2) */
+  balanceV2Comp: { type: Boolean, default: false },
 
   keybinds: { type: Schema.Types.Mixed, default: {} },
 
