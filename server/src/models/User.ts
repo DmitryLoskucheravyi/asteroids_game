@@ -84,6 +84,12 @@ const UserSchema = new Schema({
   loadouts: { type: [LoadoutSchema], default: [] },
   ownedWeapons: { type: [String], default: ['machine_gun'] },
 
+  /** Рейтинговий режим */
+  rankPoints: { type: Number, default: 0 },
+  rankBest: { type: Number, default: 0 },
+  rankedMatches: { type: Number, default: 0 },
+  rankedWins: { type: Number, default: 0 },
+
   keybinds: { type: Schema.Types.Mixed, default: {} },
 
   createdAt: { type: Date, default: () => new Date() },

@@ -1,7 +1,7 @@
 import { Sfx } from '../../core/audio';
 import { t, type TKey } from '../../core/i18n';
 import { formatTime } from '../../core/math';
-import { Save } from '../../core/storage';
+import { Save, type PlayMode } from '../../core/storage';
 import { dailyState } from '../../game/economy';
 import { getItemDef, loadoutDamageBonus } from '../../game/items';
 import { itemSvg, weaponSvg } from '../../game/ItemArt';
@@ -9,12 +9,14 @@ import { MAX_LEVEL } from '../../game/levels';
 import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
 import { getPlane, MAX_LEVEL_IN_TIER, PLANES, planeCombat } from '../../game/planes';
 import { xpToNext } from '../../game/progression';
+import { rankEmblem, rankInfo } from '../../game/ranks';
 import { getWeaponDef, DEFAULT_WEAPON_ID } from '../../game/weapons';
 import { toggleFullscreen } from '../../app/App';
 import { APP_VERSION } from '../../core/version';
 import { openDailyModal } from '../DailyModal';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { Screen } from '../Screen';
+import { Modal } from '../Modal';
 import { BattlePassScreen } from './BattlePassScreen';
 import { CratesScreen } from './CratesScreen';
 import { GameScreen } from './GameScreen';
@@ -29,6 +31,14 @@ import { QuestsScreen } from './QuestsScreen';
 
 /** Щоденну нагороду пропонуємо автоматично лише раз за сесію. */
 let dailyOffered = false;
+
+/** Режими, які запускає кнопка "Грати". */
+const MODES: Record<PlayMode, { name: TKey; desc: TKey; icon: string }> = {
+  campaign: { name: 'menu.campaign', desc: 'mode.campaignDesc', icon: Icons.star },
+  survival: { name: 'menu.survival', desc: 'mode.survivalDesc', icon: Icons.clock },
+  casual: { name: 'online.casual', desc: 'mode.casualDesc', icon: Icons.homing },
+  ranked: { name: 'online.ranked', desc: 'mode.rankedDesc', icon: Icons.trophy },
+};
 
 /**
  * Головне меню — ігрове лобі на весь екран:
@@ -71,6 +81,10 @@ export class MainMenuScreen extends Screen {
         'span',
         { class: 'pilot-inner' },
         h('span', { class: 'pilot-level' }, String(Save.data.level)),
+        (() => {
+          const rk = rankInfo(Save.data.ranked.points);
+          return h('span', { class: 'pilot-rank', title: `${t(rk.nameKey)} ${rk.roman}`, html: rankEmblem(rk.id, rk.roman) });
+        })(),
         h('span', { class: 'pilot-text' }, h('b', {}, Save.data.nickname || '—'), h('span', { class: 'pilot-xp' }, h('i', { style: `width:${pct}%` })), h('small', {}, `${Save.data.xp} / ${need} XP`)),
       ),
       () => this.app.show(new ProfileScreen(this.app)),
@@ -109,6 +123,42 @@ export class MainMenuScreen extends Screen {
     );
   }
 
+  private modeIcon(mode: PlayMode): HTMLElement {
+    if (mode === 'ranked') {
+      const rk = rankInfo(Save.data.ranked.points);
+      return h('span', { class: 'mode-ico rank', html: rankEmblem(rk.id, rk.roman) });
+    }
+    return icon(MODES[mode].icon, `ico mode-ico ${mode}`);
+  }
+
+  private launch(mode: PlayMode): void {
+    if (mode === 'campaign') this.app.show(new LevelSelectScreen(this.app));
+    else if (mode === 'survival') this.app.show(new GameScreen(this.app, 'survival', 0));
+    else this.app.show(new OnlineScreen(this.app, mode));
+  }
+
+  /** Вибір режиму: картки з описом; вибір запамʼятовується, кнопка "Грати" запускає його. */
+  private pickMode(): void {
+    const current = Save.data.settings.playMode;
+    const choose = (mode: PlayMode) => {
+      Save.data.settings.playMode = mode;
+      Save.save();
+      Sfx.pickup();
+      m.close();
+      this.render();
+      this.el.querySelector<HTMLElement>('.launch-btn.main')?.focus();
+    };
+    const cards = (Object.keys(MODES) as PlayMode[]).map((mode) =>
+      button(
+        h('span', { class: 'mode-card-inner' }, this.modeIcon(mode), h('b', {}, t(MODES[mode].name)), h('small', {}, t(MODES[mode].desc))),
+        () => choose(mode),
+        `mode-card ${mode}${mode === current ? ' on' : ''}`,
+        mode === current ? { 'data-autofocus': true } : {},
+      ),
+    );
+    const m = new Modal({ title: t('menu.chooseMode'), cls: 'mode-modal', body: [h('div', { class: 'mode-grid' }, ...cards)], actions: [], onEscape: () => m.close() }).open();
+  }
+
   protected build(): HTMLElement {
     const go = (s: () => Screen) => () => this.app.show(s());
     const daily = dailyState();
@@ -116,6 +166,7 @@ export class MainMenuScreen extends Screen {
     const questsReady = Save.data.quests.filter((q) => !q.claimed && q.progress >= q.target).length;
     const questsDone = Save.data.quests.filter((q) => q.claimed).length;
     const passReady = Save.data.pass.claimable ?? 0;
+    const mode = MODES[Save.data.settings.playMode] ? Save.data.settings.playMode : 'campaign';
 
     const soundBtn = button(icon(Save.data.settings.volume > 0 ? Icons.sound : Icons.mute), () => {
       const s = Save.data.settings;
@@ -165,9 +216,12 @@ export class MainMenuScreen extends Screen {
         h(
           'div',
           { class: 'launch' },
-          button(h('span', { class: 'launch-inner' }, icon(Icons.clock), h('b', {}, t('menu.survival'))), go(() => new GameScreen(this.app, 'survival', 0)), 'launch-btn'),
-          button(h('span', { class: 'launch-inner' }, icon(Icons.homing), h('b', {}, t('menu.online'))), go(() => new OnlineScreen(this.app)), 'launch-btn pvp'),
-          button(h('span', { class: 'launch-inner' }, icon(Icons.play), h('b', {}, t('menu.play')), h('small', {}, t('menu.campaign'))), go(() => new LevelSelectScreen(this.app)), 'launch-btn main', { 'data-autofocus': true }),
+          button(
+            h('span', { class: 'launch-inner mode-pick' }, this.modeIcon(mode), h('span', { class: 'mode-pick-text' }, h('small', {}, t('menu.mode')), h('b', {}, t(MODES[mode].name)))),
+            () => this.pickMode(),
+            'launch-btn mode-btn',
+          ),
+          button(h('span', { class: 'launch-inner' }, icon(Icons.play), h('b', {}, t('menu.play')), h('small', {}, t(MODES[mode].name))), () => this.launch(mode), 'launch-btn main', { 'data-autofocus': true }),
         ),
       ),
     );

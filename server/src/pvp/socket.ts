@@ -21,7 +21,8 @@ export function attachPvp(server: HttpServer): void {
   });
 
   io.on('connection', (socket) => {
-    socket.on('queue:join', async () => {
+    socket.on('queue:join', async (data?: { mode?: string }) => {
+      const mode = data?.mode === 'ranked' ? 'ranked' : 'casual';
       const user = await User.findById(socket.data.userId as string);
       if (!user) return;
       const progress = user.planeProgress.find((p) => p.planeId === user.selectedPlane);
@@ -41,7 +42,8 @@ export function attachPvp(server: HttpServer): void {
         level: progress?.level ?? 1,
         activeDefId: defIdOf(loadout?.active),
         passiveDefId: defIdOf(loadout?.passive),
-      });
+        rankPoints: user.rankPoints ?? 0,
+      }, mode);
     });
 
     socket.on('queue:leave', () => {

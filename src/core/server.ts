@@ -72,6 +72,14 @@ export interface ServerProfile {
   items: { id: string; defId: string; rarity: ItemRarity }[];
   loadouts: { planeId: PlaneId; active: string | null; passive: string | null; weapon: string | null }[];
   ownedWeapons: string[];
+  ranked?: RankedView;
+}
+
+export interface RankedView {
+  points: number;
+  best: number;
+  matches: number;
+  wins: number;
 }
 
 export interface RewardResult {

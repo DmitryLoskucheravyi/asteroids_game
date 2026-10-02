@@ -25,7 +25,8 @@ import {
   CRYSTAL_CHANCE,
 } from './constants.js';
 import type { CrateType } from '../content/crates.js';
-import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind, Pickup } from './types.js';
+import { botStrength, rankDelta } from '../content/ranks.js';
+import type { MatchMode, Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind, Pickup } from './types.js';
 
 const BOT_NAMES = ['Вихор', 'Корсар', 'Немезида', 'Беркут', 'Скорпіон', 'Фантом-7', 'Ренегат', 'Сокира'];
 let botSeq = 0;
@@ -40,6 +41,7 @@ export interface Entrant {
   level: number;
   activeDefId: string | null;
   passiveDefId: string | null;
+  rankPoints: number;
 }
 
 function randPos(): { x: number; y: number } {
@@ -90,6 +92,7 @@ function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'ni
     hitsInWindow: 0,
     lootCoins: 0,
     lootCrystals: 0,
+    rankPoints: 0,
   };
 }
 
@@ -112,8 +115,11 @@ export class Room {
     id: string,
     private readonly io: IOServer,
     entrants: Entrant[],
+    readonly mode: MatchMode = 'casual',
   ) {
     this.id = id;
+    const avgRp = entrants.reduce((s, e) => s + e.rankPoints, 0) / Math.max(1, entrants.length);
+    const botLevel = mode === 'ranked' ? botStrength(avgRp) : null;
     this.obstacles = makeObstacles();
 
     for (const e of entrants) {
@@ -134,6 +140,7 @@ export class Room {
         passive?.slot === 'passive' ? passive : null,
         this.spawnPos(),
       );
+      p.rankPoints = e.rankPoints;
       this.participants.set(p.id, p);
       this.sockets.set(e.socket.id, e.socket);
       e.socket.join(id);
@@ -148,8 +155,9 @@ export class Room {
           isBot: true,
           nickname: BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)],
           planeId: PLANE_IDS[Math.floor(Math.random() * PLANE_IDS.length)],
-          tier: 1 + Math.floor(Math.random() * 3),
-          level: 1 + Math.floor(Math.random() * 4),
+          // у рейтинговому боти сильніші відповідно до рангу гравців
+          tier: botLevel ? botLevel.tier : 1 + Math.floor(Math.random() * 3),
+          level: botLevel ? botLevel.level : 1 + Math.floor(Math.random() * 4),
           weaponId: (() => {
             const r = Math.random();
             return r < 0.25 ? 'rocket_launcher' : r < 0.45 ? 'laser' : 'machine_gun';
@@ -172,6 +180,7 @@ export class Room {
       obstacles: this.obstacles,
       participants: this.publicList(Date.now()),
       countdownMs: COUNTDOWN_MS,
+      mode,
       timeLimitMs: MATCH_TIME_LIMIT_MS,
       pickups: [...this.pickups.values()],
     });
@@ -543,10 +552,18 @@ export class Room {
       const base = matchReward(p.place!, p.kills);
       const crate = crates.get(p.id) ?? null;
       const won = p.place === 1;
-      return { coins: base.coins + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, crate };
+      // рейтинговий матч дає на чверть більше монет
+      const mul = this.mode === 'ranked' ? 1.25 : 1;
+      return { coins: Math.round(base.coins * mul) + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, crate };
     };
 
-    void this.grantRewards(ranked, rewardOf);
+    const rankOf = (p: Participant) => {
+      if (this.mode !== 'ranked' || p.isBot) return null;
+      const delta = rankDelta(p.place!, p.kills, p.rankPoints);
+      return { before: p.rankPoints, after: Math.max(0, p.rankPoints + delta), delta };
+    };
+
+    void this.grantRewards(ranked, rewardOf, rankOf);
 
     const results: MatchResultEntry[] = ranked.map((p) => {
       const r = rewardOf(p);
@@ -559,6 +576,7 @@ export class Room {
         isBot: p.isBot,
         reward: { coins: r.coins, crystals: r.crystals, crate: r.crate },
         jackpot: p.place === 1 ? jackpot : { coins: 0, crystals: 0 },
+        rank: rankOf(p),
       };
     });
     // невелика пауза, щоб клієнт встиг показати останній вибух
@@ -569,7 +587,7 @@ export class Room {
     }, 1200);
   }
 
-  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; crate: CrateType | null }): Promise<void> {
+  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; crate: CrateType | null }, rankOf: (p: Participant) => { after: number } | null): Promise<void> {
     for (const p of ranked) {
       if (p.isBot || !p.userId) continue;
       try {
@@ -583,6 +601,13 @@ export class Room {
         incrementQuestProgress(user, 'pvpKills', p.kills);
         if (p.place! <= 3) incrementQuestProgress(user, 'pvpTop3', 1);
         if (p.place === 1) incrementQuestProgress(user, 'pvpWins', 1);
+        const rank = rankOf(p);
+        if (rank) {
+          user.rankPoints = rank.after;
+          user.rankBest = Math.max(user.rankBest ?? 0, rank.after);
+          user.rankedMatches = (user.rankedMatches ?? 0) + 1;
+          if (p.place === 1) user.rankedWins = (user.rankedWins ?? 0) + 1;
+        }
         await user.save();
       } catch {
         // гравець лишиться без нагороди цього разу — не блокуємо завершення матчу
@@ -590,8 +615,23 @@ export class Room {
     }
   }
 
+  /** Вихід із рейтингового матчу посеред бою — зараховується як останнє місце (інакше поразку можна було б "скинути"). */
+  private async penalizeLeaver(p: Participant): Promise<void> {
+    if (!p.userId) return;
+    try {
+      const user = await User.findById(p.userId);
+      if (!user) return;
+      user.rankPoints = Math.max(0, (user.rankPoints ?? 0) + rankDelta(ROOM_SIZE, p.kills, p.rankPoints));
+      user.rankedMatches = (user.rankedMatches ?? 0) + 1;
+      await user.save();
+    } catch {
+      // не блокуємо вихід
+    }
+  }
+
   removeSocket(socketId: string): void {
     const p = this.participants.get(socketId);
+    if (p && this.mode === 'ranked' && !this.ended && p.alive && !p.isBot) void this.penalizeLeaver(p);
     if (p) {
       p.alive = false;
       p.firing = false;

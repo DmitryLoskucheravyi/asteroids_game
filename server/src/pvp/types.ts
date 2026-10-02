@@ -11,6 +11,8 @@ export interface Obstacle {
   r: number;
 }
 
+export type MatchMode = 'casual' | 'ranked';
+
 export type MatchState = 'searching' | 'countdown' | 'active' | 'ended';
 
 export type SkillKind = 'flare' | 'jump' | 'emp' | 'phase' | 'nanoRepair' | 'overdrive' | 'swarm';
@@ -50,6 +52,8 @@ export interface Participant {
   /** Зібране на полі (переживе матч лише у переможця) */
   lootCoins: number;
   lootCrystals: number;
+  /** Рейтинг на початку матчу (лише для гравців у рейтинговому режимі) */
+  rankPoints: number;
   /** Боти: поточний behavior-стан */
   botState?: 'patrol' | 'chase' | 'attack' | 'flee';
   botDir?: Vec;
@@ -111,6 +115,8 @@ export interface MatchResultEntry {
   /** Що гравець отримав за матч (місце + фраги + джекпот переможця) */
   reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null };
   jackpot: { coins: number; crystals: number };
+  /** Рейтинговий матч: рейтинг до і після */
+  rank: { before: number; after: number; delta: number } | null;
   id: string;
   userId: string | null;
   nickname: string;

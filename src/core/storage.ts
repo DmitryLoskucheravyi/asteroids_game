@@ -1,7 +1,7 @@
 import { defaultProgress, type PlaneId, type PlaneProgress } from '../game/planes';
 import type { ItemRarity } from '../game/items';
 import type { Lang } from './i18n';
-import type { CrateView, PassView, QuestView, ServerProfile } from './server';
+import type { CrateView, PassView, QuestView, RankedView, ServerProfile } from './server';
 
 export interface OwnedItem {
   id: string;
@@ -50,12 +50,17 @@ export interface SaveData {
   items: OwnedItem[];
   loadouts: Loadout[];
   ownedWeapons: string[];
+  ranked: RankedView;
   settings: {
     lang: Lang;
     volume: number;
     shake: boolean;
+    /** Режим, який запускає кнопка "Грати" в лобі */
+    playMode: PlayMode;
   };
 }
+
+export type PlayMode = 'campaign' | 'survival' | 'casual' | 'ranked';
 
 const KEY = 'asteroids.save.v3';
 /** Ключ попередньої, доакаунтної версії — звідси одноразово мігруємо прогрес при реєстрації. */
@@ -82,10 +87,12 @@ const defaults = (): SaveData => ({
   items: [],
   loadouts: [],
   ownedWeapons: ['machine_gun'],
+  ranked: { points: 0, best: 0, matches: 0, wins: 0 },
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
     shake: true,
+    playMode: 'campaign',
   },
 });
 
@@ -117,6 +124,7 @@ class SaveStore {
         items: Array.isArray(parsed.items) ? parsed.items : [],
         loadouts: Array.isArray(parsed.loadouts) ? parsed.loadouts : [],
         ownedWeapons: Array.isArray(parsed.ownedWeapons) && parsed.ownedWeapons.length ? parsed.ownedWeapons : ['machine_gun'],
+        ranked: { ...base.ranked, ...(parsed.ranked ?? {}) },
       };
     } catch {
       return base;
@@ -154,6 +162,7 @@ class SaveStore {
       items: p.items,
       loadouts: p.loadouts,
       ownedWeapons: p.ownedWeapons,
+      ranked: p.ranked ?? { points: 0, best: 0, matches: 0, wins: 0 },
     };
     this.save();
   }

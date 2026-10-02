@@ -2,6 +2,7 @@ import type { Socket } from 'socket.io-client';
 import type { App } from '../../app/App';
 import { t, type TKey } from '../../core/i18n';
 import { crate3d } from '../../game/CrateArt';
+import { rankEmblem, rankInfo } from '../../game/ranks';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
 import type { MatchResultEntry } from '../../net/pvpProtocol';
@@ -48,12 +49,33 @@ export class MatchResultScreen extends Screen {
       h('div', { class: 'match-list' }, ...rows),
       jackpot,
       myReward,
+      me?.rank ? this.rankBlock(me.rank) : null,
       h(
         'div',
         { class: 'mr-actions' },
-        button(t('matchresult.again'), () => this.app.show(new OnlineScreen(this.app)), 'btn primary', { 'data-autofocus': true }),
+        button(t('matchresult.again'), () => this.app.show(new OnlineScreen(this.app, this.results.some((r) => r.rank) ? 'ranked' : 'casual')), 'btn primary', { 'data-autofocus': true }),
         button(t('matchresult.toMenu'), () => this.app.show(new MainMenuScreen(this.app)), 'btn'),
       ),
+    );
+  }
+
+  private rankBlock(r: { before: number; after: number; delta: number }): HTMLElement {
+    const before = rankInfo(r.before);
+    const after = rankInfo(r.after);
+    const up = after.index > before.index;
+    const down = after.index < before.index;
+    return h(
+      'div',
+      { class: `mr-rank rank-${after.id}${up ? ' up' : ''}` },
+      h('div', { class: 'rank-emblem', html: rankEmblem(after.id, after.roman) }),
+      h(
+        'div',
+        { class: 'mr-rank-text' },
+        h('b', {}, `${t(after.nameKey)} ${after.roman}`),
+        h('span', { class: r.delta >= 0 ? 'rp-up' : 'rp-down' }, `${r.delta >= 0 ? '+' : ''}${r.delta} RP`),
+        up ? h('small', { class: 'rank-change up' }, t('rank.promoted')) : down ? h('small', { class: 'rank-change down' }, t('rank.demoted')) : null,
+      ),
+      h('div', { class: 'rank-progress' }, h('i', { style: `width:${Math.round(after.progress * 100)}%` })),
     );
   }
 

@@ -55,5 +55,6 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       .map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: getItemDef(it.defId)!.rarity })),
     loadouts: user.loadouts,
     ownedWeapons: user.ownedWeapons,
+    ranked: { points: user.rankPoints ?? 0, best: user.rankBest ?? 0, matches: user.rankedMatches ?? 0, wins: user.rankedWins ?? 0 },
   };
 }

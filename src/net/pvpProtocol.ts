@@ -57,6 +57,7 @@ export interface MatchInit {
   participants: PublicParticipant[];
   countdownMs: number;
   timeLimitMs: number;
+  mode?: 'casual' | 'ranked';
   pickups: PickupView[];
 }
 
@@ -90,6 +91,7 @@ export interface HitEvent {
 export interface MatchResultEntry {
   reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null };
   jackpot: { coins: number; crystals: number };
+  rank: { before: number; after: number; delta: number } | null;
   id: string;
   userId: string | null;
   nickname: string;
