@@ -33,6 +33,9 @@ export const MATCH_TIME_LIMIT_MS = Number(process.env.MATCH_TIME_LIMIT_MS) || 4 
 /** Мітка на радарі видима стільки мс після останнього пострілу. */
 export const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
 export const HIT_RADIUS = 20;
+/** Сканер: раз на 90 с, позиції інших гравців з похибкою ±5% розміру карти */
+export const SCAN_COOLDOWN_MS = 90_000;
+export const SCAN_ERROR = 0.05;
 /** Компенсація лагу: максимум, на скільки сервер "відмотує" цілі назад, і скільки історії тримає */
 export const MAX_REWIND_MS = 300;
 export const HISTORY_MS = 1000;

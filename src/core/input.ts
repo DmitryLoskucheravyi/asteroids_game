@@ -1,6 +1,6 @@
 import { Save } from './storage';
 
-export type Action = 'freeze' | 'boost' | 'jump' | 'pause' | 'item' | 'flare';
+export type Action = 'freeze' | 'boost' | 'jump' | 'pause' | 'item' | 'flare' | 'scan';
 /** 'fire' — утримувана дія (стрільба), не дискретна emit()-подія, тому окремо від Action. */
 export type BindAction = 'up' | 'down' | 'left' | 'right' | 'fire' | Action;
 
@@ -16,10 +16,16 @@ export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
   jump: ['Space', 'ShiftLeft', 'ShiftRight'],
   item: ['Digit4', 'Numpad4', 'KeyR'],
   flare: ['Digit3', 'Numpad3', 'KeyC'],
+  scan: ['KeyF', 'Digit5', 'Numpad5'],
   pause: ['Escape', 'KeyP'],
 };
 
-export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'fire', 'freeze', 'boost', 'jump', 'flare', 'item', 'pause'];
+export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'fire', 'freeze', 'boost', 'jump', 'flare', 'item', 'scan', 'pause'];
+
+/** Дії руху — у схемі «миша» вимкнені (літак летить за курсором). */
+export const MOVE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right'];
+
+export const mouseSteering = (): boolean => Save.data.settings.controlScheme === 'mouse';
 
 /** Коди клавіш для дії: кастомний бінд гравця (якщо є) замінює дефолтний набір повністю. */
 function codesFor(action: BindAction): string[] {
@@ -63,6 +69,11 @@ export class InputState {
   touchAxis: { x: number; y: number } | null = null;
   /** Кнопка вогню на сенсорному HUD утримується окремо від клавіатури. */
   touchFiring = false;
+  /** Вказівник миші (CSS-пікселі вікна) і ліва кнопка — для схеми керування «миша». */
+  private pointer: { x: number; y: number } | null = null;
+  private mouseDown = false;
+  /** Перетворення координат вікна в координати видимої області гри (ставить App). */
+  viewMapper: ((x: number, y: number) => { x: number; y: number }) | null = null;
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -74,6 +85,16 @@ export class InputState {
       if (action) this.emit(action);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse') this.pointer = { x: e.clientX, y: e.clientY };
+    });
+    // ЛКМ стріляє лише по полю гри (не по кнопках HUD)
+    window.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button === 0 && (e.target as HTMLElement | null)?.tagName === 'CANVAS') this.mouseDown = true;
+    });
+    window.addEventListener('pointerup', (e) => {
+      if (e.button === 0) this.mouseDown = false;
+    });
     // Баг оригіналу: при втраті фокусу клавіші "залипали"
     window.addEventListener('blur', () => this.clear());
     document.addEventListener('visibilitychange', () => this.clear());
@@ -90,6 +111,7 @@ export class InputState {
     if (codesFor('jump').includes(code)) return 'jump';
     if (codesFor('item').includes(code)) return 'item';
     if (codesFor('flare').includes(code)) return 'flare';
+    if (codesFor('scan').includes(code)) return 'scan';
     if (codesFor('pause').includes(code)) return 'pause';
     return null;
   }
@@ -109,11 +131,19 @@ export class InputState {
 
   /** Чи утримується вогонь зараз (клавіатура або сенсорна кнопка). */
   firing(): boolean {
-    return this.down('fire') || this.touchFiring;
+    return this.down('fire') || this.touchFiring || (mouseSteering() && this.mouseDown);
+  }
+
+  /** Курсор у координатах видимої області гри (0..ширина світу на екрані), або null. */
+  pointerView(): { x: number; y: number } | null {
+    if (!this.pointer || !this.viewMapper) return null;
+    return this.viewMapper(this.pointer.x, this.pointer.y);
   }
 
   axis(): { x: number; y: number } {
     if (this.touchAxis) return this.touchAxis;
+    // схема «миша»: клавіші руху не діють — напрям задає курсор (див. ігри)
+    if (mouseSteering()) return { x: 0, y: 0 };
     let x = 0;
     let y = 0;
     if (this.down('left')) x -= 1;
@@ -132,5 +162,6 @@ export class InputState {
     this.keys.clear();
     this.touchAxis = null;
     this.touchFiring = false;
+    this.mouseDown = false;
   }
 }

@@ -2,9 +2,10 @@ import type { GameLink } from '../net/gameLink';
 import { drawAsteroid } from './AsteroidArt';
 import { Sfx } from '../core/audio';
 import { Vec2, angleDiff, clamp } from '../core/math';
-import type { InputState } from '../core/input';
+import { mouseSteering, type InputState } from '../core/input';
 import { Save } from '../core/storage';
 import { drawGlow } from './fx';
+import { drawCrosshair } from './crosshair';
 import { drawPlane } from './PlaneArt';
 import { PVP_PROGRESS_SCALE, effectivePlaneSpec, getPlane, planeCombat, type PlaneId } from './planes';
 import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from './items';
@@ -188,6 +189,10 @@ export class PvpGame {
       if (pk.kind === 'pile') this.ring(pk.x, pk.y, 70, '255,210,74', 0.5);
     });
     this.on('match:pickup-taken', (e: PickupTaken) => this.onPickupTaken(e));
+    this.on('match:scan', (data: { blips: { x: number; y: number; ally: boolean }[] }) => {
+      this.scanBlips = data.blips;
+      this.scanAge = 0;
+    });
     this.on('match:end', (data: { results: MatchResultEntry[] }) => {
       this.state = 'ended';
       this.results = data.results;
@@ -403,6 +408,25 @@ export class PvpGame {
     this.trail(from, this.player.pos, this.player.spec.flame);
   }
 
+  // ---------- сканер ----------
+
+  /** Перезарядка сканера — однакова для всіх літаків (сервер перевіряє так само) */
+  static readonly SCAN_COOLDOWN = 90;
+  /** Скільки секунд позначки сканера лишаються на радарі */
+  static readonly SCAN_SHOW = 8;
+  scanCooldown = 0;
+  /** Приблизні позиції інших гравців з останнього сканування (±5% карти) */
+  scanBlips: { x: number; y: number; ally: boolean }[] = [];
+  /** Скільки секунд тому було сканування (для анімації радара) */
+  scanAge = Infinity;
+
+  useScan(): void {
+    if (!this.canAct || this.scanCooldown > 0) return;
+    this.scanCooldown = PvpGame.SCAN_COOLDOWN;
+    this.emitSkill('scan');
+    Sfx.powerup();
+  }
+
   useFlare(): void {
     if (!this.canAct || !this.skills.tryFlare()) return;
     this.emitSkill('flare');
@@ -551,6 +575,9 @@ export class PvpGame {
     this.slow = Math.max(0, this.slow - dt);
     this.phase = Math.max(0, this.phase - dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.5);
+    this.scanCooldown = Math.max(0, this.scanCooldown - dt);
+    this.scanAge += dt;
+    if (this.scanAge > PvpGame.SCAN_SHOW) this.scanBlips = [];
     this.shake = Math.max(0, this.shake - dt * 30);
 
     if (this.canAct) {
@@ -572,6 +599,13 @@ export class PvpGame {
   }
 
   /** Літак летить лише вперед: напрям керування задає курс, ніс розвертається дугою. */
+  /** Курсор миші у координатах світу (камера по центру екрана). */
+  private cursorWorld(): { x: number; y: number } | null {
+    const v = this.input.pointerView();
+    if (!v) return null;
+    return { x: v.x - this.width / 2 + this.cameraX, y: v.y - this.height / 2 + this.cameraY };
+  }
+
   private fly(dt: number): void {
     const p = this.player;
     const spec = p.spec;
@@ -580,14 +614,23 @@ export class PvpGame {
     const boost = this.skills.isBoosted ? BOOST_MULTIPLIER : 1;
     const slow = this.slow > 0 ? SLOW_MUL : 1;
 
+    // схема «миша»: курс — на курсор, літак весь час летить уперед
+    const cursor = mouseSteering() ? this.cursorWorld() : null;
     if (spec.feature.noRotate) {
       // тарілка — без інерції і може рухатись у будь-який бік
       p.speedMultiplier = boost * slow;
-      p.update(dt, axis, this.worldW, this.worldH);
+      let move = axis;
+      if (cursor) {
+        const dx = cursor.x - p.pos.x;
+        const dy = cursor.y - p.pos.y;
+        const d = Math.hypot(dx, dy);
+        move = d > 30 ? { x: dx / d, y: dy / d } : { x: 0, y: 0 };
+      }
+      p.update(dt, move, this.worldW, this.worldH);
       if (p.vel.length() > 40) this.aim += angleDiff(this.aim, p.vel.angle()) * Math.min(1, dt * 10);
     } else {
       const turnRate = 2.4 + spec.accel / 2600;
-      let want: number | null = mag > 0.2 ? Math.atan2(axis.y, axis.x) : null;
+      let want: number | null = cursor ? (Math.hypot(cursor.x - p.pos.x, cursor.y - p.pos.y) > 24 ? Math.atan2(cursor.y - p.pos.y, cursor.x - p.pos.x) : null) : mag > 0.2 ? Math.atan2(axis.y, axis.x) : null;
       // біля межі арени літак сам відвертає (інакше впирався б у край і "залипав")
       const margin = 170;
       const ex = p.pos.x < margin ? 1 : p.pos.x > this.worldW - margin ? -1 : 0;
@@ -600,7 +643,7 @@ export class PvpGame {
       }
       if (want !== null) p.angle += clamp(angleDiff(p.angle, want), -turnRate * dt, turnRate * dt);
       const max = spec.maxSpeed * boost * slow;
-      const target = mag > 0.2 ? max : max * 0.55;
+      const target = cursor || mag > 0.2 ? max : max * 0.55;
       const accel = spec.accel * 0.3;
       this.speed += clamp(target - this.speed, -accel * dt, accel * dt);
       p.vel.set(Math.cos(p.angle) * this.speed, Math.sin(p.angle) * this.speed);
@@ -1046,6 +1089,9 @@ export class PvpGame {
       if (this.slow > 0) this.renderSlow(ctx, this.player.pos.x, this.player.pos.y);
       const me = this.self;
       if (me) this.renderNick(ctx, me.nickname, this.player.pos.x, this.player.pos.y - 40, '220,235,255');
+      // приціл — туди, куди полетять кулі
+      const ch = Save.data.settings.crosshair;
+      if (ch.enabled && this.state !== 'ended') drawCrosshair(ctx, this.player.pos.x + Math.cos(this.aim) * ch.distance, this.player.pos.y + Math.sin(this.aim) * ch.distance, this.aim, ch);
     }
 
     for (const pr of this.projectiles) pr.render(ctx, this.clock);

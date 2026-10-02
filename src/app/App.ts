@@ -45,6 +45,11 @@ export class App {
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
+    // курсор вікна → координати видимої області гри (для керування мишею)
+    this.input.viewMapper = (x, y) => {
+      const v = this.viewport;
+      return { x: (x * v.dpr - v.ox) / v.scale, y: (y * v.dpr - v.oy) / v.scale };
+    };
     this.bindGlobalKeys();
     document.getElementById('rotate-hint')!.textContent = t('rotate');
 

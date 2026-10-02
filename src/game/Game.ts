@@ -1,7 +1,7 @@
 import { Assets } from '../core/assets';
 import { Sfx } from '../core/audio';
 import { levelName, t, type TKey } from '../core/i18n';
-import type { InputState } from '../core/input';
+import { mouseSteering, type InputState } from '../core/input';
 import { Vec2, angleDiff, chance, clamp, circlesOverlap, formatTime, pick, rand, randInt } from '../core/math';
 import { Save } from '../core/storage';
 import { ASTEROID_SIZES, Asteroid, BlackHole, BouncingAsteroid, Comet, HomingAsteroid, type AsteroidSize } from './entities/Asteroid';
@@ -441,7 +441,17 @@ export class Game {
 
   private updatePlayer(dt: number): void {
     this.player.speedMultiplier = this.skills.isBoosted ? BOOST_MULTIPLIER : 1;
-    const axis = this.input.axis();
+    let axis = this.input.axis();
+    // схема «миша»: літак летить до курсора (у кампанії світ = видима область)
+    if (mouseSteering()) {
+      const c = this.input.pointerView();
+      if (c) {
+        const dx = c.x - this.player.pos.x;
+        const dy = c.y - this.player.pos.y;
+        const d = Math.hypot(dx, dy);
+        axis = d > 18 ? { x: dx / d, y: dy / d } : { x: 0, y: 0 };
+      }
+    }
     if (axis.x !== 0 || axis.y !== 0) this.lastInputAt = this.elapsed;
     if (this.elapsed - this.lastInputAt <= 5) this.activeTime += dt;
     this.player.update(dt, axis, this.width, this.height);

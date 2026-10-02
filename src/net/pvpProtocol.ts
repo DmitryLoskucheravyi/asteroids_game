@@ -10,7 +10,7 @@ export interface Obstacle {
   r: number;
 }
 
-export type SkillKind = 'flare' | 'jump' | 'emp' | 'phase' | 'nanoRepair' | 'overdrive' | 'swarm';
+export type SkillKind = 'flare' | 'jump' | 'emp' | 'phase' | 'nanoRepair' | 'overdrive' | 'swarm' | 'scan';
 
 export interface PublicParticipant {
   id: string;

@@ -8034,3 +8034,195 @@ input[type='range'] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ===================== налаштування: вкладки й секції ===================== */
+
+.page.settings {
+  max-width: 980px;
+}
+
+.set-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.set-tab {
+  font: inherit;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--muted);
+  padding: 14px 16px;
+  border: 0;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--plate-edge);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  cursor: pointer;
+  outline: none;
+}
+
+.set-tab > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.set-tab:hover,
+.set-tab:focus-visible {
+  background: var(--plate-hi);
+  color: var(--text, #fff);
+}
+
+.set-tab.on {
+  color: #fff;
+  box-shadow:
+    inset 0 0 0 2px var(--burn-2),
+    inset 0 -4px 0 var(--burn-2);
+}
+
+.set-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.set-section {
+  margin: 0;
+}
+
+.set-section h3 {
+  margin: 0 0 4px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+}
+
+.set-section .set-row:last-child {
+  justify-content: space-between;
+}
+
+.set-label small {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.set-row.disabled .set-label,
+.set-row.disabled > :last-child {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.set-note {
+  margin: 6px 0 4px;
+  max-width: 64ch;
+}
+
+.set-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  background: var(--c);
+  cursor: pointer;
+  outline: none;
+}
+
+.swatch:hover,
+.swatch:focus-visible {
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.swatch.on {
+  border-color: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18);
+}
+
+.swatch-custom {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.xhair-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 6px;
+}
+
+.xhair-preview {
+  width: 320px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+@media (max-width: 720px) {
+  .set-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .set-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* ===================== PvP: радар і свій літак у лівому верхньому куті ===================== */
+
+.pvp-tl {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.pvp-tl .radar-box,
+.pvp-tl .hud-tl {
+  position: static;
+}
+
+.pvp-tl .hud-tl.pvp-self {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.radar-label {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.radar-scan-tag {
+  color: #ff9a3a;
+  animation: claim-pulse 1s ease-in-out infinite;
+}
+
+.vol-val {
+  white-space: nowrap;
+  min-width: 52px;
+  text-align: right;
+}

@@ -115,7 +115,7 @@ profileRouter.post('/plane/:planeId/tier-up', async (req: AuthedRequest, res) =>
   res.json({ profile: serializeProfile(user) });
 });
 
-const BINDABLE_ACTIONS = ['up', 'down', 'left', 'right', 'freeze', 'boost', 'jump', 'pause'];
+const BINDABLE_ACTIONS = ['up', 'down', 'left', 'right', 'fire', 'freeze', 'boost', 'jump', 'flare', 'item', 'scan', 'pause'];
 
 profileRouter.post('/keybinds', async (req: AuthedRequest, res) => {
   const { keybinds } = req.body ?? {};

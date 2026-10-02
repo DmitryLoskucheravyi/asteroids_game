@@ -42,9 +42,10 @@ export class PvpScreen extends Screen {
   private lootCoins!: HTMLElement;
   private lootCrystals!: HTMLElement;
   private radarCanvas!: HTMLCanvasElement;
+  private scanTag!: HTMLElement;
   private feed!: HTMLElement;
   private dead!: HTMLElement;
-  private slots!: Record<'weapon' | 'boost' | 'jump' | 'flare' | 'item', Slot>;
+  private slots!: Record<'weapon' | 'boost' | 'jump' | 'flare' | 'item' | 'scan', Slot>;
   private weaponBar!: HTMLElement;
   private leftViaResult = false;
   private loading: HTMLElement | null = null;
@@ -92,6 +93,7 @@ export class PvpScreen extends Screen {
       boost: this.slot('boost', Icons.bolt, 'boost', 'hud.boost'),
       jump: this.slot('jump', Icons.dash, 'jump', 'hud.jump'),
       flare: this.slot('flare', Icons.flare, 'flare', 'hud.flare'),
+      scan: this.slot('scan', Icons.radar, 'scan', 'hud.scan'),
       item: activeItem ? this.slot('item', itemSvg(activeItem.defId), 'item', 'hud.item', `sk-art rarity-frame-${activeItem.rarity}`) : this.slot('item', Icons.lock, 'item', 'hud.item', 'sk-none'),
     };
     this.slots.weapon.el.append(h('span', { class: 'sk-ammo' }, this.weaponBar));
@@ -105,19 +107,24 @@ export class PvpScreen extends Screen {
     return h(
       'div',
       { class: 'game pvp' },
+      // лівий верхній кут: радар, під ним — свій літак і HP
       h(
         'div',
-        { class: 'hud-tl pvp-self' },
-        h('img', { class: 'pvp-avatar', src: planeIconUrl(plane, progress.tier, progress.level), alt: '' }),
-        h('div', { class: 'pvp-self-info' }, h('div', { class: 'pvp-nick' }, Save.data.nickname || t(`plane.${plane}` as TKey)), h('div', { class: 'hp-bar' }, h('div', { class: 'hp-track' }, this.hpFill), this.hpText)),
+        { class: 'pvp-tl' },
+        h('div', { class: 'radar-box' }, h('div', { class: 'radar-label' }, t('pvp.radar'), (this.scanTag = h('span', { class: 'radar-scan-tag', hidden: true }, t('pvp.scanned')))), this.radarCanvas),
+        h(
+          'div',
+          { class: 'hud-tl pvp-self' },
+          h('img', { class: 'pvp-avatar', src: planeIconUrl(plane, progress.tier, progress.level), alt: '' }),
+          h('div', { class: 'pvp-self-info' }, h('div', { class: 'pvp-nick' }, Save.data.nickname || t(`plane.${plane}` as TKey)), h('div', { class: 'hp-bar' }, h('div', { class: 'hp-track' }, this.hpFill), this.hpText)),
+        ),
       ),
       h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t((this.initData.teamSize ?? 1) > 1 ? 'pvp.teamsAlive' : 'pvp.alive') }, icon(Icons.heart, 'ico'), this.alive)), h('div', { class: 'pvp-loot', title: t('pvp.lootHint') }, h('span', { class: 'pvp-chip loot-coin' }, icon(Icons.coin, 'ico'), this.lootCoins), h('span', { class: 'pvp-chip loot-crystal' }, icon(Icons.crystal, 'ico'), this.lootCrystals))),
       h('div', { class: 'pvp-kills', title: t('matchresult.kills') }, h('span', { class: 'pvp-kills-ico', html: Icons.boss }), this.kills, h('small', {}, t('pvp.killsLabel'))),
       h('div', { class: 'hud-tr' }, leaveBtn),
       this.feed,
       this.dead,
-      h('div', { class: 'hud-skills pvp-skills' }, this.slots.weapon.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.item.el, passive),
-      h('div', { class: 'radar-box' }, h('div', { class: 'radar-label' }, t('pvp.radar')), this.radarCanvas),
+      h('div', { class: 'hud-skills pvp-skills' }, this.slots.weapon.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.scan.el, this.slots.item.el, passive),
       (this.loading = this.loadingScreen()),
     );
   }
@@ -173,6 +180,9 @@ export class PvpScreen extends Screen {
       case 'flare':
         this.game.useFlare();
         break;
+      case 'scan':
+        this.game.useScan();
+        break;
       case 'item':
         this.game.useItem();
         break;
@@ -216,7 +226,7 @@ export class PvpScreen extends Screen {
   }
 
   private cd(slot: Slot, ready: boolean, left: number, max: number, active = false, activeP = 0): void {
-    this.set(slot.count, ready ? '' : left.toFixed(1));
+    this.set(slot.count, ready ? '' : left >= 10 ? String(Math.ceil(left)) : left.toFixed(1));
     slot.el.classList.toggle('empty', !ready && !active);
     slot.el.classList.toggle('active', active);
     slot.el.style.setProperty('--p', String(active ? activeP : ready ? 0 : left / Math.max(0.01, max)));
@@ -306,6 +316,9 @@ export class PvpScreen extends Screen {
     this.cd(this.slots.flare, sk.flareCooldown <= 0, sk.flareCooldown, sk.flareCooldownMax, sk.isFlaring, sk.flareLeft / FLARE_DURATION);
     if (sk.itemEquipped()) this.cd(this.slots.item, sk.itemCooldown <= 0, sk.itemCooldown, sk.itemCooldownMax, g.phaseLeft > 0);
 
+    this.cd(this.slots.scan, g.scanCooldown <= 0, g.scanCooldown, PvpGame.SCAN_COOLDOWN, g.scanBlips.length > 0);
+    this.scanTag.hidden = !g.scanBlips.length;
+
     this.renderRadar();
   }
 
@@ -344,6 +357,32 @@ export class PvpScreen extends Screen {
     for (const pk of g.pickups.values()) {
       if (pk.kind !== 'pile') continue;
       ctx.fillRect(pk.x * sx - 3, pk.y * sy - 3, 6, 6);
+    }
+    // сканер: хвиля від свого літака, потім приблизні позиції (коло = зона похибки ±5%)
+    if (g.scanAge < 1.2) {
+      const r = (g.scanAge / 1.2) * Math.hypot(W, H);
+      ctx.strokeStyle = `rgba(88,210,255,${0.6 * (1 - g.scanAge / 1.2)})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(g.player.pos.x * sx, g.player.pos.y * sy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (g.scanBlips.length) {
+      const fade = Math.max(0, 1 - g.scanAge / PvpGame.SCAN_SHOW);
+      const er = W * 0.05;
+      for (const b of g.scanBlips) {
+        const x = b.x * sx;
+        const y = b.y * sy;
+        ctx.fillStyle = b.ally ? `rgba(79,224,138,${0.18 * fade})` : `rgba(255,154,58,${0.22 * fade})`;
+        ctx.beginPath();
+        ctx.arc(x, y, er, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = b.ally ? `rgba(79,224,138,${0.7 * fade})` : `rgba(255,154,58,${0.85 * fade})`;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
     for (const c of g.radarContacts()) {
       ctx.fillStyle = c.isSelf ? '#58d2ff' : c.ally ? '#4fe08a' : `rgba(255,74,90,${pulse})`;

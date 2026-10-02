@@ -14,6 +14,8 @@ import {
   HISTORY_MS,
   CLIENT_INTERP_MS,
   MISSILE_SPEED,
+  SCAN_COOLDOWN_MS,
+  SCAN_ERROR,
   MISSILE_TURN,
   MISSILE_LIFE,
   MAX_MOVE_SPEED,
@@ -123,6 +125,7 @@ function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'ni
     slowUntil: 0,
     lastFlareAt: -Infinity,
     lastItemAt: -Infinity,
+    lastScanAt: -Infinity,
     shotTokens: 0,
     shotTokensAt: 0,
     moveBudget: 0,
@@ -625,6 +628,20 @@ export class Room {
 
   private useSkill(p: Participant, kind: SkillKind, now: number, angle: number): void {
     let extra: Record<string, number> = {};
+    if (kind === 'scan') {
+      // сканер є в усіх; результат бачить лише той, хто сканував (іншим нічого не шлемо)
+      if (now - p.lastScanAt < SCAN_COOLDOWN_MS - 1000) return;
+      p.lastScanAt = now;
+      const blips = [...this.participants.values()]
+        .filter((o) => o !== p && o.alive)
+        .map((o) => ({
+          x: Math.round(Math.max(0, Math.min(WORLD_W, o.pos.x + (Math.random() * 2 - 1) * WORLD_W * SCAN_ERROR))),
+          y: Math.round(Math.max(0, Math.min(WORLD_H, o.pos.y + (Math.random() * 2 - 1) * WORLD_H * SCAN_ERROR))),
+          ally: this.sameTeam(o, p),
+        }));
+      this.net.send(p.id, 'match:scan', { blips });
+      return;
+    }
     if (kind === 'flare') {
       if (now - p.lastFlareAt < FLARE_COOLDOWN_MS * p.cooldownMul * 0.9) return;
       p.lastFlareAt = now;

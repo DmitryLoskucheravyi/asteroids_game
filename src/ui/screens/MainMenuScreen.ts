@@ -29,6 +29,7 @@ import { LevelSelectScreen, starsRow } from './LevelSelectScreen';
 import { OnlineScreen } from './OnlineScreen';
 import { PlaneScreen } from './PlaneScreen';
 import { ProfileScreen } from './ProfileScreen';
+import { SettingsScreen } from './SettingsScreen';
 import { QuestsScreen } from './QuestsScreen';
 
 /** Щоденну нагороду пропонуємо автоматично лише раз за сесію. */
@@ -209,7 +210,8 @@ export class MainMenuScreen extends Screen {
         this.railBtn(Icons.star, t('menu.pass'), passReady ? t('menu.passReady', { n: passReady }) : `${Save.data.pass.bpPoints} BP`, go(() => new BattlePassScreen(this.app)), passReady, passReady ? 'ready' : ''),
         this.railBtn(Icons.coin, t('menu.daily'), daily.available ? t('menu.dailyReady') : t('menu.dailyDay', { n: daily.day }), () => this.openDaily(), daily.available ? 1 : 0, daily.available ? 'ready' : ''),
         this.railBtn(Icons.heart, t('friends.title'), Save.data.friendRequests ? t('friends.requestsN', { n: Save.data.friendRequests }) : Save.data.publicId, go(() => new FriendsScreen(this.app)), Save.data.friendRequests, Save.data.friendRequests ? 'ready' : ''),
-        this.railBtn(Icons.gear, t('menu.profile'), t('menu.settings'), go(() => new ProfileScreen(this.app))),
+        this.railBtn(Icons.user, t('menu.profile'), Save.data.nickname || null, go(() => new ProfileScreen(this.app))),
+        this.railBtn(Icons.gear, t('menu.settings'), null, go(() => new SettingsScreen(this.app))),
       ),
       h(
         'footer',

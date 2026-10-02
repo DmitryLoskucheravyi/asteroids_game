@@ -62,8 +62,28 @@ export interface SaveData {
     shake: boolean;
     /** Режим, який запускає кнопка "Грати" в лобі */
     playMode: PlayMode;
+    /** Керування: клавіші (WASD / стрілки) або літак летить за курсором миші */
+    controlScheme: ControlScheme;
+    crosshair: CrosshairSettings;
   };
 }
+
+export type ControlScheme = 'keyboard' | 'mouse';
+export type CrosshairStyle = 'cross' | 'dot' | 'circle' | 'chevron';
+
+export interface CrosshairSettings {
+  enabled: boolean;
+  style: CrosshairStyle;
+  color: string;
+  /** Множник розміру 0.6–1.8 */
+  size: number;
+  /** Непрозорість 0.2–1 */
+  opacity: number;
+  /** Відстань від носа літака, px */
+  distance: number;
+}
+
+export const DEFAULT_CROSSHAIR: CrosshairSettings = { enabled: true, style: 'cross', color: '#ff3b4e', size: 1, opacity: 0.85, distance: 230 };
 
 export type PlayMode = 'campaign' | 'survival' | 'casual' | 'solo' | 'duo' | 'trio' | 'squad';
 
@@ -102,6 +122,8 @@ const defaults = (): SaveData => ({
     volume: 0.7,
     shake: true,
     playMode: 'campaign',
+    controlScheme: 'keyboard',
+    crosshair: { ...DEFAULT_CROSSHAIR },
   },
 });
 
@@ -118,7 +140,13 @@ class SaveStore {
       return {
         ...base,
         ...parsed,
-        settings: { ...base.settings, ...(parsed.settings ?? {}), ...((parsed.settings as { playMode?: string } | undefined)?.playMode === 'ranked' ? { playMode: 'solo' as const } : {}) },
+        settings: {
+          ...base.settings,
+          ...(parsed.settings ?? {}),
+          ...((parsed.settings as { playMode?: string } | undefined)?.playMode === 'ranked' ? { playMode: 'solo' as const } : {}),
+          // нові поля прицілу доповнюються значеннями за замовчуванням
+          crosshair: { ...DEFAULT_CROSSHAIR, ...(parsed.settings?.crosshair ?? {}) },
+        },
         stars: Array.isArray(parsed.stars) ? parsed.stars : [],
         survivalTop: Array.isArray(parsed.survivalTop) ? parsed.survivalTop : [],
         coins: Math.max(0, Math.floor(Number(parsed.coins) || 0)),

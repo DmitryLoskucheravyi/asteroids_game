@@ -15,7 +15,7 @@ export type { QueueMode as MatchMode } from './constants.js';
 
 export type MatchState = 'searching' | 'countdown' | 'active' | 'ended';
 
-export type SkillKind = 'flare' | 'jump' | 'emp' | 'phase' | 'nanoRepair' | 'overdrive' | 'swarm';
+export type SkillKind = 'flare' | 'jump' | 'emp' | 'phase' | 'nanoRepair' | 'overdrive' | 'swarm' | 'scan';
 
 export interface Participant {
   id: string;
@@ -50,6 +50,7 @@ export interface Participant {
   slowUntil: number;
   lastFlareAt: number;
   lastItemAt: number;
+  lastScanAt: number;
   /** Анти-чит: бюджет пострілів (token bucket) і бюджет переміщення (px) */
   shotTokens: number;
   shotTokensAt: number;
