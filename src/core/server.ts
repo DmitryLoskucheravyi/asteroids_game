@@ -126,6 +126,22 @@ export interface PartyView {
   friends: PartyMember[];
 }
 
+export interface PlayerProfileView {
+  relation: 'self' | 'friend' | 'outgoing' | 'incoming' | 'none';
+  player: {
+    publicId: string;
+    nickname: string;
+    level: number;
+    status: 'match' | 'online' | 'offline';
+    lastLoginAt?: string;
+    createdAt?: string;
+    plane: { id: string; tier: number; level: number };
+    planesOwned: number;
+    stats: PlayerStats;
+    ranked: Record<'solo' | 'duo' | 'trio' | 'squad', RankedView | undefined>;
+  };
+}
+
 export interface LeaderboardView {
   by: string;
   top: { place: number; id: string; nickname: string; level: number; rankPoints: number; plane?: string; value: number }[];
@@ -218,6 +234,7 @@ export const Server = {
   friends: () => api.get<FriendsView>('/friends'),
   friendsPing: () => api.get<{ ok: boolean; partyInvites?: number }>('/friends/ping'),
   party: () => api.get<PartyView>('/party'),
+  player: (key: string) => api.get<PlayerProfileView>(`/players/${encodeURIComponent(key.replace(/^#/, ''))}`),
   partyAction: (action: 'invite' | 'accept' | 'decline' | 'leave' | 'kick' | 'mode' | 'search', body: Record<string, unknown> = {}) => api.post<PartyView>(`/party/${action}`, body),
   findPlayer: (publicId: string) => api.get<{ player: FriendCard; relation: 'self' | 'friend' | 'outgoing' | 'incoming' | 'none' }>(`/friends/search/${encodeURIComponent(publicId.replace(/^#/, ''))}`),
   friendAction: (action: 'request' | 'accept' | 'decline' | 'cancel' | 'remove', publicId: string) => api.post<FriendsView>(`/friends/${action}`, { publicId }),

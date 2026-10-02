@@ -9,6 +9,7 @@ import { DIVISIONS, RANK_IDS, RANK_MODES, RP_PER_DIVISION, TEAM_SIZE, rankEmblem
 import { getWeaponDef } from '../../game/weapons';
 import { getSocket } from '../../net/socket';
 import { GameLink } from '../../net/gameLink';
+import { profileLink } from '../PlayerProfile';
 import { Sfx } from '../../core/audio';
 import { Server, type PartyMember, type PartyView } from '../../core/server';
 import { toast } from '../Modal';
@@ -252,14 +253,14 @@ export class OnlineScreen extends Screen {
 
   private memberRow(m: PartyMember, actions: HTMLElement[]): HTMLElement {
     const rk = rankInfo(m.rankPoints);
-    return h(
+    return profileLink(h(
       'div',
       { class: `party-member${m.self ? ' self' : ''}` },
       h('img', { class: 'friend-plane', src: planeIconUrl((m.plane as PlaneId) ?? 'falcon'), alt: '' }),
       h('div', { class: 'friend-info' }, h('b', {}, m.leader ? '★ ' : '', m.nickname), h('small', {}, m.publicId), h('span', { class: `friend-status ${m.status}` }, h('i'), t(m.status === 'match' ? 'friends.inMatch' : m.status === 'online' ? 'friends.online' : 'friends.offline'))),
       this.mode !== 'casual' ? h('span', { class: 'friend-rank', html: rankEmblem(rk.id, rk.roman, this.mode as RankMode) }) : h('span'),
       h('div', { class: 'friend-actions' }, ...actions),
-    );
+    ), m.self ? null : m.publicId);
   }
 
   private partyBlock(): HTMLElement {

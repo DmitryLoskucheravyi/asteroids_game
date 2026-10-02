@@ -24,6 +24,7 @@ const ROUTES: [prefix: string, service: ServiceName][] = [
   ['/api/leaderboard', 'stats'],
   ['/api/friends', 'social'],
   ['/api/party', 'social'],
+  ['/api/players', 'social'],
   ['/socket.io', 'matchmaker'],
 ];
 

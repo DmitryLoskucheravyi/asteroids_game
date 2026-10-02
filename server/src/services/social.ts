@@ -1,5 +1,6 @@
 import { friendsRouter } from '../routes/friends.js';
 import { partyRouter } from '../routes/party.js';
+import { playersRouter } from '../routes/players.js';
 import { setInMatch } from '../presence.js';
 import { getParty, getPartyById, setIdle, setSearching } from '../social/party.js';
 import { startDbService } from './common.js';
@@ -11,6 +12,7 @@ import { startDbService } from './common.js';
 void startDbService('social', (app) => {
   app.use('/api/friends', friendsRouter);
   app.use('/api/party', partyRouter);
+  app.use('/api/players', playersRouter);
 
   /** Ігровий сервер: гравець увійшов у бій / вийшов з нього. */
   app.post('/internal/presence', (req, res) => {

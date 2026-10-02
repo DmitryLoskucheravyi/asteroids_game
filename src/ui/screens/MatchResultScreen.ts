@@ -9,6 +9,7 @@ import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 import type { MatchResultEntry } from '../../net/pvpProtocol';
 import { Icons, button, h, icon } from '../dom';
 import { Screen } from '../Screen';
+import { profileLink } from '../PlayerProfile';
 import { MainMenuScreen } from './MainMenuScreen';
 import { OnlineScreen } from './OnlineScreen';
 
@@ -83,13 +84,13 @@ export class MatchResultScreen extends Screen {
         const self = r.id === this.socket.id;
         const pl = this.teamSize > 1 ? r.teamPlace ?? r.place : r.place;
         const ally = this.teamSize > 1 && me && r.team === me.team;
-        return h(
+        return profileLink(h(
           'div',
           { class: `mr-row${self ? ' self' : ''}${ally && !self ? ' ally' : ''}${pl === 1 ? ' winner' : ''}`, style: `--i:${i}` },
           h('span', { class: 'mr-row-place' }, pl === 1 ? icon(Icons.trophy, 'ico gold') : `#${pl}`),
           h('span', { class: 'mr-row-name' }, self ? `${r.nickname} · ${t('matchresult.you')}` : r.nickname),
           h('span', { class: 'mr-row-kills' }, icon(Icons.boss, 'ico'), String(r.kills)),
-        );
+        ), self || r.isBot ? null : r.userId);
       }),
     );
 

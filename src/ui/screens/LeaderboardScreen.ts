@@ -8,6 +8,7 @@ import type { PlaneId } from '../../game/planes';
 import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 import { Icons, button, h, icon } from '../dom';
 import { Screen } from '../Screen';
+import { profileLink } from '../PlayerProfile';
 import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
@@ -108,9 +109,9 @@ export class LeaderboardScreen extends Screen {
     }
   }
 
-  private row(place: number | null, nickname: string, plane: string | undefined, rankPoints: number, level: number, value: number, self: boolean): HTMLElement {
+  private row(place: number | null, nickname: string, plane: string | undefined, rankPoints: number, level: number, value: number, self: boolean, id?: string): HTMLElement {
     const rk = rankInfo(rankPoints);
-    return h(
+    return profileLink(h(
       'div',
       { class: `lb-row${self ? ' self' : ''}${place && place <= 3 ? ` podium p${place}` : ''}` },
       h('span', { class: 'lb-place' }, place === 1 ? icon(Icons.trophy, 'ico') : place ? `#${place}` : '—'),
@@ -118,7 +119,7 @@ export class LeaderboardScreen extends Screen {
       h('span', { class: 'lb-name' }, h('b', {}, nickname), h('small', {}, `${t('lb.level')} ${level}`)),
       h('span', { class: 'lb-rank', html: rankEmblem(rk.id, rk.roman, this.rankMode), title: `${t(rk.nameKey)} ${rk.roman}` }),
       h('span', { class: 'lb-value' }, this.format(this.board, value)),
-    );
+    ), self ? null : id);
   }
 
   protected build(): HTMLElement {
@@ -151,7 +152,7 @@ export class LeaderboardScreen extends Screen {
       body = h(
         'div',
         { class: 'lb-list' },
-        ...d.top.map((r) => this.row(r.place, r.nickname, r.plane, r.rankPoints, r.level, r.value, r.nickname === Save.data.nickname)),
+        ...d.top.map((r) => this.row(r.place, r.nickname, r.plane, r.rankPoints, r.level, r.value, r.nickname === Save.data.nickname, r.id)),
         !meInTop ? h('div', { class: 'lb-sep' }, '···') : null,
         !meInTop ? this.row(d.me.place, Save.data.nickname, Save.data.plane, Save.rank(this.rankMode).points, Save.data.level, d.me.value, true) : null,
       );

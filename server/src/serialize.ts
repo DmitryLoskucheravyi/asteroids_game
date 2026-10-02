@@ -59,11 +59,8 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       .map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: getItemDef(it.defId)!.rarity })),
     loadouts: user.loadouts,
     ownedWeapons: user.ownedWeapons,
-    rankedModes: Object.fromEntries(RANK_MODES.map((m) => {
-      const r = getRank(user, m);
-      return [m, { points: r.points, best: r.best, matches: r.matches, wins: r.wins, lastSeason: r.lastSeason ?? null }];
-    })),
-    stats: { pvpMatches: user.stats?.pvpMatches ?? 0, pvpWins: user.stats?.pvpWins ?? 0, pvpTop3: user.stats?.pvpTop3 ?? 0, pvpKills: user.stats?.pvpKills ?? 0, pvpDeaths: user.stats?.pvpDeaths ?? 0, pvpDamage: user.stats?.pvpDamage ?? 0, bestKills: user.stats?.bestKills ?? 0, cratesOpened: user.stats?.cratesOpened ?? 0, coinsEarned: user.stats?.coinsEarned ?? 0, levelsCompleted: user.stats?.levelsCompleted ?? 0, stars: user.stats?.stars ?? 0, survivalBest: user.stats?.survivalBest ?? 0 },
+    rankedModes: serializeRankedModes(user),
+    stats: serializeStats(user),
     ranked: {
       points: user.rankPoints ?? 0,
       best: user.rankBest ?? 0,
@@ -73,4 +70,21 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       lastSeason: (user.rankLastSeason as { seasonId: string; points: number; division: number; crate: string; crystals: number } | null) ?? null,
     },
   };
+}
+
+/** Статистика гравця (і для свого профілю, і для публічного). */
+export function serializeStats(user: { stats?: unknown }) {
+  const st = (user.stats ?? {}) as Partial<Record<string, number>>;
+  const n = (k: string) => st[k] ?? 0;
+  return { pvpMatches: n('pvpMatches'), pvpWins: n('pvpWins'), pvpTop3: n('pvpTop3'), pvpKills: n('pvpKills'), pvpDeaths: n('pvpDeaths'), pvpDamage: n('pvpDamage'), bestKills: n('bestKills'), cratesOpened: n('cratesOpened'), coinsEarned: n('coinsEarned'), levelsCompleted: n('levelsCompleted'), stars: n('stars'), survivalBest: n('survivalBest') };
+}
+
+/** Рейтинг у кожному режимі (соло, дуо, тріо, сквад). */
+export function serializeRankedModes(user: Parameters<typeof getRank>[0]) {
+  return Object.fromEntries(
+    RANK_MODES.map((m) => {
+      const r = getRank(user, m);
+      return [m, { points: r.points, best: r.best, matches: r.matches, wins: r.wins, lastSeason: r.lastSeason ?? null }];
+    }),
+  );
 }

@@ -8,6 +8,7 @@ import { rankEmblem, rankInfo } from '../../game/ranks';
 import { Icons, button, h, icon } from '../dom';
 import { toast } from '../Modal';
 import { Screen } from '../Screen';
+import { profileLink } from '../PlayerProfile';
 import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
 
@@ -77,7 +78,7 @@ export class FriendsScreen extends Screen {
 
   private card(c: FriendCard, actions: HTMLElement[]): HTMLElement {
     const rk = rankInfo(c.rankPoints);
-    return h(
+    return profileLink(h(
       'div',
       { class: 'friend-row' },
       h('img', { class: 'friend-plane', src: planeIconUrl((c.plane as PlaneId) ?? 'falcon'), alt: '' }),
@@ -85,7 +86,7 @@ export class FriendsScreen extends Screen {
       h('span', { class: 'friend-rank', html: rankEmblem(rk.id, rk.roman), title: `${t(rk.nameKey)} ${rk.roman}` }),
       h('span', { class: 'friend-stats' }, `${c.stats.wins} ${t('lb.wins').toLowerCase()} · ${c.stats.kills} ${t('lb.kills').toLowerCase()}`),
       h('div', { class: 'friend-actions' }, ...actions),
-    );
+    ), c.publicId);
   }
 
   private searchBlock(): HTMLElement {
