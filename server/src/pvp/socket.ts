@@ -80,10 +80,6 @@ export function attachPvp(server: HttpServer): void {
       if (f) roomFor(socket.id)?.onShot(socket.id, f);
     });
 
-    socket.on('match:fire-hit', (data: { targetId: string; source?: string }) => {
-      roomFor(socket.id)?.onHit(socket.id, String(data?.targetId), String(data?.source ?? 'weapon'));
-    });
-
     socket.on('match:skill', (data: { kind: SkillKind; x: number; y: number; angle: number }) => {
       roomFor(socket.id)?.onSkill(socket.id, data);
     });

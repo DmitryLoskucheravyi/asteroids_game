@@ -50,9 +50,12 @@ export interface Participant {
   slowUntil: number;
   lastFlareAt: number;
   lastItemAt: number;
-  /** Анти-чит: вікно підрахунку влучань */
-  hitWindowStart: number;
-  hitsInWindow: number;
+  /** Анти-чит: бюджет пострілів (token bucket) і бюджет переміщення (px) */
+  shotTokens: number;
+  shotTokensAt: number;
+  moveBudget: number;
+  lastMoveAt: number;
+  lastJumpAt: number;
   /** Зібране на полі (переживе матч лише у переможця) */
   lootCoins: number;
   lootCrystals: number;
@@ -108,10 +111,15 @@ export interface Pickup {
   crystals: number;
 }
 
-/** Снаряд, який симулює сервер (постріли ботів). */
+/** Снаряд, який симулює сервер — і ботів, і гравців (сервер — єдине джерело влучань). */
 export interface ServerProjectile {
   ownerId: string;
-  kind: 'bullet' | 'rocket';
+  kind: 'bullet' | 'rocket' | 'missile';
+  /** Компенсація лагу: цілі перевіряємо в їхніх позиціях на (зараз − lagMs) — як їх бачив стрілець */
+  lagMs: number;
+  /** Ракети з самонаведенням: курс і залишок життя (с) */
+  angle?: number;
+  life?: number;
   x: number;
   y: number;
   vx: number;

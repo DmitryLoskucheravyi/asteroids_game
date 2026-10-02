@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "check:balance": "tsx scripts/check-balance.ts",
-    "doc": "tsx scripts/gen-doc.ts"
+    "doc": "tsx scripts/gen-doc.ts",
+    "net:check": "tsx scripts/net-check.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -33,6 +33,18 @@ export const MATCH_TIME_LIMIT_MS = 4 * 60 * 1000;
 /** Мітка на радарі видима стільки мс після останнього пострілу. */
 export const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
 export const HIT_RADIUS = 20;
+/** Компенсація лагу: максимум, на скільки сервер "відмотує" цілі назад, і скільки історії тримає */
+export const MAX_REWIND_MS = 300;
+export const HISTORY_MS = 1000;
+/** Затримка інтерполяції клієнта (див. src/net/interp.ts) — типовий відкат для подій без мітки часу */
+export const CLIENT_INTERP_MS = 100;
+/** Самонавідні ракети (дзеркалить src/game/PvpGame.ts) */
+export const MISSILE_SPEED = 520;
+export const MISSILE_TURN = 2.2;
+export const MISSILE_LIFE = 2.2;
+/** Анти-чит руху: найбільша швидкість з форсажем і запасом, плюс ривок */
+export const MAX_MOVE_SPEED = 1500;
+export const JUMP_ALLOWANCE = 360;
 
 /** Лут на полі: монети й кристали спавняться весь матч, збитий літак лишає все зібране. */
 export const PICKUP_START = 45;

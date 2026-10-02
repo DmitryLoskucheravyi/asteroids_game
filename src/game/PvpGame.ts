@@ -442,7 +442,6 @@ export class PvpGame {
           const ang = this.aim + (i - 2.5) * 0.28;
           const pos = this.nose();
           this.missiles.push({ pos, angle: ang, life: 2.2, remote: false, ownerId: this.selfId, source: 'swarm' });
-          this.fire(pos.x, pos.y, ang, 'missile');
         }
         break;
     }
@@ -753,15 +752,14 @@ export class PvpGame {
         const rp = this.renderPos(id)!;
         if (Math.hypot(pr.pos.x - rp.x, pr.pos.y - rp.y) < HIT_RADIUS + pr.radius) {
           pr.kill();
-          this.socket.emit('match:fire-hit', { targetId: id, source: 'weapon' });
-          this.impact(pr, id);
+          this.impact(pr);
           break;
         }
       }
     }
     this.projectiles = this.projectiles.filter((pr) => pr.alive);
 
-    // чужі снаряди — лише візуал (урон рахує сервер / клієнт стрільця)
+    // чужі снаряди — лише візуал (влучання й урон рахує сервер)
     for (const pr of this.remote) {
       pr.update(dt, world);
       if (!pr.alive) continue;
@@ -793,16 +791,11 @@ export class PvpGame {
     this.remote = this.remote.filter((pr) => pr.alive);
   }
 
-  /** Вибух ракети: ефект + сплеш-урон по сусідах. */
-  private impact(pr: Projectile, directId?: string): void {
+  /** Вибух ракети — лише ефект (сплеш-урон рахує сервер). */
+  private impact(pr: Projectile): void {
     if (pr.kind !== 'rocket') return;
     this.explosion(pr.pos.x, pr.pos.y, 0.7);
     this.ring(pr.pos.x, pr.pos.y, pr.splashRadius, '255,140,80', 0.35);
-    for (const [id, p] of this.participants) {
-      if (id === this.selfId || id === directId || !p.alive || p.phase || this.isAlly(id)) continue;
-      const rp = this.renderPos(id)!;
-      if (Math.hypot(pr.pos.x - rp.x, pr.pos.y - rp.y) < pr.splashRadius) this.socket.emit('match:fire-hit', { targetId: id, source: 'splash' });
-    }
   }
 
   private updateMissiles(dt: number): void {
@@ -842,7 +835,6 @@ export class PvpGame {
         if (Math.hypot(rp.x - m.pos.x, rp.y - m.pos.y) < HIT_RADIUS + 4) {
           m.life = 0;
           this.explosion(m.pos.x, m.pos.y, 0.4);
-          if (!m.remote) this.socket.emit('match:fire-hit', { targetId: id, source: m.source });
           break;
         }
       }
@@ -900,7 +892,6 @@ export class PvpGame {
     const y2 = from.y + Math.sin(angle) * ray.dist;
     this.beams.push({ x1: from.x, y1: from.y, x2, y2, t: 0, hostile: false });
     this.fire(from.x, from.y, angle, 'laser');
-    if (ray.targetId) this.socket.emit('match:fire-hit', { targetId: ray.targetId, source: 'weapon' });
     this.particles.emit(x2, y2, { count: ray.blocked ? 4 : 2, speed: [30, 120], life: [0.1, 0.25], size: [2, 3], colors: ray.blocked ? ['#fff1a8', '#ff9a3a'] : ['#ffffff', '#ff5ad0', '#c070ff'] });
     if (this.clock - this.lastShotSfx > 0.08) {
       this.lastShotSfx = this.clock;
@@ -1053,6 +1044,8 @@ export class PvpGame {
       ctx.globalAlpha = 1;
       if (this.skills.isFlaring) this.renderFlareShield(ctx, this.player.pos.x, this.player.pos.y);
       if (this.slow > 0) this.renderSlow(ctx, this.player.pos.x, this.player.pos.y);
+      const me = this.self;
+      if (me) this.renderNick(ctx, me.nickname, this.player.pos.x, this.player.pos.y - 40, '220,235,255');
     }
 
     for (const pr of this.projectiles) pr.render(ctx, this.clock);
@@ -1282,17 +1275,23 @@ export class PvpGame {
       ctx.arc(x, y, 34, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.font = '600 12px Bungee, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(10,9,24,0.9)';
-    ctx.fillText(p.nickname, x + 1, y - 50);
-    ctx.fillStyle = ally ? '#a8ffc8' : '#ffb3b3';
-    ctx.fillText(p.nickname, x, y - 51);
+    this.renderNick(ctx, p.nickname, x, y - 50, ally ? '168,255,200' : '255,190,190');
     if (p.lootCoins || p.lootCrystals) {
       ctx.font = '600 11px Bungee, sans-serif';
       ctx.fillStyle = '#ffd24a';
       ctx.fillText(`${p.lootCoins}${p.lootCrystals ? `  ${p.lootCrystals}◆` : ''}`, x, y - 66);
     }
+  }
+
+  /** Нікнейм над літаком: дрібно й напівпрозоро, щоб не заважав бачити бій. */
+  private renderNick(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, rgb: string): void {
+    ctx.font = '600 10px Onest, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(6,5,16,0.45)';
+    ctx.fillText(name, x + 1, y + 1);
+    ctx.fillStyle = `rgba(${rgb},0.62)`;
+    ctx.fillText(name, x, y);
   }
 
   private renderFlareShield(ctx: CanvasRenderingContext2D, x: number, y: number): void {
