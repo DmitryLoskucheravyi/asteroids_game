@@ -4,6 +4,7 @@ import { verifyToken } from '../utils/jwt.js';
 import { User } from '../models/User.js';
 import { enqueue, enqueueGroup, dequeue, roomFor, onDisconnect, leaveRoom } from './matchmaking.js';
 import type { Entrant } from './room.js';
+import { decodeFire, decodeMove } from '../shared/netcodec.js';
 import { getParty, getPartyById, setSearching } from '../social/party.js';
 import { DEFAULT_WEAPON_ID } from '../content/weapons.js';
 import { ensureRankSeason, getRank } from '../progress.js';
@@ -68,12 +69,15 @@ export function attachPvp(server: HttpServer): void {
       leaveRoom(socket.id);
     });
 
-    socket.on('match:move', (data: { pos: { x: number; y: number }; angle: number; firing: boolean }) => {
-      roomFor(socket.id)?.onMove(socket.id, data?.pos, data?.angle, data?.firing);
+    // рух і постріли приходять бінарно (див. shared/netcodec.ts)
+    socket.on('match:move', (data: Uint8Array) => {
+      const m = data instanceof Uint8Array ? decodeMove(data) : null;
+      if (m) roomFor(socket.id)?.onMove(socket.id, { x: m.x, y: m.y }, m.angle, m.firing);
     });
 
-    socket.on('match:shot', (data: { x: number; y: number; angle: number; kind: string }) => {
-      roomFor(socket.id)?.onShot(socket.id, data);
+    socket.on('match:shot', (data: Uint8Array) => {
+      const f = data instanceof Uint8Array ? decodeFire(data) : null;
+      if (f) roomFor(socket.id)?.onShot(socket.id, f);
     });
 
     socket.on('match:fire-hit', (data: { targetId: string; source?: string }) => {

@@ -8,6 +8,7 @@ import { drawGlow } from './fx';
 import { drawPlane } from './PlaneArt';
 import { PVP_PROGRESS_SCALE, effectivePlaneSpec, getPlane, planeCombat, type PlaneId } from './planes';
 import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from './items';
+import { decodeShot, decodeState, encodeFire, encodeMove, type ShotKind, type StatePatch } from '../../server/src/shared/netcodec';
 import { INTERP_DELAY_MS, ServerClock, SnapshotBuffer } from '../net/interp';
 import { getWeaponDef, DEFAULT_WEAPON_ID, WeaponState, type WeaponDef } from './weapons';
 import { Player } from './entities/Player';
@@ -126,6 +127,9 @@ export class PvpGame {
   private readonly buffers = new Map<string, SnapshotBuffer>();
   private readonly serverClock = new ServerClock();
   private delayed: { at: number; fn: () => void }[] = [];
+  /** Порядок учасників з match:init — у бінарних пакетах учасник = індекс */
+  private order: string[] = [];
+  private gotKeyframe = false;
   private readonly listeners: [string, (...a: any[]) => void][] = [];
   private speed = 0;
   private aim = 0;
@@ -170,19 +174,13 @@ export class PvpGame {
       this.matchTime = 0;
       Sfx.countdown(true);
     });
-    this.on('match:state', (data: { participants: PublicParticipant[]; t: number }) => {
-      this.serverClock.sample(data.t);
-      for (const p of data.participants) {
-        this.participants.set(p.id, p);
-        if (p.id === this.selfId) continue;
-        let buf = this.buffers.get(p.id);
-        if (!buf) this.buffers.set(p.id, (buf = new SnapshotBuffer()));
-        buf.push({ t: data.t, x: p.pos.x, y: p.pos.y, a: p.angle });
-      }
-      this.matchTime = data.t / 1000;
-    });
+    this.on('match:state', (data: ArrayBuffer) => this.onState(decodeState(data)));
     // чужі постріли й навички показуємо з тією ж затримкою, що й самі літаки, — інакше куля вилітає попереду носа
-    this.on('match:shot', (s: ShotEvent) => this.later(() => this.onRemoteShot(s), s.ownerId));
+    this.on('match:shot', (data: ArrayBuffer) => {
+      const n = decodeShot(data);
+      const s: ShotEvent = { ownerId: this.order[n.owner] ?? '', x: n.x, y: n.y, angle: n.angle, kind: n.kind, speed: n.speed };
+      this.later(() => this.onRemoteShot(s), s.ownerId);
+    });
     this.on('match:skill', (s: SkillEvent) => this.later(() => this.onRemoteSkill(s), s.id));
     this.on('match:hit', (h: HitEvent) => this.onHit(h));
     this.on('match:pickup-spawn', (pk: PickupView) => {
@@ -195,6 +193,49 @@ export class PvpGame {
       this.results = data.results;
       this.onMatchEnd(data.results);
     });
+  }
+
+  /** Свій постріл → сервер (бінарно, з моментом, який бачив гравець, — для компенсації лагу). */
+  private fire(x: number, y: number, angle: number, kind: ShotKind): void {
+    this.socket.emit('match:shot', encodeFire({ x, y, angle, kind, viewT: this.serverClock.now() - INTERP_DELAY_MS }));
+  }
+
+  /** Пакет стану (ключовий кадр або дельта) → учасники + буфери інтерполяції. */
+  private onState(st: StatePatch): void {
+    if (st.key) this.gotKeyframe = true;
+    if (!this.gotKeyframe) return; // дельта без бази — чекаємо ключовий кадр
+    this.serverClock.sample(st.t);
+    for (const { index, patch } of st.entries) {
+      const p = this.participants.get(this.order[index]);
+      if (!p) continue;
+      if (patch.x !== undefined && patch.y !== undefined) p.pos = { x: patch.x, y: patch.y };
+      if (patch.angle !== undefined) p.angle = patch.angle;
+      if (patch.hp !== undefined) p.hp = patch.hp;
+      if (patch.maxHp !== undefined) p.maxHp = patch.maxHp;
+      if (patch.alive !== undefined) {
+        p.alive = patch.alive;
+        p.firing = !!patch.firing;
+        p.flare = !!patch.flare;
+        p.phase = !!patch.phase;
+        p.slowed = !!patch.slowed;
+      }
+      if (patch.kills !== undefined) p.kills = patch.kills;
+      if (patch.lootCoins !== undefined) {
+        p.lootCoins = patch.lootCoins;
+        p.lootCrystals = patch.lootCrystals ?? p.lootCrystals;
+      }
+      if (patch.lastFiredAt !== undefined) p.lastFiredAt = patch.lastFiredAt;
+    }
+    // у буфер інтерполяції — кожен чужий літак на кожен тік (незмінний теж: це "стоїть на місці")
+    for (const id of this.order) {
+      if (id === this.selfId) continue;
+      const p = this.participants.get(id);
+      if (!p) continue;
+      let buf = this.buffers.get(id);
+      if (!buf) this.buffers.set(id, (buf = new SnapshotBuffer()));
+      buf.push({ t: st.t, x: p.pos.x, y: p.pos.y, a: p.angle });
+    }
+    this.matchTime = st.t / 1000;
   }
 
   /** Подія чужого літака — відкладаємо до моменту, коли він сам буде показаний у цій точці. */
@@ -229,6 +270,7 @@ export class PvpGame {
     this.countdownLeft = data.countdownMs / 1000;
     this.timeLimit = data.timeLimitMs / 1000;
     for (const p of data.participants) this.participants.set(p.id, p);
+    this.order = data.participants.map((p) => p.id);
     for (const pk of data.pickups ?? []) this.pickups.set(pk.id, pk);
     const me = this.self;
     this.player.reset(me?.pos.x ?? this.worldW / 2, me?.pos.y ?? this.worldH / 2);
@@ -400,7 +442,7 @@ export class PvpGame {
           const ang = this.aim + (i - 2.5) * 0.28;
           const pos = this.nose();
           this.missiles.push({ pos, angle: ang, life: 2.2, remote: false, ownerId: this.selfId, source: 'swarm' });
-          this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle: ang, kind: 'missile' });
+          this.fire(pos.x, pos.y, ang, 'missile');
         }
         break;
     }
@@ -518,7 +560,7 @@ export class PvpGame {
       this.sendTimer -= dt;
       if (this.sendTimer <= 0) {
         this.sendTimer = SEND_EVERY;
-        this.socket.emit('match:move', { pos: { x: this.player.pos.x, y: this.player.pos.y }, angle: this.aim, firing: this.input.firing() });
+        this.socket.emit('match:move', encodeMove({ x: this.player.pos.x, y: this.player.pos.y, angle: this.aim, firing: this.input.firing() }));
       }
     }
 
@@ -622,14 +664,14 @@ export class PvpGame {
       for (let i = 0; i < n; i++) {
         const a = angle + (i - (n - 1) / 2) * 0.32;
         this.missiles.push({ pos: pos.clone(), angle: a, life: 2.2, remote: false, ownerId: this.selfId, source: 'weapon' });
-        this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle: a, kind: 'missile' });
+        this.fire(pos.x, pos.y, a, 'missile');
       }
       this.muzzle(pos.x, pos.y, angle, true);
       Sfx.boost();
       return;
     }
     this.projectiles.push(new Projectile(this.weapon.kind as 'bullet' | 'rocket', pos, angle, this.weapon.projectileSpeed, this.weapon.damage, this.weapon.splashRadius ?? 0, false, this.selfId));
-    this.socket.emit('match:shot', { x: pos.x, y: pos.y, angle, kind: this.weapon.kind });
+    this.fire(pos.x, pos.y, angle, this.weapon.kind);
     this.muzzle(pos.x, pos.y, angle, this.weapon.kind === 'rocket');
     if (this.weapon.kind === 'rocket') Sfx.bossShot();
     else if (this.clock - this.lastShotSfx > 0.06) {
@@ -857,7 +899,7 @@ export class PvpGame {
     const x2 = from.x + Math.cos(angle) * ray.dist;
     const y2 = from.y + Math.sin(angle) * ray.dist;
     this.beams.push({ x1: from.x, y1: from.y, x2, y2, t: 0, hostile: false });
-    this.socket.emit('match:shot', { x: from.x, y: from.y, angle, kind: 'laser' });
+    this.fire(from.x, from.y, angle, 'laser');
     if (ray.targetId) this.socket.emit('match:fire-hit', { targetId: ray.targetId, source: 'weapon' });
     this.particles.emit(x2, y2, { count: ray.blocked ? 4 : 2, speed: [30, 120], life: [0.1, 0.25], size: [2, 3], colors: ray.blocked ? ['#fff1a8', '#ff9a3a'] : ['#ffffff', '#ff5ad0', '#c070ff'] });
     if (this.clock - this.lastShotSfx > 0.08) {
@@ -949,7 +991,8 @@ export class PvpGame {
 
   /** Мітки на радарі: чужі кораблі видно лише поки стріляють (і трохи після). */
   radarContacts(): { id: string; x: number; y: number; isSelf: boolean; ally?: boolean }[] {
-    const now = Date.now();
+    // lastFiredAt — у мс від старту матчу, як і годинник сервера
+    const now = this.serverClock.now();
     const out: { id: string; x: number; y: number; isSelf: boolean; ally?: boolean }[] = [];
     if (this.selfId && this.selfAlive) out.push({ id: this.selfId, x: this.player.pos.x, y: this.player.pos.y, isSelf: true });
     for (const [id, p] of this.participants) {

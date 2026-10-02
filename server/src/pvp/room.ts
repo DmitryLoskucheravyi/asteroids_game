@@ -1,6 +1,7 @@
 import type { Server as IOServer, Socket } from 'socket.io';
 import { User } from '../models/User.js';
 import { grantReward, addBp, ensureQuestSlots, incrementQuestProgress, getRank, setRank } from '../progress.js';
+import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
 import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/weapons.js';
 import { getItemDef, type ItemMeta } from '../content/items.js';
 import { PLANE_IDS, planeCombat } from '../content/planes.js';
@@ -11,6 +12,7 @@ import {
   WORLD_W,
   WORLD_H,
   TICK_MS,
+  TICK_HZ,
   COUNTDOWN_MS,
   MATCH_TIME_LIMIT_MS,
   HIT_RADIUS,
@@ -234,6 +236,8 @@ export class Room {
 
     for (let i = 0; i < PICKUP_START; i++) this.spawnPickup(false);
 
+    this.order = [...this.participants.keys()];
+    this.order.forEach((pid, i) => this.orderIndex.set(pid, i));
     this.io.to(id).emit('match:init', {
       roomId: id,
       world: { w: WORLD_W, h: WORLD_H },
@@ -309,6 +313,45 @@ export class Room {
     }, Math.max(0, this.nextTickAt - Date.now()));
   }
 
+  /** Кодувальник дельт стану і порядок учасників (індекс = позиція в match:init) */
+  private readonly encoder = new StateEncoder(TICK_HZ);
+  private order: string[] = [];
+  private readonly orderIndex = new Map<string, number>();
+  /** Метрики кімнати: байти, розіслані клієнтам, і кількість тіків */
+  readonly metrics = { bytesOut: 0, ticks: 0, tickMsTotal: 0, tickMsMax: 0 };
+
+  private indexOf(id: string): number {
+    return this.orderIndex.get(id) ?? 255;
+  }
+
+  /** Розсилка всім у кімнаті з обліком трафіку. */
+  private broadcast(event: string, payload: Uint8Array): void {
+    this.metrics.bytesOut += payload.byteLength * this.sockets.size;
+    this.io.to(this.id).emit(event, payload);
+  }
+
+  private netStates(now: number): NetState[] {
+    return this.order.map((id) => {
+      const p = this.participants.get(id)!;
+      return {
+        x: p.pos.x,
+        y: p.pos.y,
+        angle: p.angle,
+        hp: p.hp,
+        maxHp: p.maxHp,
+        alive: p.alive,
+        firing: p.firing,
+        flare: now < p.flareUntil,
+        phase: now < p.phaseUntil,
+        slowed: now < p.slowUntil,
+        kills: p.kills,
+        lootCoins: p.lootCoins,
+        lootCrystals: p.lootCrystals,
+        lastFiredAt: p.lastFiredAt && this.startedAt ? Math.max(1, p.lastFiredAt - this.startedAt) : 0,
+      };
+    });
+  }
+
   private publicList(now: number): PublicParticipant[] {
     return [...this.participants.values()].map((p) => ({
       id: p.id,
@@ -320,7 +363,7 @@ export class Room {
       pos: p.pos,
       angle: p.angle,
       firing: p.firing,
-      lastFiredAt: p.lastFiredAt,
+      lastFiredAt: 0,
       hp: p.hp,
       maxHp: p.maxHp,
       alive: p.alive,
@@ -377,6 +420,7 @@ export class Room {
 
   /** Розсилка всім у кімнаті, крім автора (він уже показав ефект локально). */
   private relay(fromId: string, event: string, data: unknown): void {
+    if (data instanceof Uint8Array) this.metrics.bytesOut += data.byteLength * Math.max(0, this.sockets.size - 1);
     const s = this.sockets.get(fromId);
     if (s) s.to(this.id).emit(event, data);
     else this.io.to(this.id).emit(event, data);
@@ -404,7 +448,7 @@ export class Room {
     p.lastFiredAt = Date.now();
     p.shots++;
     const def = getWeaponDef(p.weaponId);
-    this.relay(socketId, 'match:shot', { ownerId: p.id, x: data.x, y: data.y, angle: data.angle, kind, speed: kind === 'missile' ? 560 : def?.projectileSpeed ?? 900 });
+    this.relay(socketId, 'match:shot', encodeShot({ owner: this.indexOf(p.id), x: data.x, y: data.y, angle: data.angle, kind, speed: kind === 'missile' ? 560 : def?.projectileSpeed ?? 900 }));
   }
 
   onHit(attackerId: string, targetId: string, source: string): void {
@@ -523,7 +567,7 @@ export class Room {
       damage: def.damage * bot.damageMul,
       splash: def.splashRadius ?? 0,
     });
-    this.io.to(this.id).emit('match:shot', { ownerId: bot.id, x: nose.x, y: nose.y, angle, kind: def.kind, speed: def.projectileSpeed });
+    this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: nose.x, y: nose.y, angle, kind: def.kind, speed: def.projectileSpeed }));
   }
 
   /** Лазер бота: миттєвий промінь до першої перешкоди або цілі. */
@@ -554,7 +598,7 @@ export class Room {
         hit = p;
       }
     }
-    this.io.to(this.id).emit('match:shot', { ownerId: bot.id, x: from.x, y: from.y, angle, kind: 'laser', speed: 0 });
+    this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: from.x, y: from.y, angle, kind: 'laser', speed: 0 }));
     if (hit) this.applyDamage(bot, hit, damage, now);
   }
 
@@ -626,7 +670,7 @@ export class Room {
     for (let i = 0; i < 2; i++) this.updateProjectiles(dt / 2, now);
     if (this.ended) return;
     this.collectPickups(now);
-    this.io.to(this.id).emit('match:state', { participants: this.publicList(now), t: now - this.startedAt });
+    this.broadcast('match:state', this.encoder.encode(now - this.startedAt, this.netStates(now)));
 
     if (now - this.startedAt > MATCH_TIME_LIMIT_MS) this.checkEnd(true);
   }
