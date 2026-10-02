@@ -1,4 +1,5 @@
-import { Assets } from '../core/assets';
+import { ASTEROID_VARIANTS, drawAsteroid } from '../game/AsteroidArt';
+import { drawGlow } from '../game/fx';
 import { rand, pick } from '../core/math';
 import { ASTEROID_SIZES, type AsteroidSize } from '../game/entities/Asteroid';
 import { Starfield } from '../game/systems/Starfield';
@@ -11,13 +12,14 @@ interface Drifter {
   rot: number;
   spin: number;
   size: AsteroidSize;
+  variant: number;
   scale: number;
   alpha: number;
 }
 
 /** Живий фон для меню: зоряне небо + астероїди, що повільно пропливають. */
 export class MenuBackdrop {
-  private readonly stars = new Starfield('bgMenu');
+  private readonly stars = new Starfield(null);
   private drifters: Drifter[] = [];
   private w = 1;
   private h = 1;
@@ -42,8 +44,9 @@ export class MenuBackdrop {
       rot: rand(0, Math.PI * 2),
       spin: rand(-0.6, 0.6),
       size,
-      scale: depth * 1.2,
-      alpha: Math.min(1, 0.25 + depth * 0.45),
+      variant: Math.floor(rand(0, ASTEROID_VARIANTS)),
+      scale: depth * 1.8,
+      alpha: Math.min(1, 0.45 + depth * 0.45),
     };
   }
 
@@ -60,13 +63,13 @@ export class MenuBackdrop {
   render(ctx: CanvasRenderingContext2D): void {
     this.stars.render(ctx);
     for (const d of this.drifters) {
-      const img = Assets.get(ASTEROID_SIZES[d.size].sprite);
       const s = ASTEROID_SIZES[d.size].visual * 2 * d.scale;
+      drawGlow(ctx, d.x, d.y, 'rgba(255,110,30,1)', s * 0.6, 0.18 * d.alpha);
       ctx.globalAlpha = d.alpha;
       ctx.save();
       ctx.translate(d.x, d.y);
       ctx.rotate(d.rot);
-      ctx.drawImage(img, -s / 2, -s / 2, s, s);
+      drawAsteroid(ctx, d.size, d.variant, s);
       ctx.restore();
     }
     ctx.globalAlpha = 1;

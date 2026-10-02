@@ -1,14 +1,10 @@
 const BASE = import.meta.env.BASE_URL;
 
 const IMAGE_PATHS = {
-  astLarge: 'assets/sprites/ast-large.png',
-  astMedium: 'assets/sprites/ast-medium.png',
-  astSmall: 'assets/sprites/ast-small.png',
   explosion: 'assets/sprites/explosion.png',
   arrowLeft: 'assets/sprites/arrow-left.png',
   arrowRight: 'assets/sprites/arrow-right.png',
   bgGame: 'assets/bg/space.webp',
-  bgMenu: 'assets/bg/space2.webp',
   splash: 'assets/bg/splash.webp',
 } as const;
 

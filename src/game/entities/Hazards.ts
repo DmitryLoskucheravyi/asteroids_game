@@ -1,4 +1,4 @@
-import { Assets } from '../../core/assets';
+import { drawAsteroid } from '../AsteroidArt';
 import { Vec2, rand } from '../../core/math';
 import { drawGlow } from '../fx';
 import { Asteroid } from './Asteroid';
@@ -237,12 +237,11 @@ export class BossAsteroid extends Asteroid {
 
   render(ctx: CanvasRenderingContext2D, time: number): void {
     this.renderAura(ctx, time);
-    const img = Assets.get('astLarge');
     const d = this.visual * 2;
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
     ctx.rotate(this.rotation);
-    ctx.drawImage(img, -d / 2, -d / 2, d, d);
+    drawAsteroid(ctx, 'boss', this.variant, d);
     ctx.restore();
     if (this.charge > 0) {
       ctx.strokeStyle = `rgba(255,200,120,${this.charge})`;

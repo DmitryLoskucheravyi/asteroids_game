@@ -1,6 +1,6 @@
-import { Assets, type ImageKey } from '../../core/assets';
 import { Vec2, angleDiff, rand } from '../../core/math';
 import { drawGlow } from '../fx';
+import { ASTEROID_VARIANTS, drawAsteroid } from '../AsteroidArt';
 import { Entity, type WorldView } from './Entity';
 
 export type AsteroidSize = 'small' | 'medium' | 'large';
@@ -10,13 +10,12 @@ interface SizeSpec {
   visual: number;
   /** Базова швидкість, px/s */
   speed: number;
-  sprite: ImageKey;
 }
 
 export const ASTEROID_SIZES: Record<AsteroidSize, SizeSpec> = {
-  small: { visual: 17, speed: 230, sprite: 'astSmall' },
-  medium: { visual: 27, speed: 165, sprite: 'astMedium' },
-  large: { visual: 42, speed: 115, sprite: 'astLarge' },
+  small: { visual: 17, speed: 230 },
+  medium: { visual: 27, speed: 165 },
+  large: { visual: 42, speed: 115 },
 };
 
 /** Хітбокс трохи менший за картинку — щоб зіткнення відчувались чесними. */
@@ -26,6 +25,8 @@ const HITBOX_FACTOR = 0.8;
 export class Asteroid extends Entity {
   protected rotation = rand(0, Math.PI * 2);
   protected readonly spin = rand(-1.2, 1.2);
+  /** Варіант форми каменю */
+  protected readonly variant = Math.floor(rand(0, ASTEROID_VARIANTS));
   visual: number;
   /** Чи заморожений (для відмальовки) */
   frozen = false;
@@ -49,12 +50,13 @@ export class Asteroid extends Entity {
 
   render(ctx: CanvasRenderingContext2D, time: number): void {
     this.renderAura(ctx, time);
-    const img = Assets.get(ASTEROID_SIZES[this.size].sprite);
     const d = this.visual * 2;
+    // жар лави навколо каменя
+    drawGlow(ctx, this.pos.x, this.pos.y, 'rgba(255,110,30,1)', this.visual * 1.25, 0.22);
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
     ctx.rotate(this.rotation);
-    ctx.drawImage(img, -d / 2, -d / 2, d, d);
+    drawAsteroid(ctx, this.size, this.variant, d);
     ctx.restore();
     if (this.frozen) {
       ctx.globalCompositeOperation = 'lighter';

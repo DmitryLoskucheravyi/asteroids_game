@@ -1,5 +1,5 @@
 import type { Socket } from 'socket.io-client';
-import { Assets } from '../core/assets';
+import { drawAsteroid } from './AsteroidArt';
 import { Sfx } from '../core/audio';
 import { Vec2, angleDiff, clamp } from '../core/math';
 import type { InputState } from '../core/input';
@@ -1141,7 +1141,6 @@ export class PvpGame {
   }
 
   private renderObstacles(ctx: CanvasRenderingContext2D): void {
-    const img = Assets.ready ? Assets.get('astLarge') : null;
     const viewL = this.cameraX - this.width / 2 - 120;
     const viewR = this.cameraX + this.width / 2 + 120;
     const viewT = this.cameraY - this.height / 2 - 120;
@@ -1151,15 +1150,7 @@ export class PvpGame {
       ctx.save();
       ctx.translate(o.x, o.y);
       ctx.rotate(i * 1.7 + this.clock * 0.05 * (i % 2 ? 1 : -1));
-      if (img && img.complete && img.naturalWidth) {
-        const d = o.r * 2.3;
-        ctx.drawImage(img, -d / 2, -d / 2, d, d);
-      } else {
-        ctx.fillStyle = '#5a5470';
-        ctx.beginPath();
-        ctx.arc(0, 0, o.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      drawAsteroid(ctx, o.r > 70 ? 'boss' : 'large', i, o.r * 2.25);
       ctx.restore();
     });
   }

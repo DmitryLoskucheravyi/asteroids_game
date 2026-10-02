@@ -25,7 +25,10 @@ export class Starfield {
   private time = 0;
   private bgOffset = 0;
 
-  constructor(private readonly bg: 'bgGame' | 'bgMenu') {}
+  /** Процедурні туманності (коли фон-картинки немає) — малюються один раз */
+  private nebula: HTMLCanvasElement | null = null;
+
+  constructor(private readonly bg: 'bgGame' | null) {}
 
   resize(w: number, h: number): void {
     const first = this.layers.length === 0;
@@ -57,18 +60,45 @@ export class Starfield {
     });
   }
 
+  /** Кілька м'яких кольорових плям туманності — без зовнішніх картинок. */
+  private buildNebula(): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(this.w / 4));
+    c.height = Math.max(1, Math.round(this.h / 4));
+    const g = c.getContext('2d')!;
+    const blobs: [number, number, number, string][] = [
+      [0.2, 0.3, 0.45, 'rgba(90,60,200,0.35)'],
+      [0.8, 0.25, 0.35, 'rgba(40,120,220,0.25)'],
+      [0.65, 0.8, 0.5, 'rgba(200,60,140,0.18)'],
+      [0.1, 0.85, 0.3, 'rgba(255,120,40,0.12)'],
+    ];
+    for (const [x, y, r, col] of blobs) {
+      const rad = r * Math.max(c.width, c.height);
+      const grad = g.createRadialGradient(x * c.width, y * c.height, 0, x * c.width, y * c.height, rad);
+      grad.addColorStop(0, col);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, c.width, c.height);
+    }
+    return c;
+  }
+
   render(ctx: CanvasRenderingContext2D, speedMul = 1): void {
-    const img = Assets.get(this.bg);
     ctx.fillStyle = '#04030a';
     ctx.fillRect(0, 0, this.w, this.h);
-    if (img.naturalWidth) {
+    if (!this.bg) {
+      if (!this.nebula || Math.abs(this.nebula.width * 4 - this.w) > 8 || Math.abs(this.nebula.height * 4 - this.h) > 8) this.nebula = this.buildNebula();
+      ctx.drawImage(this.nebula, 0, 0, this.w, this.h);
+    }
+    const img = this.bg ? Assets.get(this.bg) : null;
+    if (img && img.naturalWidth) {
       // "cover" + повільний вертикальний дрейф із безшовним повтором
       const scale = Math.max(this.w / img.naturalWidth, this.h / img.naturalHeight);
       const dw = img.naturalWidth * scale;
       const dh = img.naturalHeight * scale;
       const dx = (this.w - dw) / 2;
       const off = this.bgOffset % dh;
-      ctx.globalAlpha = this.bg === 'bgGame' ? 0.9 : 0.75;
+      ctx.globalAlpha = 0.9;
       ctx.drawImage(img, dx, off, dw, dh);
       ctx.save();
       ctx.translate(dx, off);
