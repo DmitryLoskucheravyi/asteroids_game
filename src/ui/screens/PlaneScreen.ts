@@ -5,7 +5,7 @@ import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
 import { ITEM_DEFS, RARITIES, applyItemPassive, getItemDef, itemStatLines, loadoutDamageBonus, type ItemDef } from '../../game/items';
 import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
-import { effectivePlaneSpec, levelUpCost, tierUpCost, MAX_TIER, MAX_LEVEL_IN_TIER, planeCombat, type PlaneSpec } from '../../game/planes';
+import { effectivePlaneSpec, levelUpCost, tierUpCost, MAX_TIER, MAX_LEVEL_IN_TIER, PLANES, planeCombat, type PlaneSpec } from '../../game/planes';
 import { WEAPON_DEFS, getWeaponDef, DEFAULT_WEAPON_ID } from '../../game/weapons';
 import { JUMP_COOLDOWN, FLARE_COOLDOWN } from '../../game/systems/SkillSystem';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
@@ -71,7 +71,14 @@ export class PlaneScreen extends Screen {
     return h(
       'section',
       { class: 'card plane-hero' },
-      h('div', { class: 'plane-hero-pic' }, h('img', { src: planeIconUrl(p.id, progress.tier, progress.level), alt: '' })),
+      h(
+        'div',
+        { class: 'plane-hero-pic' },
+        button(icon(Icons.back), () => this.switchPlane(-1), 'hero-arrow prev', { 'aria-label': 'prev' }),
+        h('img', { src: planeIconUrl(p.id, progress.tier, progress.level), alt: '' }),
+        button(icon(Icons.back), () => this.switchPlane(1), 'hero-arrow next', { 'aria-label': 'next' }),
+        h('span', { class: 'hero-index' }, `${PLANES.indexOf(p) + 1} / ${PLANES.length}`),
+      ),
       h(
         'div',
         { class: 'plane-hero-info' },
@@ -84,6 +91,13 @@ export class PlaneScreen extends Screen {
         action,
       ),
     );
+  }
+
+  /** Стрілки на героїчному блоці — гортання літаків без повернення в ангар. */
+  private switchPlane(dir: number): void {
+    const i = PLANES.indexOf(this.plane);
+    const next = PLANES[(i + dir + PLANES.length) % PLANES.length];
+    this.app.show(new PlaneScreen(this.app, next));
   }
 
   // ---------- характеристики ----------
@@ -302,8 +316,13 @@ export class PlaneScreen extends Screen {
       'div',
       { class: 'page plane-page' },
       screenHeader(t(`plane.${this.plane.id}` as TKey), () => this.onBack(), h('div', { class: 'head-coins' }, coinBadge(Save.data.coins, 'coin-badge big'), crystalBadge(Save.data.crystals, 'coin-badge big crystal-badge'))),
-      h('div', { class: 'plane-layout' }, h('div', { class: 'plane-col' }, this.heroBlock(), this.upgradeBlock()), h('div', { class: 'plane-col' }, this.statsBlock())),
-      this.loadoutBlock(),
+      h(
+        'div',
+        { class: 'plane-layout' },
+        h('div', { class: 'plane-col col-stats' }, this.statsBlock()),
+        h('div', { class: 'plane-col col-hero' }, this.heroBlock(), this.upgradeBlock()),
+        h('div', { class: 'plane-col col-gear' }, this.loadoutBlock() ?? h('section', { class: 'card plane-loadout locked-gear' }, h('h3', {}, icon(Icons.lock, 'ico'), t('items.loadout')), h('p', { class: 'muted small' }, t('planePage.buyFirst')))),
+      ),
     );
   }
 
