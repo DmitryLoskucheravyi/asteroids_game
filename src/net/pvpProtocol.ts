@@ -30,6 +30,24 @@ export interface PublicParticipant {
   flare: boolean;
   phase: boolean;
   slowed: boolean;
+  lootCoins: number;
+  lootCrystals: number;
+}
+
+export interface PickupView {
+  id: number;
+  kind: 'coin' | 'crystal' | 'pile';
+  x: number;
+  y: number;
+  coins: number;
+  crystals: number;
+}
+
+export interface PickupTaken {
+  id: number;
+  by: string;
+  coins: number;
+  crystals: number;
 }
 
 export interface MatchInit {
@@ -39,6 +57,7 @@ export interface MatchInit {
   participants: PublicParticipant[];
   countdownMs: number;
   timeLimitMs: number;
+  pickups: PickupView[];
 }
 
 export interface ShotEvent {
@@ -69,6 +88,8 @@ export interface HitEvent {
 }
 
 export interface MatchResultEntry {
+  reward: { coins: number; crystals: number };
+  jackpot: { coins: number; crystals: number };
   id: string;
   userId: string | null;
   nickname: string;

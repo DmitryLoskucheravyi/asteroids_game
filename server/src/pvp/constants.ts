@@ -9,6 +9,13 @@ export const MATCH_TIME_LIMIT_MS = 4 * 60 * 1000;
 export const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
 export const HIT_RADIUS = 20;
 
+/** Лут на полі: монети й кристали спавняться весь матч, збитий літак лишає все зібране. */
+export const PICKUP_START = 30;
+export const PICKUP_MAX = 70;
+export const PICKUP_SPAWN_MS = 1500;
+export const PICKUP_RADIUS = 38;
+export const CRYSTAL_CHANCE = 0.18;
+
 /** Теплові пастки — дзеркалить FLARE_* у src/game/systems/SkillSystem.ts */
 export const FLARE_COOLDOWN_MS = 9000;
 export const FLARE_DURATION_MS = 1400;

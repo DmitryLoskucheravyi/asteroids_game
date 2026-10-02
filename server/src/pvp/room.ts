@@ -17,8 +17,13 @@ import {
   FLARE_DURATION_MS,
   FLARE_RADIUS,
   matchReward,
+  PICKUP_START,
+  PICKUP_MAX,
+  PICKUP_SPAWN_MS,
+  PICKUP_RADIUS,
+  CRYSTAL_CHANCE,
 } from './constants.js';
-import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind } from './types.js';
+import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind, Pickup } from './types.js';
 
 const BOT_NAMES = ['Вихор', 'Корсар', 'Немезида', 'Беркут', 'Скорпіон', 'Фантом-7', 'Ренегат', 'Сокира'];
 let botSeq = 0;
@@ -81,6 +86,8 @@ function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'ni
     lastItemAt: -Infinity,
     hitWindowStart: 0,
     hitsInWindow: 0,
+    lootCoins: 0,
+    lootCrystals: 0,
   };
 }
 
@@ -91,6 +98,9 @@ export class Room {
   private sockets = new Map<string, Socket>();
   private obstacles: Obstacle[];
   private projectiles: ServerProjectile[] = [];
+  private pickups = new Map<number, Pickup>();
+  private pickupSeq = 0;
+  private lastPickupSpawn = 0;
   private startedAt = Date.now();
   private tickHandle: ReturnType<typeof setInterval> | null = null;
   private ended = false;
@@ -149,6 +159,8 @@ export class Room {
       this.participants.set(botId, p);
     }
 
+    for (let i = 0; i < PICKUP_START; i++) this.spawnPickup(false);
+
     this.io.to(id).emit('match:init', {
       roomId: id,
       world: { w: WORLD_W, h: WORLD_H },
@@ -156,6 +168,7 @@ export class Room {
       participants: this.publicList(Date.now()),
       countdownMs: COUNTDOWN_MS,
       timeLimitMs: MATCH_TIME_LIMIT_MS,
+      pickups: [...this.pickups.values()],
     });
 
     setTimeout(() => this.begin(), COUNTDOWN_MS);
@@ -205,7 +218,49 @@ export class Room {
       flare: now < p.flareUntil,
       phase: now < p.phaseUntil,
       slowed: now < p.slowUntil,
+      lootCoins: p.lootCoins,
+      lootCrystals: p.lootCrystals,
     }));
+  }
+
+  /** Випадкова монета/кристал у вільному від перешкод місці. */
+  private spawnPickup(announce = true): void {
+    let pos = { x: 0, y: 0 };
+    for (let i = 0; i < 12; i++) {
+      pos = { x: 120 + Math.random() * (WORLD_W - 240), y: 120 + Math.random() * (WORLD_H - 240) };
+      if (this.obstacles.every((o) => Math.hypot(pos.x - o.x, pos.y - o.y) > o.r + 40)) break;
+    }
+    const crystal = Math.random() < CRYSTAL_CHANCE;
+    const p: Pickup = { id: ++this.pickupSeq, kind: crystal ? 'crystal' : 'coin', ...pos, coins: crystal ? 0 : 10 + Math.floor(Math.random() * 16), crystals: crystal ? 1 + (Math.random() < 0.25 ? 1 : 0) : 0 };
+    this.pickups.set(p.id, p);
+    if (announce) this.io.to(this.id).emit('match:pickup-spawn', p);
+  }
+
+  /** Збитий літак лишає на місці все, що встиг зібрати. */
+  private dropLoot(p: Participant): void {
+    if (p.lootCoins <= 0 && p.lootCrystals <= 0) return;
+    const pile: Pickup = { id: ++this.pickupSeq, kind: 'pile', x: p.pos.x, y: p.pos.y, coins: p.lootCoins, crystals: p.lootCrystals };
+    p.lootCoins = 0;
+    p.lootCrystals = 0;
+    this.pickups.set(pile.id, pile);
+    this.io.to(this.id).emit('match:pickup-spawn', pile);
+  }
+
+  private collectPickups(now: number): void {
+    if (now - this.lastPickupSpawn > PICKUP_SPAWN_MS && this.pickups.size < PICKUP_MAX) {
+      this.lastPickupSpawn = now;
+      this.spawnPickup();
+    }
+    for (const p of this.participants.values()) {
+      if (!p.alive) continue;
+      for (const pk of this.pickups.values()) {
+        if (Math.hypot(pk.x - p.pos.x, pk.y - p.pos.y) > PICKUP_RADIUS + (pk.kind === 'pile' ? 14 : 0)) continue;
+        p.lootCoins += pk.coins;
+        p.lootCrystals += pk.crystals;
+        this.pickups.delete(pk.id);
+        this.io.to(this.id).emit('match:pickup-taken', { id: pk.id, by: p.id, coins: pk.coins, crystals: pk.crystals });
+      }
+    }
   }
 
   /** Розсилка всім у кімнаті, крім автора (він уже показав ефект локально). */
@@ -322,6 +377,7 @@ export class Room {
       target.alive = false;
       target.firing = false;
       attacker.kills++;
+      this.dropLoot(target);
     }
     this.io.to(this.id).emit('match:hit', { attackerId: attacker.id, targetId: target.id, hp: target.hp, died, damage: Math.round(damage * 10) / 10 });
     if (died) this.checkEnd();
@@ -402,7 +458,7 @@ export class Room {
     const list = [...this.participants.values()];
     for (const p of list) {
       if (!p.isBot || !p.alive) continue;
-      const actions = updateBot(p, list, this.obstacles, this.projectiles, dt, now);
+      const actions = updateBot(p, list, this.obstacles, this.projectiles, this.pickups.values(), dt, now);
       for (const a of actions.shots) this.spawnBotShot(p, a);
       if (actions.flare) this.useSkill(p, 'flare', now, p.angle);
       if (p.activeItem?.active?.kind === 'nanoRepair' && p.hp < p.maxHp * 0.5) this.useSkill(p, 'nanoRepair', now, p.angle);
@@ -410,6 +466,7 @@ export class Room {
     // кілька підкроків — швидкі кулі не "проскакують" крізь літаки
     for (let i = 0; i < 2; i++) this.updateProjectiles(dt / 2, now);
     if (this.ended) return;
+    this.collectPickups(now);
     this.io.to(this.id).emit('match:state', { participants: this.publicList(now), t: now - this.startedAt });
 
     if (now - this.startedAt > MATCH_TIME_LIMIT_MS) this.checkEnd(true);
@@ -431,9 +488,34 @@ export class Room {
     });
     ranked.forEach((p, i) => (p.place = i + 1));
 
-    void this.grantRewards(ranked);
+    // увесь вантаж, що лишився на борту живих, забирає лише переможець
+    const jackpot = { coins: 0, crystals: 0 };
+    for (const p of ranked) {
+      if (!p.alive) continue;
+      jackpot.coins += p.lootCoins;
+      jackpot.crystals += p.lootCrystals;
+    }
+    const rewardOf = (p: Participant) => {
+      const base = matchReward(p.place!, p.kills);
+      const won = p.place === 1;
+      return { coins: base.coins + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp };
+    };
 
-    const results: MatchResultEntry[] = ranked.map((p) => ({ id: p.id, userId: p.userId, nickname: p.nickname, place: p.place!, kills: p.kills, isBot: p.isBot }));
+    void this.grantRewards(ranked, rewardOf);
+
+    const results: MatchResultEntry[] = ranked.map((p) => {
+      const r = rewardOf(p);
+      return {
+        id: p.id,
+        userId: p.userId,
+        nickname: p.nickname,
+        place: p.place!,
+        kills: p.kills,
+        isBot: p.isBot,
+        reward: { coins: r.coins, crystals: r.crystals },
+        jackpot: p.place === 1 ? jackpot : { coins: 0, crystals: 0 },
+      };
+    });
     // невелика пауза, щоб клієнт встиг показати останній вибух
     setTimeout(() => {
       this.io.to(this.id).emit('match:end', { results });
@@ -442,14 +524,14 @@ export class Room {
     }, 1200);
   }
 
-  private async grantRewards(ranked: Participant[]): Promise<void> {
+  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number }): Promise<void> {
     for (const p of ranked) {
       if (p.isBot || !p.userId) continue;
       try {
         const user = await User.findById(p.userId);
         if (!user) continue;
-        const reward = matchReward(p.place!, p.kills);
-        grantReward(user, { coins: reward.coins }, 'pvp');
+        const reward = rewardOf(p);
+        grantReward(user, { coins: reward.coins, crystals: reward.crystals }, 'pvp');
         addBp(user, reward.bpXp);
         ensureQuestSlots(user);
         incrementQuestProgress(user, 'pvpMatches', 1);

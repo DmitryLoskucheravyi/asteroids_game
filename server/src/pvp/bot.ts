@@ -1,4 +1,4 @@
-import type { Participant, Obstacle, ServerProjectile, Vec } from './types.js';
+import type { Participant, Obstacle, ServerProjectile, Vec, Pickup } from './types.js';
 import { WORLD_W, WORLD_H, FLARE_COOLDOWN_MS } from './constants.js';
 import { getWeaponDef, DEFAULT_WEAPON_ID } from '../content/weapons.js';
 
@@ -46,7 +46,7 @@ export interface BotActions {
   flare: boolean;
 }
 
-export function updateBot(bot: Participant, others: readonly Participant[], obstacles: readonly Obstacle[], projectiles: readonly ServerProjectile[], dt: number, now: number): BotActions {
+export function updateBot(bot: Participant, others: readonly Participant[], obstacles: readonly Obstacle[], projectiles: readonly ServerProjectile[], pickups: Iterable<Pickup>, dt: number, now: number): BotActions {
   const out: BotActions = { shots: [], flare: false };
   if (!bot.alive) return out;
 
@@ -73,6 +73,20 @@ export function updateBot(bot: Participant, others: readonly Participant[], obst
 
   switch (bot.botState) {
     case 'patrol': {
+      // поруч лут — летимо збирати (купи збитих літаків цікавіші за дрібні монети)
+      let loot: Pickup | null = null;
+      let lootScore = Infinity;
+      for (const pk of pickups) {
+        const d = Math.hypot(pk.x - bot.pos.x, pk.y - bot.pos.y) / (pk.kind === 'pile' ? 3 : 1);
+        if (d < 700 && d < lootScore) {
+          lootScore = d;
+          loot = pk;
+        }
+      }
+      if (loot) {
+        want = { x: loot.x - bot.pos.x, y: loot.y - bot.pos.y };
+        break;
+      }
       if (bot.botTimer <= 0) {
         bot.botTimer = 2 + Math.random() * 2.5;
         // боти "полюють": здебільшого летять у бік випадкового суперника, щоб бій не затягувався

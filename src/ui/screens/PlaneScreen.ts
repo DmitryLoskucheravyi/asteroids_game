@@ -32,12 +32,12 @@ export class PlaneScreen extends Screen {
     return Save.owns(this.plane.id);
   }
 
-  private async call(fn: () => Promise<{ profile: Parameters<typeof Save.applyProfile>[0] }>, sound = Sfx.powerup): Promise<boolean> {
+  private async call(fn: () => Promise<{ profile: Parameters<typeof Save.applyProfile>[0] }>, sound: () => void = () => Sfx.powerup()): Promise<boolean> {
     try {
       const { profile } = await fn();
       Save.applyProfile(profile);
-      sound();
       this.render();
+      sound();
       return true;
     } catch {
       Sfx.warning();
@@ -65,7 +65,7 @@ export class PlaneScreen extends Screen {
         affordable ? null : h('span', { class: 'need' }, t('planes.notEnough', { n: p.price - Save.data.coins })),
       );
     } else {
-      action = button(selected ? t('planes.selected') : t('planes.select'), () => void this.call(() => Server.selectPlane(p.id), Sfx.pickup), `btn${selected ? ' btn-on' : ' primary'}`, { 'data-autofocus': true });
+      action = button(selected ? t('planes.selected') : t('planes.select'), () => void this.call(() => Server.selectPlane(p.id), () => Sfx.pickup()), `btn${selected ? ' btn-on' : ' primary'}`, { 'data-autofocus': true });
     }
 
     return h(
@@ -204,7 +204,7 @@ export class PlaneScreen extends Screen {
     const p = this.plane;
     const l = Save.loadoutFor(p.id);
     const next = { active: l.active, passive: l.passive, weapon: l.weapon, [this.slot]: value };
-    await this.call(() => Server.setLoadout(p.id, next.active, next.passive, next.weapon), Sfx.pickup);
+    await this.call(() => Server.setLoadout(p.id, next.active, next.passive, next.weapon), () => Sfx.pickup());
   }
 
   private slotButton(slot: Slot): HTMLElement {

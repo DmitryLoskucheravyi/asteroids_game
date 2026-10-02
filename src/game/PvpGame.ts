@@ -14,7 +14,7 @@ import { Projectile } from './entities/Projectile';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, FLARE_RADIUS, SkillSystem } from './systems/SkillSystem';
 import type { Viewport } from './Game';
-import type { HitEvent, MatchInit, MatchResultEntry, Obstacle, PublicParticipant, ShotEvent, SkillEvent, SkillKind } from '../net/pvpProtocol';
+import type { HitEvent, MatchInit, MatchResultEntry, Obstacle, PickupTaken, PickupView, PublicParticipant, ShotEvent, SkillEvent, SkillKind } from '../net/pvpProtocol';
 
 const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
 const SEND_EVERY = 0.05;
@@ -76,6 +76,8 @@ export class PvpGame {
   readonly activeDef: ItemDef | undefined;
   readonly passiveDef: ItemDef | undefined;
   participants = new Map<string, PublicParticipant>();
+  /** Монети, кристали й купи луту збитих літаків на полі */
+  pickups = new Map<number, PickupView>();
   obstacles: Obstacle[] = [];
   worldW = 6400;
   worldH = 3600;
@@ -154,6 +156,11 @@ export class PvpGame {
     this.on('match:shot', (s: ShotEvent) => this.onRemoteShot(s));
     this.on('match:skill', (s: SkillEvent) => this.onRemoteSkill(s));
     this.on('match:hit', (h: HitEvent) => this.onHit(h));
+    this.on('match:pickup-spawn', (pk: PickupView) => {
+      this.pickups.set(pk.id, pk);
+      if (pk.kind === 'pile') this.ring(pk.x, pk.y, 70, '255,210,74', 0.5);
+    });
+    this.on('match:pickup-taken', (e: PickupTaken) => this.onPickupTaken(e));
     this.on('match:end', (data: { results: MatchResultEntry[] }) => {
       this.state = 'ended';
       this.results = data.results;
@@ -179,6 +186,7 @@ export class PvpGame {
     this.countdownLeft = data.countdownMs / 1000;
     this.timeLimit = data.timeLimitMs / 1000;
     for (const p of data.participants) this.participants.set(p.id, p);
+    for (const pk of data.pickups ?? []) this.pickups.set(pk.id, pk);
     const me = this.self;
     this.player.reset(me?.pos.x ?? this.worldW / 2, me?.pos.y ?? this.worldH / 2);
     this.player.angle = me?.angle ?? -Math.PI / 2;
@@ -216,6 +224,34 @@ export class PvpGame {
 
   get timeLeft(): number {
     return Math.max(0, this.timeLimit - this.matchTime);
+  }
+
+  /** Що зараз на борту — переживе матч лише у переможця */
+  get lootCoins(): number {
+    return this.self?.lootCoins ?? 0;
+  }
+
+  get lootCrystals(): number {
+    return this.self?.lootCrystals ?? 0;
+  }
+
+  private onPickupTaken(e: PickupTaken): void {
+    const pk = this.pickups.get(e.id);
+    this.pickups.delete(e.id);
+    if (!pk) return;
+    const color = pk.crystals > 0 && pk.coins === 0 ? ['#e2c2ff', '#b24fff'] : ['#fff1a8', '#ffd24a'];
+    this.particles.emit(pk.x, pk.y, { count: pk.kind === 'pile' ? 30 : 8, speed: [40, 160], life: [0.2, 0.5], size: [2, 4], colors: [...color, '#ffffff'] });
+    // зібране одразу видно в HUD, не чекаючи наступного стану з сервера
+    const who = this.participants.get(e.by);
+    if (who) {
+      who.lootCoins += e.coins;
+      who.lootCrystals += e.crystals;
+    }
+    if (e.by === this.selfId) {
+      const parts = [e.coins ? `+${e.coins}` : '', e.crystals ? `+${e.crystals}◆` : ''].filter(Boolean).join(' ');
+      this.texts.push({ x: pk.x, y: pk.y - 20, text: parts, t: 0, color: e.crystals && !e.coins ? '#d9a8ff' : '#ffd24a' });
+      Sfx.pickup();
+    }
   }
 
   get overdriveLeft(): number {
@@ -790,6 +826,7 @@ export class PvpGame {
 
     this.renderWorldBounds(ctx, w, h);
     this.renderObstacles(ctx);
+    this.renderPickups(ctx);
 
     for (const d of this.decoys) drawGlow(ctx, d.x, d.y, 'rgba(255,200,110,1)', 16 * Math.min(1, d.life), 0.9);
     this.particles.render(ctx);
@@ -932,6 +969,64 @@ export class PvpGame {
     ctx.setLineDash([]);
   }
 
+  private renderPickups(ctx: CanvasRenderingContext2D): void {
+    const l = this.cameraX - this.width / 2 - 60;
+    const r = this.cameraX + this.width / 2 + 60;
+    const t = this.cameraY - this.height / 2 - 60;
+    const b = this.cameraY + this.height / 2 + 60;
+    for (const pk of this.pickups.values()) {
+      if (pk.x < l || pk.x > r || pk.y < t || pk.y > b) continue;
+      const bob = Math.sin(this.clock * 3 + pk.id) * 3;
+      const x = pk.x;
+      const y = pk.y + bob;
+      if (pk.kind === 'coin') {
+        drawGlow(ctx, x, y, 'rgba(255,210,74,1)', 20, 0.5);
+        const sx = Math.abs(Math.cos(this.clock * 3 + pk.id));
+        ctx.fillStyle = '#ffd24a';
+        ctx.strokeStyle = '#a8740a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(x, y, 9 * Math.max(0.25, sx), 9, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (pk.kind === 'crystal') {
+        drawGlow(ctx, x, y, 'rgba(178,79,255,1)', 24, 0.6);
+        ctx.fillStyle = '#b77bff';
+        ctx.strokeStyle = '#3a145a';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 12);
+        ctx.lineTo(x + 8, y - 2);
+        ctx.lineTo(x, y + 12);
+        ctx.lineTo(x - 8, y - 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillRect(x - 2, y - 7, 3, 6);
+      } else {
+        // купа луту збитого літака — велика, пульсує, з підписом суми
+        const pulse = 1 + Math.sin(this.clock * 5) * 0.08;
+        drawGlow(ctx, x, y, 'rgba(255,200,80,1)', 46 * pulse, 0.7);
+        if (pk.crystals) drawGlow(ctx, x, y, 'rgba(178,79,255,1)', 30 * pulse, 0.5);
+        for (let i = 0; i < 6; i++) {
+          const a = i * 1.05 + this.clock;
+          ctx.fillStyle = i % 3 === 0 && pk.crystals ? '#b77bff' : '#ffd24a';
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(a) * 12, y + Math.sin(a) * 8, 6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.font = '700 13px Bungee, sans-serif';
+        ctx.textAlign = 'center';
+        const label = [pk.coins ? `${pk.coins}` : '', pk.crystals ? `${pk.crystals}◆` : ''].filter(Boolean).join('  ');
+        ctx.fillStyle = 'rgba(10,9,24,0.9)';
+        ctx.fillText(label, x + 1, y - 25);
+        ctx.fillStyle = '#ffe27a';
+        ctx.fillText(label, x, y - 26);
+      }
+    }
+  }
+
   private renderObstacles(ctx: CanvasRenderingContext2D): void {
     const img = Assets.ready ? Assets.get('astLarge') : null;
     const viewL = this.cameraX - this.width / 2 - 120;
@@ -981,6 +1076,11 @@ export class PvpGame {
     ctx.fillText(p.nickname, x + 1, y - 50);
     ctx.fillStyle = '#ffb3b3';
     ctx.fillText(p.nickname, x, y - 51);
+    if (p.lootCoins || p.lootCrystals) {
+      ctx.font = '600 11px Bungee, sans-serif';
+      ctx.fillStyle = '#ffd24a';
+      ctx.fillText(`${p.lootCoins}${p.lootCrystals ? `  ${p.lootCrystals}◆` : ''}`, x, y - 66);
+    }
   }
 
   private renderFlareShield(ctx: CanvasRenderingContext2D, x: number, y: number): void {

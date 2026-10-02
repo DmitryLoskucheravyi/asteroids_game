@@ -47,6 +47,9 @@ export interface Participant {
   /** Анти-чит: вікно підрахунку влучань */
   hitWindowStart: number;
   hitsInWindow: number;
+  /** Зібране на полі (переживе матч лише у переможця) */
+  lootCoins: number;
+  lootCrystals: number;
   /** Боти: поточний behavior-стан */
   botState?: 'patrol' | 'chase' | 'attack' | 'flee';
   botDir?: Vec;
@@ -76,6 +79,18 @@ export interface PublicParticipant {
   flare: boolean;
   phase: boolean;
   slowed: boolean;
+  lootCoins: number;
+  lootCrystals: number;
+}
+
+/** Монети / кристали на полі; 'pile' — усе, що випало зі збитого літака. */
+export interface Pickup {
+  id: number;
+  kind: 'coin' | 'crystal' | 'pile';
+  x: number;
+  y: number;
+  coins: number;
+  crystals: number;
 }
 
 /** Снаряд, який симулює сервер (постріли ботів). */
@@ -93,6 +108,9 @@ export interface ServerProjectile {
 }
 
 export interface MatchResultEntry {
+  /** Що гравець отримав за матч (місце + фраги + джекпот переможця) */
+  reward: { coins: number; crystals: number };
+  jackpot: { coins: number; crystals: number };
   id: string;
   userId: string | null;
   nickname: string;

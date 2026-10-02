@@ -4171,3 +4171,41 @@ input[type='range'] {
 .item-head h3 {
   overflow-wrap: anywhere;
 }
+
+
+/* ===================== PvP: лут ===================== */
+
+.pvp-loot {
+  display: flex;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.loot-coin {
+  color: var(--gold);
+}
+
+.loot-coin .ico,
+.loot-crystal .ico {
+  color: inherit;
+}
+
+.loot-crystal {
+  color: #d9a8ff;
+}
+
+.mr-jackpot,
+.mr-reward {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-weight: 700;
+}
+
+.mr-jackpot {
+  color: var(--gold);
+}

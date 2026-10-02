@@ -34,6 +34,8 @@ export class PvpScreen extends Screen {
   private timer!: HTMLElement;
   private alive!: HTMLElement;
   private kills!: HTMLElement;
+  private lootCoins!: HTMLElement;
+  private lootCrystals!: HTMLElement;
   private radarCanvas!: HTMLCanvasElement;
   private feed!: HTMLElement;
   private dead!: HTMLElement;
@@ -69,6 +71,8 @@ export class PvpScreen extends Screen {
     this.timer = h('div', { class: 'pvp-timer' }, '4:00');
     this.alive = h('span', {}, '5');
     this.kills = h('span', {}, '0');
+    this.lootCoins = h('span', {}, '0');
+    this.lootCrystals = h('span', {}, '0');
     this.radarCanvas = h('canvas', { width: RADAR_W * 2, height: RADAR_H * 2, class: 'radar-canvas', style: `width:${RADAR_W}px;height:${RADAR_H}px` }) as HTMLCanvasElement;
     this.feed = h('div', { class: 'frag-feed' });
     this.dead = h('div', { class: 'pvp-dead', hidden: true }, h('b', {}, t('pvp.downed')), h('span', {}, t('pvp.spectating')));
@@ -101,7 +105,7 @@ export class PvpScreen extends Screen {
         h('img', { class: 'pvp-avatar', src: planeIconUrl(plane, progress.tier, progress.level), alt: '' }),
         h('div', { class: 'pvp-self-info' }, h('div', { class: 'pvp-nick' }, Save.data.nickname || t(`plane.${plane}` as TKey)), h('div', { class: 'hp-bar' }, h('div', { class: 'hp-track' }, this.hpFill), this.hpText)),
       ),
-      h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t('pvp.alive') }, icon(Icons.heart, 'ico'), this.alive), h('span', { class: 'pvp-chip', title: t('matchresult.kills') }, icon(Icons.boss, 'ico'), this.kills))),
+      h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t('pvp.alive') }, icon(Icons.heart, 'ico'), this.alive), h('span', { class: 'pvp-chip', title: t('matchresult.kills') }, icon(Icons.boss, 'ico'), this.kills)), h('div', { class: 'pvp-loot', title: t('pvp.lootHint') }, h('span', { class: 'pvp-chip loot-coin' }, icon(Icons.coin, 'ico'), this.lootCoins), h('span', { class: 'pvp-chip loot-crystal' }, icon(Icons.crystal, 'ico'), this.lootCrystals))),
       h('div', { class: 'hud-tr' }, leaveBtn),
       this.feed,
       this.dead,
@@ -220,6 +224,8 @@ export class PvpScreen extends Screen {
     this.timer.classList.toggle('urgent', g.state === 'active' && g.timeLeft < 30);
     this.set(this.alive, String(g.aliveCount));
     this.set(this.kills, String(g.self?.kills ?? 0));
+    this.set(this.lootCoins, String(g.lootCoins));
+    this.set(this.lootCrystals, String(g.lootCrystals));
     this.dead.hidden = g.selfAlive || g.state === 'ended';
 
     const gun = g.gun;
@@ -277,6 +283,12 @@ export class PvpScreen extends Screen {
     ctx.strokeStyle = 'rgba(88,210,255,0.35)';
     ctx.strokeRect((g.player.pos.x - g.width / 2) * sx, (g.player.pos.y - g.height / 2) * sy, g.width * sx, g.height * sy);
     const pulse = 0.6 + Math.sin(performance.now() / 120) * 0.4;
+    // купи луту збитих літаків видно на радарі завжди
+    ctx.fillStyle = '#ffd24a';
+    for (const pk of g.pickups.values()) {
+      if (pk.kind !== 'pile') continue;
+      ctx.fillRect(pk.x * sx - 3, pk.y * sy - 3, 6, 6);
+    }
     for (const c of g.radarContacts()) {
       ctx.fillStyle = c.isSelf ? '#58d2ff' : `rgba(255,74,90,${pulse})`;
       ctx.beginPath();
