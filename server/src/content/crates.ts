@@ -26,8 +26,8 @@ type Kind = 'coins' | 'xp' | 'crystals' | 'item' | 'weapon' | 'plane';
 interface CrateDef {
   /** Скільки нагород випадає за одне відкриття */
   rolls: number;
-  /** Перша нагорода — гарантовано "цінна" (предмет/зброя/літак) */
-  guaranteed: boolean;
+  /** Шанс, що перша нагорода буде "цінною" (предмет/зброя/літак) — лише для найрідкісніших ящиків */
+  jackpotChance: number;
   weights: Record<Kind, number>;
   coins: [number, number];
   xp: [number, number];
@@ -36,13 +36,27 @@ interface CrateDef {
   itemRarities: ItemRarity[];
 }
 
+// Предмети, зброя й особливо літаки — рідкісна удача: основу нагород складають монети, досвід і кристали.
 const CRATES: Record<CrateType, CrateDef> = {
-  common: { rolls: 2, guaranteed: false, weights: { coins: 50, xp: 25, crystals: 15, item: 8, weapon: 0, plane: 2 }, coins: [40, 150], xp: [20, 60], crystals: [1, 3], itemRarities: ['common'] },
-  rare: { rolls: 3, guaranteed: false, weights: { coins: 40, xp: 20, crystals: 20, item: 13, weapon: 2, plane: 5 }, coins: [150, 400], xp: [60, 140], crystals: [3, 8], itemRarities: ['common', 'rare'] },
-  epic: { rolls: 3, guaranteed: true, weights: { coins: 32, xp: 15, crystals: 25, item: 18, weapon: 3, plane: 7 }, coins: [300, 700], xp: [120, 260], crystals: [8, 20], itemRarities: ['rare', 'epic'] },
-  mythic: { rolls: 4, guaranteed: true, weights: { coins: 26, xp: 12, crystals: 25, item: 24, weapon: 4, plane: 9 }, coins: [600, 1200], xp: [220, 420], crystals: [15, 35], itemRarities: ['epic', 'mythic'] },
-  legendary: { rolls: 5, guaranteed: true, weights: { coins: 22, xp: 10, crystals: 25, item: 25, weapon: 4, plane: 14 }, coins: [1000, 2500], xp: [350, 700], crystals: [25, 60], itemRarities: ['mythic', 'legendary'] },
+  common: { rolls: 2, jackpotChance: 0, weights: { coins: 60, xp: 28, crystals: 11, item: 0.8, weapon: 0, plane: 0.15 }, coins: [40, 150], xp: [20, 60], crystals: [1, 3], itemRarities: ['common'] },
+  rare: { rolls: 3, jackpotChance: 0, weights: { coins: 50, xp: 25, crystals: 22, item: 2.2, weapon: 0.3, plane: 0.4 }, coins: [150, 400], xp: [60, 140], crystals: [3, 8], itemRarities: ['common', 'rare'] },
+  epic: { rolls: 3, jackpotChance: 0, weights: { coins: 45, xp: 22, crystals: 28, item: 3.5, weapon: 0.6, plane: 0.8 }, coins: [300, 700], xp: [120, 260], crystals: [8, 20], itemRarities: ['rare', 'epic'] },
+  mythic: { rolls: 4, jackpotChance: 0.08, weights: { coins: 40, xp: 20, crystals: 32, item: 5, weapon: 0.9, plane: 1.2 }, coins: [600, 1200], xp: [220, 420], crystals: [15, 35], itemRarities: ['epic', 'mythic'] },
+  legendary: { rolls: 5, jackpotChance: 0.2, weights: { coins: 36, xp: 18, crystals: 34, item: 7, weapon: 1.2, plane: 1.8 }, coins: [1000, 2500], xp: [350, 700], crystals: [25, 60], itemRarities: ['mythic', 'legendary'] },
 };
+
+/** Серед доступних предметів дешевші рідкості трапляються значно частіше. */
+const ITEM_RARITY_WEIGHT: Record<ItemRarity, number> = { common: 10, rare: 5, epic: 2.5, mythic: 1.2, legendary: 0.5 };
+
+function weightedPick<T>(list: readonly T[], weight: (v: T) => number): T {
+  const total = list.reduce((s, v) => s + weight(v), 0);
+  let roll = Math.random() * total;
+  for (const v of list) {
+    if (roll < weight(v)) return v;
+    roll -= weight(v);
+  }
+  return list[0];
+}
 
 const between = ([a, b]: [number, number]): number => a + Math.floor(Math.random() * (b - a + 1));
 const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
@@ -70,7 +84,7 @@ function rollOne(def: CrateDef, kind: Kind, owned: Owned): CrateReward {
     case 'item': {
       const pool = ITEM_DEFS.filter((i) => def.itemRarities.includes(i.rarity) && !owned.items.includes(i.id));
       if (!pool.length) return { kind: 'crystals', amount: between(def.crystals) * 2 };
-      const it = pick(pool);
+      const it = weightedPick(pool, (i) => ITEM_RARITY_WEIGHT[i.rarity]);
       owned.items.push(it.id);
       return { kind: 'item', defId: it.id, rarity: it.rarity };
     }
@@ -84,7 +98,8 @@ function rollOne(def: CrateDef, kind: Kind, owned: Owned): CrateReward {
     case 'plane': {
       const pool = PLANE_IDS.filter((id) => !owned.planes.includes(id));
       if (!pool.length) return { kind: 'coins', amount: between(def.coins) * 3 };
-      const id = pick(pool);
+      // дорогі літаки випадають рідше за дешеві
+      const id = weightedPick(pool, (p) => 1 / Math.max(150, PLANE_PRICES[p]));
       owned.planes.push(id);
       return { kind: 'plane', planeId: id };
     }
@@ -95,7 +110,8 @@ export function openCrate(type: CrateType, owned: Owned): CrateReward[] {
   const def = CRATES[type];
   const out: CrateReward[] = [];
   for (let i = 0; i < def.rolls; i++) {
-    const kind = i === 0 && def.guaranteed ? pickKind(def.weights, ['item', 'weapon', 'plane']) : pickKind(def.weights);
+    const jackpot = i === 0 && Math.random() < def.jackpotChance;
+    const kind = jackpot ? pickKind(def.weights, ['item', 'weapon', 'plane']) : pickKind(def.weights);
     out.push(rollOne(def, kind, owned));
   }
   return out;
