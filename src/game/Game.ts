@@ -13,6 +13,8 @@ import { CRYSTAL_INTERVAL, SURVIVAL_BASE, getLevel, introducedHazard, type Level
 import { CRYSTAL_COINS } from './economy';
 import { applyItemPassive, effectiveActive, getItemDef, type ActiveKind } from './items';
 import { effectivePlaneSpec, getPlane, type PlaneFeature, type PlaneId } from './planes';
+import { Projectile } from './entities/Projectile';
+import { DEFAULT_WEAPON_ID, canDestroy, getWeaponDef, type WeaponDef } from './weapons';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
 import { Starfield } from './systems/Starfield';
@@ -105,6 +107,7 @@ export class Game {
   private mines: Mine[] = [];
   private lasers: LaserGate[] = [];
   private shower: Shower | null = null;
+  private projectiles: Projectile[] = [];
 
   width = 1600;
   height = 900;
@@ -157,6 +160,12 @@ export class Game {
   private empTimer = 0;
   private readonly empPos = new Vec2();
 
+  /** Екіпірована зброя (завжди є — за замовчуванням стартовий кулемет). */
+  private weapon: WeaponDef;
+  private fireTimer = 0;
+  ammo = 0;
+  reloadTimer = 0;
+
   constructor(
     readonly mode: GameMode,
     readonly levelId: number,
@@ -179,6 +188,9 @@ export class Game {
         this.itemCooldownMax = eff.cooldown;
       }
     }
+
+    this.weapon = getWeaponDef(loadout.weapon ?? undefined) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+    this.ammo = this.weapon.ammo === 'infinite' ? Infinity : this.weapon.ammo;
 
     this.player = new Player(spec, progress.tier, progress.level);
   }
@@ -229,6 +241,10 @@ export class Game {
     this.crystals = 0;
     this.prisms = 0;
     this.coins = 0;
+    this.projectiles = [];
+    this.fireTimer = 0;
+    this.reloadTimer = 0;
+    this.ammo = this.weapon.ammo === 'infinite' ? Infinity : this.weapon.ammo;
     this.difficultyStep = 0;
     this.ended = false;
     this.shake = 0;
@@ -419,7 +435,76 @@ export class Game {
     this.updateShieldRegen(dt);
     this.updateHazards(dt, true);
     this.updatePickups(dt);
+    this.updateWeapon(dt);
+    this.updateProjectiles(dt);
     if (!this.frozen) this.updateSpawning(dt);
+  }
+
+  /** Стан зброї для HUD: тип, патрони (Infinity — безлімітні), чи йде перезарядка. */
+  get ammoInfo(): { kind: WeaponDef['kind']; ammo: number; infinite: boolean; reloading: boolean; reloadPct: number } {
+    return {
+      kind: this.weapon.kind,
+      ammo: this.ammo,
+      infinite: this.weapon.ammo === 'infinite',
+      reloading: this.reloadTimer > 0,
+      reloadPct: this.weapon.reloadTime ? 1 - this.reloadTimer / this.weapon.reloadTime : 0,
+    };
+  }
+
+  private updateWeapon(dt: number): void {
+    this.fireTimer = Math.max(0, this.fireTimer - dt);
+    if (this.reloadTimer > 0) {
+      this.reloadTimer -= dt;
+      if (this.reloadTimer <= 0 && this.weapon.ammo !== 'infinite') this.ammo = this.weapon.ammo;
+      return;
+    }
+    if (!this.input.firing() || this.fireTimer > 0 || this.ammo <= 0) return;
+    this.fireTimer = 1 / this.weapon.fireRate;
+    if (this.weapon.ammo !== 'infinite') {
+      this.ammo--;
+      if (this.ammo <= 0) this.reloadTimer = this.weapon.reloadTime ?? 2;
+    }
+    const nose = this.player.nose();
+    const angle = this.player.spec.feature.noRotate ? -Math.PI / 2 : this.player.angle;
+    this.projectiles.push(new Projectile(this.weapon.kind, nose, angle, this.weapon.projectileSpeed, this.weapon.damage, this.weapon.splashRadius ?? 0));
+    Sfx.jump();
+  }
+
+  private destroyByWeapon(a: Asteroid, splashRadius: number): void {
+    a.kill();
+    this.burst(a.pos.x, a.pos.y, a.visual, a.size === 'large');
+    this.coins += a.size === 'medium' ? 4 : 2;
+    if (splashRadius > 0) {
+      for (const n of this.asteroids) {
+        if (n === a || !n.alive || !this.destructible(n) || !canDestroy('rocket', n.size)) continue;
+        if (Vec2.dist(n.pos, a.pos) < splashRadius + n.radius) {
+          n.kill();
+          this.burst(n.pos.x, n.pos.y, n.visual, true);
+          this.coins += n.size === 'medium' ? 4 : 2;
+        }
+      }
+    }
+  }
+
+  private updateProjectiles(dt: number): void {
+    const world = this.worldView();
+    for (const pr of this.projectiles) {
+      pr.update(dt, world);
+      if (!pr.alive) continue;
+      for (const a of this.asteroids) {
+        if (!a.alive || !this.destructible(a) || !canDestroy(pr.kind, a.size)) continue;
+        if (circlesOverlap(pr.pos, pr.radius, a.pos, a.radius)) {
+          pr.kill();
+          if (pr.kind === 'rocket') {
+            this.rings.push({ x: a.pos.x, y: a.pos.y, t: 0, dur: 0.35, r0: 10, r1: pr.splashRadius, color: '255,140,80' });
+            this.addShake(5);
+          }
+          this.destroyByWeapon(a, pr.splashRadius);
+          break;
+        }
+      }
+    }
+    this.projectiles = this.projectiles.filter((pr) => pr.alive);
   }
 
   private updateSurvivalProgress(dt: number): void {
@@ -1083,6 +1168,7 @@ export class Game {
     if (this.state !== 'dying' && this.state !== 'lost') this.player.render(ctx, boosted);
     for (const a of this.asteroids) if (!(a instanceof BlackHole)) a.render(ctx, this.clock);
     for (const l of this.lasers) l.render(ctx, this.clock);
+    for (const pr of this.projectiles) pr.render(ctx, this.clock);
     this.renderEffects(ctx);
 
     if (this.frozen && this.state === 'running') {

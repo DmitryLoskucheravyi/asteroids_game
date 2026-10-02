@@ -3,6 +3,7 @@ import { t, type TKey } from '../../core/i18n';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
 import { ITEM_DEFS, RARITIES, itemPrice, type ItemRarity } from '../../game/items';
+import { WEAPON_DEFS } from '../../game/weapons';
 import { Icons, button, coinBadge, h, icon } from '../dom';
 import { toast } from '../Modal';
 import { Screen } from '../Screen';
@@ -23,6 +24,39 @@ export class ItemsScreen extends Screen {
       Sfx.warning();
       btn.removeAttribute('aria-disabled');
     }
+  }
+
+  private async buyWeapon(id: string, btn: HTMLButtonElement): Promise<void> {
+    btn.setAttribute('aria-disabled', 'true');
+    try {
+      const { profile } = await Server.buyWeapon(id);
+      Save.applyProfile(profile);
+      Sfx.powerup();
+      toast(t('planes.bought'));
+      this.render();
+    } catch {
+      Sfx.warning();
+      btn.removeAttribute('aria-disabled');
+    }
+  }
+
+  private weaponCard(def: (typeof WEAPON_DEFS)[number]): HTMLElement {
+    const owned = Save.ownsWeapon(def.id);
+    const affordable = Save.data.coins >= def.price;
+    let action: HTMLElement;
+    if (owned) {
+      action = h('span', { class: 'owned-count' }, t('items.equipped'));
+    } else {
+      const buyBtn = button(h('span', { class: 'buy-label' }, t('items.buy'), coinBadge(def.price, 'coin-badge small')), () => void this.buyWeapon(def.id, buyBtn), `btn small${affordable ? '' : ' locked'}`);
+      action = buyBtn;
+    }
+    return h(
+      'section',
+      { class: 'card item-card' },
+      h('h3', {}, icon(def.kind === 'rocket' ? Icons.boss : Icons.bolt, 'ico active'), t(def.nameKey)),
+      h('p', { class: 'plane-desc' }, t(def.descKey)),
+      action,
+    );
   }
 
   private itemCard(def: (typeof ITEM_DEFS)[number]): HTMLElement {
@@ -56,6 +90,8 @@ export class ItemsScreen extends Screen {
       { class: 'page items' },
       screenHeader(t('items.title'), () => this.onBack(), coinBadge(Save.data.coins, 'coin-badge big')),
       h('p', { class: 'page-sub' }, t('items.subtitle')),
+      h('h3', { class: 'quest-group-title' }, t('items.weapon')),
+      h('div', { class: 'item-grid' }, ...WEAPON_DEFS.map((w) => this.weaponCard(w))),
       h('h3', { class: 'quest-group-title' }, t('items.slotActive')),
       h('div', { class: 'item-grid' }, ...actives.map((d) => this.itemCard(d))),
       h('h3', { class: 'quest-group-title' }, t('items.slotPassive')),

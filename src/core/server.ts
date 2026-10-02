@@ -52,7 +52,8 @@ export interface ServerProfile {
   crystals: number;
   planeProgress: { planeId: PlaneId; tier: number; level: number }[];
   items: { id: string; defId: string; rarity: ItemRarity }[];
-  loadouts: { planeId: PlaneId; active: string | null; passive: string | null }[];
+  loadouts: { planeId: PlaneId; active: string | null; passive: string | null; weapon: string | null }[];
+  ownedWeapons: string[];
 }
 
 export interface RewardResult {
@@ -113,5 +114,7 @@ export const Server = {
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; reward: CrateReward }>(`/crates/${crateId}/open`),
 
   buyItem: (defId: string, rarity: ItemRarity) => api.post<{ profile: ServerProfile }>('/items/buy', { defId, rarity }),
-  setLoadout: (planeId: PlaneId, active: string | null, passive: string | null) => api.post<{ profile: ServerProfile }>('/items/loadout', { planeId, active, passive }),
+  buyWeapon: (weaponId: string) => api.post<{ profile: ServerProfile }>('/items/buy-weapon', { weaponId }),
+  setLoadout: (planeId: PlaneId, active: string | null, passive: string | null, weapon: string | null) =>
+    api.post<{ profile: ServerProfile }>('/items/loadout', { planeId, active, passive, weapon }),
 };

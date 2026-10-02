@@ -44,6 +44,7 @@ const LoadoutSchema = new Schema(
     planeId: { type: String, required: true },
     active: { type: String, default: null },
     passive: { type: String, default: null },
+    weapon: { type: String, default: null },
   },
   { _id: false },
 );
@@ -81,6 +82,7 @@ const UserSchema = new Schema({
 
   items: { type: [OwnedItemSchema], default: [] },
   loadouts: { type: [LoadoutSchema], default: [] },
+  ownedWeapons: { type: [String], default: ['machine_gun'] },
 
   keybinds: { type: Schema.Types.Mixed, default: {} },
 

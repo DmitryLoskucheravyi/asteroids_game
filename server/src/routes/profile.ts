@@ -219,6 +219,7 @@ profileRouter.post('/reset', async (req: AuthedRequest, res) => {
   user.crates.splice(0, user.crates.length);
   user.items.splice(0, user.items.length);
   user.loadouts.splice(0, user.loadouts.length);
+  user.ownedWeapons = ['machine_gun'];
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });

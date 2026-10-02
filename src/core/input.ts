@@ -1,7 +1,8 @@
 import { Save } from './storage';
 
 export type Action = 'freeze' | 'boost' | 'jump' | 'pause' | 'item';
-export type BindAction = 'up' | 'down' | 'left' | 'right' | Action;
+/** 'fire' — утримувана дія (стрільба), не дискретна emit()-подія, тому окремо від Action. */
+export type BindAction = 'up' | 'down' | 'left' | 'right' | 'fire' | Action;
 
 /** Дефолтні клавіші (декілька варіантів на дію) — використовуються, доки гравець не перебʼє дію своєю. */
 export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
@@ -9,6 +10,7 @@ export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
   down: ['ArrowDown', 'KeyS'],
   left: ['ArrowLeft', 'KeyA'],
   right: ['ArrowRight', 'KeyD'],
+  fire: ['KeyX'],
   freeze: ['Digit1', 'Numpad1', 'KeyE'],
   boost: ['Digit2', 'Numpad2', 'KeyQ'],
   jump: ['Space', 'ShiftLeft', 'ShiftRight'],
@@ -16,7 +18,7 @@ export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
   pause: ['Escape', 'KeyP'],
 };
 
-export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'freeze', 'boost', 'jump', 'item', 'pause'];
+export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'fire', 'freeze', 'boost', 'jump', 'item', 'pause'];
 
 /** Коди клавіш для дії: кастомний бінд гравця (якщо є) замінює дефолтний набір повністю. */
 function codesFor(action: BindAction): string[] {
@@ -58,6 +60,8 @@ export class InputState {
   private readonly listeners = new Set<(a: Action) => void>();
   /** Вектор з сенсорного джойстика (null — джойстик не активний). */
   touchAxis: { x: number; y: number } | null = null;
+  /** Кнопка вогню на сенсорному HUD утримується окремо від клавіатури. */
+  touchFiring = false;
 
   constructor() {
     window.addEventListener('keydown', (e) => {
@@ -101,6 +105,11 @@ export class InputState {
     return codesFor(action).some((c) => this.keys.has(c));
   }
 
+  /** Чи утримується вогонь зараз (клавіатура або сенсорна кнопка). */
+  firing(): boolean {
+    return this.down('fire') || this.touchFiring;
+  }
+
   axis(): { x: number; y: number } {
     if (this.touchAxis) return this.touchAxis;
     let x = 0;
@@ -120,5 +129,6 @@ export class InputState {
   clear(): void {
     this.keys.clear();
     this.touchAxis = null;
+    this.touchFiring = false;
   }
 }

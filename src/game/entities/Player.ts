@@ -94,6 +94,13 @@ export class Player {
     return new Vec2(this.pos.x + Math.cos(a) * r, this.pos.y + Math.sin(a) * r);
   }
 
+  /** Точка перед носом — звідти стартують снаряди. */
+  nose(): Vec2 {
+    const a = this.spec.feature.noRotate ? -Math.PI / 2 : this.angle;
+    const r = this.spec.feature.noRotate ? 18 : 24;
+    return new Vec2(this.pos.x + Math.cos(a) * r, this.pos.y + Math.sin(a) * r);
+  }
+
   render(ctx: CanvasRenderingContext2D, boosted: boolean): void {
     // мерехтіння під час невразливості
     if (this.invulnerable > 0 && Math.floor(this.time * 20) % 2 === 0) return;

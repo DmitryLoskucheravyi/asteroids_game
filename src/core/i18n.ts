@@ -291,6 +291,7 @@ const uk = {
   'control.freeze': 'Заморозка',
   'control.boost': 'Форсаж',
   'control.jump': 'Ривок',
+  'control.fire': 'Вогонь',
   'control.item': 'Актив (предмет)',
   'control.pause': 'Пауза',
 
@@ -346,6 +347,15 @@ const uk = {
   'itemDesc.decoyFlare': 'Коротка невразливість — збиває наведення переслідувачів',
   'itemDesc.nanoRepair': 'Миттєво відновлює щит',
   'hud.item': 'Актив',
+
+  'weapon.machineGun': 'Кулемет',
+  'weapon.rocketLauncher': 'Ракетниця',
+  'weaponDesc.machineGun': 'Швидкий вогонь, безлімітні патрони, низький урон',
+  'weaponDesc.rocketLauncher': 'Повільна, вибух зачіпає сусідні астероїди, патрони обмежені',
+  'items.weapon': 'Зброя',
+  'items.slotWeapon': 'Зброя',
+  'hud.ammo': 'Патрони',
+  'hud.reloading': 'Перезарядка',
 };
 
 type Dict = Record<keyof typeof uk, string>;
@@ -639,6 +649,7 @@ const en: Dict = {
   'control.freeze': 'Freeze',
   'control.boost': 'Boost',
   'control.jump': 'Dash',
+  'control.fire': 'Fire',
   'control.item': 'Active item',
   'control.pause': 'Pause',
 
@@ -694,6 +705,15 @@ const en: Dict = {
   'itemDesc.decoyFlare': 'Brief invulnerability — breaks pursuer lock-on',
   'itemDesc.nanoRepair': 'Instantly restores your shield',
   'hud.item': 'Active',
+
+  'weapon.machineGun': 'Machine Gun',
+  'weapon.rocketLauncher': 'Rocket Launcher',
+  'weaponDesc.machineGun': 'Fast fire rate, unlimited ammo, low damage',
+  'weaponDesc.rocketLauncher': 'Slow, splash hits nearby asteroids, limited ammo',
+  'items.weapon': 'Weapon',
+  'items.slotWeapon': 'Weapon',
+  'hud.ammo': 'Ammo',
+  'hud.reloading': 'Reloading',
 };
 
 export type TKey = keyof typeof uk;

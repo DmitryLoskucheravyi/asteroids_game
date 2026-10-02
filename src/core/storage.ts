@@ -13,6 +13,7 @@ export interface Loadout {
   planeId: PlaneId;
   active: string | null;
   passive: string | null;
+  weapon: string | null;
 }
 
 export interface SurvivalRecord {
@@ -48,6 +49,7 @@ export interface SaveData {
   keybinds: Record<string, string>;
   items: OwnedItem[];
   loadouts: Loadout[];
+  ownedWeapons: string[];
   settings: {
     lang: Lang;
     volume: number;
@@ -79,6 +81,7 @@ const defaults = (): SaveData => ({
   keybinds: {},
   items: [],
   loadouts: [],
+  ownedWeapons: ['machine_gun'],
   settings: {
     lang: navigator.language?.toLowerCase().startsWith('uk') || navigator.language?.toLowerCase().startsWith('ru') ? 'uk' : 'en',
     volume: 0.7,
@@ -113,6 +116,7 @@ class SaveStore {
         keybinds: { ...(parsed.keybinds ?? {}) },
         items: Array.isArray(parsed.items) ? parsed.items : [],
         loadouts: Array.isArray(parsed.loadouts) ? parsed.loadouts : [],
+        ownedWeapons: Array.isArray(parsed.ownedWeapons) && parsed.ownedWeapons.length ? parsed.ownedWeapons : ['machine_gun'],
       };
     } catch {
       return base;
@@ -149,6 +153,7 @@ class SaveStore {
       keybinds: p.keybinds,
       items: p.items,
       loadouts: p.loadouts,
+      ownedWeapons: p.ownedWeapons,
     };
     this.save();
   }
@@ -206,7 +211,11 @@ class SaveStore {
   }
 
   loadoutFor(id: PlaneId): Loadout {
-    return this.data.loadouts.find((l) => l.planeId === id) ?? { planeId: id, active: null, passive: null };
+    return this.data.loadouts.find((l) => l.planeId === id) ?? { planeId: id, active: null, passive: null, weapon: null };
+  }
+
+  ownsWeapon(id: string): boolean {
+    return this.data.ownedWeapons.includes(id);
   }
 
   itemById(id: string | null): OwnedItem | undefined {

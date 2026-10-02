@@ -35,6 +35,8 @@ export class GameScreen extends Screen {
   private hudCenter!: HTMLElement;
   private hudCoins!: HTMLElement;
   private hudCoinsText!: HTMLElement;
+  private hudAmmo!: HTMLElement;
+  private hudAmmoText!: HTMLElement;
   private slots!: Record<'freeze' | 'boost' | 'jump' | 'item', SkillSlot>;
   private shieldSlot!: HTMLElement;
   private featSlot!: HTMLElement;
@@ -58,6 +60,8 @@ export class GameScreen extends Screen {
     this.hudCenter = h('div', { class: 'hud-center' });
     this.hudCoinsText = h('span', {}, String(Save.data.coins));
     this.hudCoins = h('div', { class: 'hud-coins' }, icon(Icons.coin, 'ico coin'), this.hudCoinsText);
+    this.hudAmmoText = h('span', {}, '');
+    this.hudAmmo = h('div', { class: 'hud-ammo' }, icon(Icons.bolt, 'ico'), this.hudAmmoText);
 
     const slot = (key: 'freeze' | 'boost' | 'jump' | 'item', ic: string, hint: string, labelKey = `hud.${key}`): SkillSlot => {
       const count = h('span', { class: 'sk-count' });
@@ -94,9 +98,10 @@ export class GameScreen extends Screen {
       { class: `game${isTouch() ? ' touch' : ''}` },
       h('div', { class: 'hud-tl' }, h('div', { class: 'hud-label' }, label), this.hudTime, campaign ? h('div', { class: 'hud-bar' }, this.hudProgress) : null),
       this.hudCenter,
-      h('div', { class: 'hud-tr' }, this.hudCoins, fsBtn, this.pauseBtn),
+      h('div', { class: 'hud-tr' }, this.hudAmmo, this.hudCoins, fsBtn, this.pauseBtn),
       h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el, this.slots.item.el),
       isTouch() ? this.buildJoystick() : null,
+      isTouch() ? this.buildFireButton() : null,
     );
     return el;
   }
@@ -142,6 +147,20 @@ export class GameScreen extends Screen {
     zone.addEventListener('pointerup', end);
     zone.addEventListener('pointercancel', end);
     return zone;
+  }
+
+  private buildFireButton(): HTMLElement {
+    const btn = h('button', { class: 'fire-btn', tabindex: -1 }, icon(Icons.bolt, 'ico'));
+    const set = (v: boolean) => (e: PointerEvent): void => {
+      e.preventDefault();
+      this.app.input.touchFiring = v;
+      btn.classList.toggle('on', v);
+    };
+    btn.addEventListener('pointerdown', set(true));
+    btn.addEventListener('pointerup', set(false));
+    btn.addEventListener('pointercancel', set(false));
+    btn.addEventListener('pointerleave', set(false));
+    return btn;
   }
 
   onShow(): void {
@@ -248,6 +267,13 @@ export class GameScreen extends Screen {
       this.hudCoins.classList.add('bump');
     }
     this.set(this.hudCoinsText, coinsNow);
+
+    const ammo = g.ammoInfo;
+    this.hudAmmo.hidden = ammo.infinite;
+    if (!ammo.infinite) {
+      this.set(this.hudAmmoText, ammo.reloading ? t('hud.reloading') : String(ammo.ammo));
+      this.hudAmmo.classList.toggle('reloading', ammo.reloading);
+    }
 
     const fz = this.slots.freeze;
     this.set(fz.count, String(sk.freezeCharges));

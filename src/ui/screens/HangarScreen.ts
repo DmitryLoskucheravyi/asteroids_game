@@ -5,6 +5,7 @@ import { Save } from '../../core/storage';
 import { getItemDef } from '../../game/items';
 import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
 import { effectivePlaneSpec, levelUpCost, tierUpCost, MAX_TIER, MAX_LEVEL_IN_TIER, PLANES, planeStats, type PlaneSpec } from '../../game/planes';
+import { WEAPON_DEFS, getWeaponDef } from '../../game/weapons';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
@@ -123,16 +124,15 @@ export class HangarScreen extends Screen {
     );
   }
 
-  /** Модалка вибору предмета зі свого інвентарю (або зняти) в заданий слот. */
-  private pickItem(p: PlaneSpec, slot: 'active' | 'passive'): void {
+  /** Модалка вибору предмета (actіve/passive) або зброї зі свого інвентарю в заданий слот. */
+  private pickItem(p: PlaneSpec, slot: 'active' | 'passive' | 'weapon'): void {
     const loadout = Save.loadoutFor(p.id);
-    const owned = Save.data.items.filter((it) => getItemDef(it.defId)?.slot === slot);
-    const current = slot === 'active' ? loadout.active : loadout.passive;
+    const current = loadout[slot];
 
-    const apply = async (itemId: string | null): Promise<void> => {
+    const apply = async (value: string | null): Promise<void> => {
       try {
-        const next = slot === 'active' ? { active: itemId, passive: loadout.passive } : { active: loadout.active, passive: itemId };
-        const { profile } = await Server.setLoadout(p.id, next.active, next.passive);
+        const next = { active: loadout.active, passive: loadout.passive, weapon: loadout.weapon, [slot]: value };
+        const { profile } = await Server.setLoadout(p.id, next.active, next.passive, next.weapon);
         Save.applyProfile(profile);
         Sfx.pickup();
         m.close();
@@ -142,21 +142,25 @@ export class HangarScreen extends Screen {
       }
     };
 
-    const rows = [
-      button(t('items.empty'), () => void apply(null), `btn${current === null ? ' btn-on' : ''}`, { 'data-autofocus': current === null }),
-      ...owned.map((it) => {
+    const rows: HTMLElement[] = [];
+    if (slot === 'weapon') {
+      for (const w of WEAPON_DEFS) {
+        if (!Save.ownsWeapon(w.id)) continue;
+        rows.push(button(t(w.nameKey), () => void apply(w.id), `btn${current === w.id ? ' btn-on' : ''}`, { 'data-autofocus': current === w.id }));
+      }
+    } else {
+      const owned = Save.data.items.filter((it) => getItemDef(it.defId)?.slot === slot);
+      rows.push(button(t('items.empty'), () => void apply(null), `btn${current === null ? ' btn-on' : ''}`, { 'data-autofocus': current === null }));
+      for (const it of owned) {
         const def = getItemDef(it.defId);
-        return button(
-          h('span', {}, t(def!.nameKey), h('span', { class: `rarity-dot rarity-${it.rarity}` })),
-          () => void apply(it.id),
-          `btn${current === it.id ? ' btn-on' : ''}`,
-        );
-      }),
-    ];
+        rows.push(button(h('span', {}, t(def!.nameKey), h('span', { class: `rarity-dot rarity-${it.rarity}` })), () => void apply(it.id), `btn${current === it.id ? ' btn-on' : ''}`));
+      }
+    }
 
+    const titleKey = slot === 'active' ? 'items.slotActive' : slot === 'passive' ? 'items.slotPassive' : 'items.slotWeapon';
     const m = new Modal({
-      title: t(slot === 'active' ? 'items.slotActive' : 'items.slotPassive'),
-      body: owned.length ? [] : [h('p', { class: 'muted' }, t('items.empty'))],
+      title: t(titleKey),
+      body: rows.length ? [] : [h('p', { class: 'muted' }, t('items.empty'))],
       actions: rows,
       onEscape: () => m.close(),
     }).open();
@@ -164,17 +168,29 @@ export class HangarScreen extends Screen {
 
   private loadoutBlock(p: PlaneSpec): HTMLElement {
     const loadout = Save.loadoutFor(p.id);
-    const chip = (slot: 'active' | 'passive', itemId: string | null) => {
-      const owned = Save.data.items.find((it) => it.id === itemId);
-      const def = owned ? getItemDef(owned.defId) : undefined;
-      return h(
+    const chip = (slot: 'active' | 'passive' | 'weapon', labelKey: TKey, label: string) =>
+      h(
         'div',
         { class: 'loadout-row' },
-        h('span', { class: 'set-label' }, t(slot === 'active' ? 'items.slotActive' : 'items.slotPassive')),
-        button(def ? h('span', {}, t(def.nameKey), h('span', { class: `rarity-dot rarity-${owned!.rarity}` })) : t('items.empty'), () => this.pickItem(p, slot), 'btn small'),
+        h('span', { class: 'set-label' }, t(labelKey)),
+        button(label, () => this.pickItem(p, slot), 'btn small'),
       );
+    const itemLabel = (itemId: string | null): string => {
+      const owned = Save.data.items.find((it) => it.id === itemId);
+      const def = owned ? getItemDef(owned.defId) : undefined;
+      return def ? t(def.nameKey) : t('items.empty');
     };
-    return h('div', { class: 'loadout-block' }, chip('active', loadout.active), chip('passive', loadout.passive));
+    const weaponLabel = (id: string | null): string => {
+      const def = getWeaponDef(id ?? undefined);
+      return def ? t(def.nameKey) : t('weapon.machineGun');
+    };
+    return h(
+      'div',
+      { class: 'loadout-block' },
+      chip('active', 'items.slotActive', itemLabel(loadout.active)),
+      chip('passive', 'items.slotPassive', itemLabel(loadout.passive)),
+      chip('weapon', 'items.slotWeapon', weaponLabel(loadout.weapon)),
+    );
   }
 
   protected build(): HTMLElement {

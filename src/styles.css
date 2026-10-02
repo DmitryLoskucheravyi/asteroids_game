@@ -1530,7 +1530,8 @@ input[type='range'] {
   grid-template-columns: repeat(2, auto);
   grid-template-areas:
     'shield freeze'
-    'boost jump';
+    'boost jump'
+    'none item';
   gap: 10px;
 }
 
@@ -1547,6 +1548,36 @@ input[type='range'] {
 }
 .game.touch .sk-jump {
   grid-area: jump;
+}
+.game.touch .sk-item {
+  grid-area: item;
+}
+
+.fire-btn {
+  position: absolute;
+  right: 110px;
+  bottom: 34px;
+  width: 86px;
+  height: 86px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 90, 40, 0.18);
+  border: 2px solid rgba(255, 130, 60, 0.6);
+  color: #ffb36b;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.fire-btn .ico {
+  width: 34px;
+  height: 34px;
+}
+
+.fire-btn.on {
+  background: rgba(255, 120, 40, 0.4);
+  transform: scale(0.94);
 }
 
 .game.touch .skill:not(.sk-shield) {
@@ -2243,6 +2274,28 @@ input[type='range'] {
   font-weight: 800;
   color: #ffe9a8;
   font-variant-numeric: tabular-nums;
+}
+
+.hud-ammo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 14px 0 10px;
+  border-radius: 12px;
+  background: rgba(10, 9, 24, 0.6);
+  border: 1px solid rgba(255, 130, 60, 0.35);
+  backdrop-filter: blur(6px);
+  font-family: var(--font-ui);
+  font-weight: 800;
+  color: #ffb36b;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-ammo.reloading {
+  color: var(--muted);
+  font-size: 11px;
+  animation: gift-wiggle 1.2s ease-in-out infinite;
 }
 
 .hud-coins.bump {
