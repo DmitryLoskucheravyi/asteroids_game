@@ -169,6 +169,8 @@ export class Room {
       );
       p.botState = 'patrol';
       p.botTimer = 0;
+      // у рейтинговому бот має правдоподібний рейтинг поруч із гравцями (для емблеми на екрані завантаження)
+      if (mode === 'ranked') p.rankPoints = Math.max(0, Math.round(avgRp + (Math.random() - 0.5) * 300));
       this.participants.set(botId, p);
     }
 
@@ -234,6 +236,7 @@ export class Room {
       slowed: now < p.slowUntil,
       lootCoins: p.lootCoins,
       lootCrystals: p.lootCrystals,
+      rankPoints: p.rankPoints,
     }));
   }
 
@@ -554,7 +557,9 @@ export class Room {
       const won = p.place === 1;
       // рейтинговий матч дає на чверть більше монет
       const mul = this.mode === 'ranked' ? 1.25 : 1;
-      return { coins: Math.round(base.coins * mul) + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, crate };
+      // досвід пілота: за місце й фраги
+      const xp = 30 + p.kills * 8 + Math.max(0, ROOM_SIZE + 1 - p.place!) * 6;
+      return { coins: Math.round(base.coins * mul) + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, xp, crate };
     };
 
     const rankOf = (p: Participant) => {
@@ -574,7 +579,7 @@ export class Room {
         place: p.place!,
         kills: p.kills,
         isBot: p.isBot,
-        reward: { coins: r.coins, crystals: r.crystals, crate: r.crate },
+        reward: { coins: r.coins, crystals: r.crystals, crate: r.crate, xp: r.xp, bp: r.bpXp },
         jackpot: p.place === 1 ? jackpot : { coins: 0, crystals: 0 },
         rank: rankOf(p),
       };
@@ -587,14 +592,14 @@ export class Room {
     }, 1200);
   }
 
-  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; crate: CrateType | null }, rankOf: (p: Participant) => { after: number } | null): Promise<void> {
+  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; xp: number; crate: CrateType | null }, rankOf: (p: Participant) => { after: number } | null): Promise<void> {
     for (const p of ranked) {
       if (p.isBot || !p.userId) continue;
       try {
         const user = await User.findById(p.userId);
         if (!user) continue;
         const reward = rewardOf(p);
-        grantReward(user, { coins: reward.coins, crystals: reward.crystals, crate: reward.crate ?? undefined }, 'pvp');
+        grantReward(user, { coins: reward.coins, xp: reward.xp, crystals: reward.crystals, crate: reward.crate ?? undefined }, 'pvp');
         addBp(user, reward.bpXp);
         ensureQuestSlots(user);
         incrementQuestProgress(user, 'pvpMatches', 1);

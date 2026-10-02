@@ -6,6 +6,8 @@ import { formatTime } from '../../core/math';
 import { Save } from '../../core/storage';
 import { itemSvg, weaponSvg } from '../../game/ItemArt';
 import { planeIconUrl } from '../../game/PlaneArt';
+import type { PlaneId } from '../../game/planes';
+import { rankEmblem, rankInfo } from '../../game/ranks';
 import { PvpGame } from '../../game/PvpGame';
 import { BOOST_DURATION, FLARE_DURATION } from '../../game/systems/SkillSystem';
 import type { MatchInit, MatchResultEntry } from '../../net/pvpProtocol';
@@ -42,6 +44,7 @@ export class PvpScreen extends Screen {
   private slots!: Record<'weapon' | 'boost' | 'jump' | 'flare' | 'item', Slot>;
   private weaponBar!: HTMLElement;
   private leftViaResult = false;
+  private loading: HTMLElement | null = null;
   private cache = new Map<HTMLElement, string>();
 
   constructor(
@@ -112,6 +115,7 @@ export class PvpScreen extends Screen {
       this.dead,
       h('div', { class: 'hud-skills pvp-skills' }, this.slots.weapon.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.item.el, passive),
       h('div', { class: 'radar-box' }, h('div', { class: 'radar-label' }, t('pvp.radar')), this.radarCanvas),
+      (this.loading = this.loadingScreen()),
     );
   }
 
@@ -214,7 +218,41 @@ export class PvpScreen extends Screen {
     slot.el.style.setProperty('--p', String(active ? activeP : ready ? 0 : left / Math.max(0.01, max)));
   }
 
+  /**
+   * Екран завантаження поверх бою на час відліку: режим, картки всіх пілотів (по черзі),
+   * смуга підготовки й порада. Зникає, щойно сервер стартує матч.
+   */
+  private loadingScreen(): HTMLElement {
+    const init = this.initData;
+    const ranked = init.mode === 'ranked';
+    const selfId = this.socket.id;
+    const tips: TKey[] = ['pvp.tip1', 'pvp.tip2', 'pvp.tip3', 'pvp.tip4', 'pvp.tip5'];
+    const cards = init.participants.map((p, i) => {
+      const rk = ranked ? rankInfo(p.rankPoints ?? 0) : null;
+      return h(
+        'div',
+        { class: `load-card${p.id === selfId ? ' self' : ''}`, style: `--i:${i}` },
+        h('img', { class: 'load-plane', src: planeIconUrl(p.planeId as PlaneId, p.tier ?? 1, p.level ?? 1), alt: '' }),
+        h('b', { class: 'load-nick' }, p.nickname),
+        h('span', { class: 'load-meta' }, rk ? h('span', { class: 'load-rank', html: rankEmblem(rk.id, rk.roman), title: `${t(rk.nameKey)} ${rk.roman}` }) : null, h('span', { class: 'tier-chip' }, `${t('planes.tier')} ${p.tier ?? 1}`)),
+      );
+    });
+    return h(
+      'div',
+      { class: `pvp-loading${ranked ? ' ranked' : ''}`, style: `--count:${init.countdownMs}ms` },
+      h('div', { class: 'load-head' }, h('small', {}, t(ranked ? 'online.ranked' : 'online.casual')), h('h2', {}, t('pvp.matchFound'))),
+      h('div', { class: 'load-grid' }, ...cards),
+      h('div', { class: 'load-foot' }, h('div', { class: 'load-bar' }, h('i')), h('span', { class: 'load-status' }, t('pvp.preparing')), h('p', { class: 'load-tip' }, t(tips[Math.floor(Math.random() * tips.length)]))),
+    );
+  }
+
   private updateHud(): void {
+    if (this.loading && this.game.state !== 'countdown') {
+      const el = this.loading;
+      this.loading = null;
+      el.classList.add('leaving');
+      setTimeout(() => el.remove(), 600);
+    }
     const g = this.game;
     const sk = g.skills;
     const pct = Math.max(0, g.hp / g.hpMax);

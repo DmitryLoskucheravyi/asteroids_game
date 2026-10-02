@@ -85,6 +85,7 @@ export interface PublicParticipant {
   slowed: boolean;
   lootCoins: number;
   lootCrystals: number;
+  rankPoints: number;
 }
 
 /** Монети / кристали на полі; 'pile' — усе, що випало зі збитого літака. */
@@ -113,7 +114,7 @@ export interface ServerProjectile {
 
 export interface MatchResultEntry {
   /** Що гравець отримав за матч (місце + фраги + джекпот переможця) */
-  reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null };
+  reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null; xp: number; bp: number };
   jackpot: { coins: number; crystals: number };
   /** Рейтинговий матч: рейтинг до і після */
   rank: { before: number; after: number; delta: number } | null;

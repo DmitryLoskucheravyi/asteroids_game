@@ -32,6 +32,7 @@ export interface PublicParticipant {
   slowed: boolean;
   lootCoins: number;
   lootCrystals: number;
+  rankPoints?: number;
 }
 
 export interface PickupView {
@@ -89,7 +90,7 @@ export interface HitEvent {
 }
 
 export interface MatchResultEntry {
-  reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null };
+  reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null; xp?: number; bp?: number };
   jackpot: { coins: number; crystals: number };
   rank: { before: number; after: number; delta: number } | null;
   id: string;
