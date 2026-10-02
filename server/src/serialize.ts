@@ -2,6 +2,7 @@ import type { HydratedDocument } from 'mongoose';
 import type { UserDoc } from './models/User.js';
 import { findQuestDef } from './content/quests.js';
 import { getItemDef } from './content/items.js';
+import { SEASON_ID, claimableCount } from './content/pass.js';
 
 export function serializeProfile(user: HydratedDocument<UserDoc>) {
   return {
@@ -38,6 +39,7 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
       premium: user.passPremium,
       claimedFree: user.passClaimedFree,
       claimedPremium: user.passClaimedPremium,
+      claimable: user.passSeasonId === SEASON_ID ? claimableCount(user.passBpPoints, user.passPremium, user.passClaimedFree, user.passClaimedPremium) : 0,
     },
     crates: user.crates.map((c) => ({
       id: (c as unknown as { _id: { toString(): string } })._id.toString(),

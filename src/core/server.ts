@@ -38,6 +38,8 @@ export interface PassView {
   premium: boolean;
   claimedFree: number[];
   claimedPremium: number[];
+  /** Скільки тьєрів можна забрати зараз (рахує сервер) */
+  claimable?: number;
 }
 
 export interface CrateView {
@@ -89,11 +91,21 @@ export type CrateReward =
   | { kind: 'item'; defId: string; rarity: ItemRarity }
   | { kind: 'weapon'; weaponId: string };
 
+export interface PassRewardView {
+  coins: number;
+  xp: number;
+  crate?: CrateType;
+  crystals?: number;
+  item?: string;
+  weapon?: string;
+  plane?: PlaneId;
+}
+
 export interface PassTierView {
   tier: number;
   bpRequired: number;
-  reward: { coins: number; xp: number; crate?: CrateType; crystals?: number };
-  premiumReward: { coins: number; xp: number; crate?: CrateType; crystals?: number };
+  reward: PassRewardView;
+  premiumReward: PassRewardView;
 }
 
 export const Server = {
@@ -131,6 +143,7 @@ export const Server = {
       claimedPremium: number[];
     }>('/pass'),
   claimTier: (tier: number, track: 'free' | 'premium') => api.post<{ profile: ServerProfile; reward: RewardResult }>(`/pass/claim/${tier}`, { track }),
+  claimAllPass: () => api.post<{ profile: ServerProfile; total: { coins: number; xp: number; crystals: number; crates: number; tiers: number } }>('/pass/claim-all'),
   buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
 
   openCrate: (crateId: string) => api.post<{ profile: ServerProfile; rewards: CrateReward[] }>(`/crates/${crateId}/open`),

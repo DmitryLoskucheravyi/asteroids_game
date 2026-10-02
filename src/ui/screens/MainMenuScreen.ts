@@ -115,6 +115,7 @@ export class MainMenuScreen extends Screen {
     const unopened = Save.data.crates.filter((c) => !c.openedAt).length;
     const questsReady = Save.data.quests.filter((q) => !q.claimed && q.progress >= q.target).length;
     const questsDone = Save.data.quests.filter((q) => q.claimed).length;
+    const passReady = Save.data.pass.claimable ?? 0;
 
     const soundBtn = button(icon(Save.data.settings.volume > 0 ? Icons.sound : Icons.mute), () => {
       const s = Save.data.settings;
@@ -148,7 +149,7 @@ export class MainMenuScreen extends Screen {
         'nav',
         { class: 'lobby-rail rail-right', 'aria-label': t('menu.quests') },
         this.railBtn(Icons.trophy, t('menu.quests'), Save.data.quests.length ? `${questsDone} / ${Save.data.quests.length}` : null, go(() => new QuestsScreen(this.app)), questsReady),
-        this.railBtn(Icons.star, t('menu.pass'), `${Save.data.pass.bpPoints} BP`, go(() => new BattlePassScreen(this.app))),
+        this.railBtn(Icons.star, t('menu.pass'), passReady ? t('menu.passReady', { n: passReady }) : `${Save.data.pass.bpPoints} BP`, go(() => new BattlePassScreen(this.app)), passReady, passReady ? 'ready' : ''),
         this.railBtn(Icons.coin, t('menu.daily'), daily.available ? t('menu.dailyReady') : t('menu.dailyDay', { n: daily.day }), () => this.openDaily(), daily.available ? 1 : 0, daily.available ? 'ready' : ''),
         this.railBtn(Icons.gear, t('menu.profile'), t('menu.settings'), go(() => new ProfileScreen(this.app))),
       ),

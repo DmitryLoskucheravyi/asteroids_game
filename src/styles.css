@@ -5710,3 +5710,100 @@ input[type='range'] {
     margin-top: 90px;
   }
 }
+
+
+/* ===================== пропуск: різні нагороди, маркер, "зібрати все" ===================== */
+
+.pass-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.pass-actions .premium-banner {
+  flex: 1;
+  margin: 0;
+}
+
+.claim-all-btn {
+  animation: claim-pulse 1.4s ease-in-out infinite;
+}
+
+.claim-all-btn .buy-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rail-badge.inline {
+  position: static;
+  min-width: 22px;
+  height: 22px;
+}
+
+@keyframes claim-pulse {
+  50% {
+    box-shadow: 0 0 22px rgba(255, 180, 50, 0.65);
+  }
+}
+
+.tier-reward {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tier-visual {
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+.tier-visual .ico.tier-big {
+  width: 30px;
+  height: 30px;
+}
+
+.tier-visual .ico.crystal {
+  color: #c07bff;
+}
+
+.tier-plane {
+  width: 44px;
+  height: 44px;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.tier-name {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  max-width: 120px;
+}
+
+.tier-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 8px;
+}
+
+.tier-cell.special {
+  box-shadow: inset 0 0 0 1px rgba(255, 210, 74, 0.55);
+}
+
+/* маркер: тьєр, який можна забрати, світиться */
+.tier-cell.ready {
+  box-shadow:
+    inset 0 0 0 2px var(--gold),
+    0 0 18px -4px rgba(255, 200, 60, 0.7);
+  animation: claim-pulse 1.4s ease-in-out infinite;
+}
+
+.rail-btn.ready .rail-badge {
+  animation: claim-pulse 1.4s ease-in-out infinite;
+}
+
