@@ -18,3 +18,19 @@ export const PLANE_PRICES: Record<PlaneId, number> = {
 };
 
 export const isPlaneId = (id: string): id is PlaneId => (PLANE_IDS as readonly string[]).includes(id);
+
+export const MAX_TIER = 4;
+export const MAX_LEVEL_IN_TIER = 4;
+
+// Тримати синхронізовано з src/game/planes.ts (levelUpCost/tierUpCost).
+export function levelUpCost(price: number, tier: number, level: number): number {
+  return Math.max(20, Math.round((price || 60) * 0.08 * tier * level));
+}
+
+export function tierUpCost(price: number, tier: number): { coins: number; crystals: number } {
+  const crystalsByTier = [0, 40, 120, 300];
+  return {
+    coins: levelUpCost(price, tier, MAX_LEVEL_IN_TIER) * 6,
+    crystals: crystalsByTier[tier] ?? 300,
+  };
+}

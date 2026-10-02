@@ -8,7 +8,7 @@ import { planeIconUrl } from '../../game/PlaneArt';
 import { getPlane } from '../../game/planes';
 import { toggleFullscreen } from '../../app/App';
 import { openDailyModal } from '../DailyModal';
-import { Icons, button, coinBadge, h, icon } from '../dom';
+import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { Screen } from '../Screen';
 import { BattlePassScreen } from './BattlePassScreen';
 import { CratesScreen } from './CratesScreen';
@@ -44,7 +44,8 @@ export class MainMenuScreen extends Screen {
       'aria-label': t('menu.daily'),
       title: t('menu.daily'),
     });
-    const planeImg = h('img', { class: 'menu-plane', src: planeIconUrl(plane.id), alt: '' });
+    const planeProgress = Save.progressFor(plane.id);
+    const planeImg = h('img', { class: 'menu-plane', src: planeIconUrl(plane.id, planeProgress.tier, planeProgress.level), alt: '' });
 
     const unopenedCrates = Save.data.crates.filter((c) => !c.openedAt).length;
     const cratesBtn = button(h('span', {}, icon(Icons.gift), unopenedCrates > 0 ? h('span', { class: 'badge-count' }, String(unopenedCrates)) : null), go(new CratesScreen(this.app)), `icon-btn crates-btn${unopenedCrates > 0 ? ' ready' : ''}`, {
@@ -77,7 +78,7 @@ export class MainMenuScreen extends Screen {
     return h(
       'div',
       { class: 'menu' },
-      h('div', { class: 'wallet' }, coinBadge(Save.data.coins, 'coin-badge big'), cratesBtn, dailyBtn),
+      h('div', { class: 'wallet' }, coinBadge(Save.data.coins, 'coin-badge big'), Save.data.crystals > 0 ? crystalBadge(Save.data.crystals, 'coin-badge big crystal-badge') : null, cratesBtn, dailyBtn),
       h('div', { class: 'corner-actions' }, profileBtn, soundBtn, button(icon(Icons.fullscreen), toggleFullscreen, 'icon-btn', { 'aria-label': 'fullscreen' })),
       h('div', { class: 'menu-head' }, h('h1', { class: 'logo' }, 'ASTEROIDS'), h('p', { class: 'menu-sub' }, t('menu.subtitle'))),
       h(

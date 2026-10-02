@@ -68,6 +68,68 @@ export const PLANES: readonly PlaneSpec[] = [
 
 export const getPlane = (id: PlaneId): PlaneSpec => PLANES.find((p) => p.id === id) ?? PLANES[0];
 
+// ---------- тіри та рівні ----------
+
+export const MAX_TIER = 4;
+export const MAX_LEVEL_IN_TIER = 4;
+
+export interface PlaneProgress {
+  planeId: PlaneId;
+  tier: number;
+  level: number;
+}
+
+export const defaultProgress = (planeId: PlaneId): PlaneProgress => ({ planeId, tier: 1, level: 1 });
+
+/** Вартість прокачки рівня (в межах тіру) — монети, зростають з тіром і рівнем. */
+export function levelUpCost(price: number, tier: number, level: number): number {
+  return Math.max(20, Math.round((price || 60) * 0.08 * tier * level));
+}
+
+/** Вартість підвищення тіру — монети (помітний стрибок) + кристали (рідкісна валюта, робить тір "подією"). */
+export function tierUpCost(price: number, tier: number): { coins: number; crystals: number } {
+  const crystalsByTier = [0, 40, 120, 300];
+  return {
+    coins: levelUpCost(price, tier, MAX_LEVEL_IN_TIER) * 6,
+    crystals: crystalsByTier[tier] ?? 300,
+  };
+}
+
+/** Структурна надбавка статів за тір (понад рівневі бонуси) — спільна для всіх літаків. */
+const TIER_STAT_BONUS = 0.09;
+
+/** Для кожного тіру понад 1-й — яке поле PlaneFeature підсилюється і на скільки (своя "фішка" під кожен літак). */
+const TIER_FEATURE_BONUS: Partial<Record<PlaneId, (feature: PlaneFeature, tier: number) => PlaneFeature>> = {
+  falcon: (f, tier) => ({ ...f, boostDurationMul: (f.boostDurationMul ?? 1) + 0.15 * (tier - 1) }),
+  phantom: (f, tier) => ({ ...f, jumpDistanceMul: (f.jumpDistanceMul ?? 1) + 0.1 * (tier - 1), jumpCooldownMul: Math.max(0.5, (f.jumpCooldownMul ?? 1) - 0.03 * (tier - 1)) }),
+  blaze: (f, tier) => ({ ...f, extraBoost: (f.extraBoost ?? 0) + (tier >= 4 ? 1 : 0) }),
+  wasp: (f, tier) => ({ ...f, extraFreeze: (f.extraFreeze ?? 0) + Math.floor((tier - 1) / 2) }),
+  collector: (f, tier) => ({ ...f, magnetRadius: (f.magnetRadius ?? 0) + 40 * (tier - 1) }),
+  swift: (f, tier) => ({ ...f, jumpCharges: (f.jumpCharges ?? 1) + (tier >= 4 ? 1 : 0) }),
+  titan: (f, tier) => ({ ...f, shieldRegen: Math.max(10, (f.shieldRegen ?? 22) - 2 * (tier - 1)) }),
+  chronos: (f, tier) => ({ ...f, freezeDurationMul: (f.freezeDurationMul ?? 1) + 0.15 * (tier - 1) }),
+  thunder: (f, tier) => ({ ...f, dashShockwave: (f.dashShockwave ?? 0) + 20 * (tier - 1) }),
+  phoenix: (f, tier) => ({ ...f, extraBoost: (f.extraBoost ?? 0) + (tier >= 3 ? 1 : 0) }),
+};
+
+/** Рахує фінальний PlaneSpec із базового + бонусів тіру/рівня. Єдина точка, де "сирий" PLANES перетворюється на той, що летить. */
+export function effectivePlaneSpec(base: PlaneSpec, progress: PlaneProgress): PlaneSpec {
+  const tier = Math.min(MAX_TIER, Math.max(1, progress.tier));
+  const level = Math.min(MAX_LEVEL_IN_TIER, Math.max(1, progress.level));
+  const tierFactor = 1 + TIER_STAT_BONUS * (tier - 1);
+  const levelAccelFactor = 1 + 0.025 * (level - 1);
+  const levelSpeedFactor = 1 + 0.015 * (level - 1);
+  const levelDragFactor = 1 - 0.01 * (level - 1);
+  const featureBonus = TIER_FEATURE_BONUS[base.id];
+  return {
+    ...base,
+    accel: base.accel * tierFactor * levelAccelFactor,
+    maxSpeed: base.maxSpeed * tierFactor * levelSpeedFactor,
+    drag: base.drag * levelDragFactor,
+    feature: featureBonus ? featureBonus(base.feature, tier) : base.feature,
+  };
+}
+
 /** Нормовані показники 0..1 для смужок на екрані вибору. */
 export function planeStats(p: PlaneSpec): { speed: number; agility: number; size: number } {
   return {

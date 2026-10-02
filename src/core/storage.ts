@@ -1,4 +1,4 @@
-import type { PlaneId } from '../game/planes';
+import { defaultProgress, type PlaneId, type PlaneProgress } from '../game/planes';
 import type { Lang } from './i18n';
 import type { CrateView, PassView, QuestView, ServerProfile } from './server';
 
@@ -17,8 +17,12 @@ export interface SaveData {
   plane: PlaneId;
   /** Внутрішньоігрова валюта */
   coins: number;
+  /** Рідкісна валюта на тір-апи літаків */
+  crystals: number;
   /** Куплені літаки */
   owned: PlaneId[];
+  /** Тір/рівень прокачки кожного купленого літака (відсутній запис = тір1/рівень1) */
+  planeProgress: PlaneProgress[];
   /** Щоденна нагорода: дата останнього отримання (YYYY-MM-DD) і довжина серії */
   daily: { last: string; streak: number };
   /** Досвід і рівень пілота (акаунтний прогрес, окремо від рівнів кампанії) */
@@ -48,7 +52,9 @@ const defaults = (): SaveData => ({
   survivalTop: [],
   plane: 'falcon',
   coins: 0,
+  crystals: 0,
   owned: ['falcon'],
+  planeProgress: [],
   daily: { last: '', streak: 0 },
   xp: 0,
   level: 1,
@@ -80,7 +86,9 @@ class SaveStore {
         stars: Array.isArray(parsed.stars) ? parsed.stars : [],
         survivalTop: Array.isArray(parsed.survivalTop) ? parsed.survivalTop : [],
         coins: Math.max(0, Math.floor(Number(parsed.coins) || 0)),
+        crystals: Math.max(0, Math.floor(Number(parsed.crystals) || 0)),
         owned: Array.isArray(parsed.owned) && parsed.owned.length ? parsed.owned : ['falcon'],
+        planeProgress: Array.isArray(parsed.planeProgress) ? parsed.planeProgress : [],
         daily: { ...base.daily, ...(parsed.daily ?? {}) },
         quests: Array.isArray(parsed.quests) ? parsed.quests : [],
         crates: Array.isArray(parsed.crates) ? parsed.crates : [],
@@ -106,10 +114,12 @@ class SaveStore {
       ...this.data,
       nickname: p.nickname,
       coins: p.coins,
+      crystals: p.crystals,
       xp: p.xp,
       level: p.level,
       plane: p.selectedPlane,
       owned: p.ownedPlanes,
+      planeProgress: p.planeProgress,
       stars: p.stars,
       unlocked: p.unlocked,
       survivalTop: p.survivalTop,
@@ -168,6 +178,10 @@ class SaveStore {
 
   owns(id: PlaneId): boolean {
     return this.data.owned.includes(id);
+  }
+
+  progressFor(id: PlaneId): PlaneProgress {
+    return this.data.planeProgress.find((p) => p.planeId === id) ?? defaultProgress(id);
   }
 
   get bestSurvival(): number {

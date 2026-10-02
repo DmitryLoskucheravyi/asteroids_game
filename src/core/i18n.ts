@@ -306,6 +306,18 @@ const uk = {
   'item.rarity.epic': 'Епічний',
   'item.rarity.mythic': 'Міфічний',
   'item.rarity.legendary': 'Легендарний',
+
+  'planes.tier': 'Тір',
+  'planes.levelUp': 'Прокачати рівень',
+  'planes.tierUp': 'Підвищити тір',
+  'planes.maxTier': 'Максимальний тір',
+  'planes.needCrystals': 'Не вистачає {n} кристалів',
+  'planes.upgradeTitle': 'Прокачка',
+  'planes.before': 'До',
+  'planes.after': 'Після',
+  'planes.confirm': 'Прокачати',
+  'planes.accelStat': 'Прискорення',
+  'planes.dragStat': 'Гальмування',
 };
 
 type Dict = Record<keyof typeof uk, string>;
@@ -614,6 +626,18 @@ const en: Dict = {
   'item.rarity.epic': 'Epic',
   'item.rarity.mythic': 'Mythic',
   'item.rarity.legendary': 'Legendary',
+
+  'planes.tier': 'Tier',
+  'planes.levelUp': 'Upgrade level',
+  'planes.tierUp': 'Upgrade tier',
+  'planes.maxTier': 'Max tier',
+  'planes.needCrystals': 'Need {n} more crystals',
+  'planes.upgradeTitle': 'Upgrade',
+  'planes.before': 'Before',
+  'planes.after': 'After',
+  'planes.confirm': 'Upgrade',
+  'planes.accelStat': 'Acceleration',
+  'planes.dragStat': 'Braking',
 };
 
 export type TKey = keyof typeof uk;

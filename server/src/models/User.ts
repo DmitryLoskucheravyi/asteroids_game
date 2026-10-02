@@ -25,6 +25,15 @@ const SurvivalEntrySchema = new Schema(
   { _id: false },
 );
 
+const PlaneProgressSchema = new Schema(
+  {
+    planeId: { type: String, required: true },
+    tier: { type: Number, default: 1 },
+    level: { type: Number, default: 1 },
+  },
+  { _id: false },
+);
+
 const UserSchema = new Schema({
   nickname: { type: String, required: true, unique: true, minlength: 3, maxlength: 20, trim: true },
   nicknameLower: { type: String, required: true, unique: true },
@@ -32,11 +41,13 @@ const UserSchema = new Schema({
   passwordHash: { type: String, required: true },
 
   coins: { type: Number, default: 0 },
+  crystals: { type: Number, default: 0 },
   xp: { type: Number, default: 0 },
   level: { type: Number, default: 1 },
 
   selectedPlane: { type: String, default: 'falcon' },
   ownedPlanes: { type: [String], default: ['falcon'] },
+  planeProgress: { type: [PlaneProgressSchema], default: [] },
   stars: { type: [Number], default: [] },
   unlocked: { type: Number, default: 1 },
   survivalTop: { type: [SurvivalEntrySchema], default: [] },

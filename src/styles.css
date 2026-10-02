@@ -2004,6 +2004,85 @@ input[type='range'] {
   color: var(--muted);
 }
 
+/* ---------- прокачка літака (тір/рівень) ---------- */
+
+.head-coins {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crystal-badge {
+  color: #c08aff;
+}
+
+.crystal-badge .ico.crystal {
+  color: #b24fff;
+}
+
+.upgrade-block {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upgrade-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tier-chip {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.upgrade-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upgrade-actions .btn.small {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.upgrade-actions .btn.small.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stat-compare-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.stat-compare-row .ico.tiny {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.stat-after {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
 .reward {
   margin-top: 16px;
   padding: 12px 14px;

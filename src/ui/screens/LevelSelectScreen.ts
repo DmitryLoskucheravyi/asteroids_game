@@ -17,8 +17,12 @@ export function screenHeader(title: string, onBack: () => void, right?: HTMLElem
   );
 }
 
-export function starsRow(n: number, max = 3): HTMLElement {
-  return h('div', { class: 'stars' }, ...Array.from({ length: max }, (_, i) => icon(Icons.star, `ico star${i < n ? ' on' : ''}`)));
+export function starsRow(n: number, max = 3, color?: string): HTMLElement {
+  return h(
+    'div',
+    { class: 'stars' },
+    ...Array.from({ length: max }, (_, i) => icon(Icons.star, `ico star${i < n ? ' on' : ''}`, i < n && color ? `color:${color}` : undefined)),
+  );
 }
 
 /** Вибір рівня кампанії (аналог LevelSelectForm, але 12 рівнів замість 5). */

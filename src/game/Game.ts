@@ -11,7 +11,7 @@ import { Pickup, type PickupKind } from './entities/Pickup';
 import { Player } from './entities/Player';
 import { CRYSTAL_INTERVAL, SURVIVAL_BASE, getLevel, introducedHazard, type LevelConfig } from './levels';
 import { CRYSTAL_COINS } from './economy';
-import { getPlane, type PlaneFeature, type PlaneId } from './planes';
+import { effectivePlaneSpec, getPlane, type PlaneFeature, type PlaneId } from './planes';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
 import { Starfield } from './systems/Starfield';
@@ -150,7 +150,8 @@ export class Game {
     planeId: PlaneId,
     private readonly input: InputState,
   ) {
-    this.player = new Player(getPlane(planeId));
+    const progress = Save.progressFor(planeId);
+    this.player = new Player(effectivePlaneSpec(getPlane(planeId), progress), progress.tier, progress.level);
   }
 
   get level(): LevelConfig {

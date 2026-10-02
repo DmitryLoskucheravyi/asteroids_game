@@ -48,6 +48,8 @@ export interface ServerProfile {
   pass: PassView;
   crates: CrateView[];
   keybinds: Record<string, string>;
+  crystals: number;
+  planeProgress: { planeId: PlaneId; tier: number; level: number }[];
 }
 
 export interface RewardResult {
@@ -78,6 +80,8 @@ export const Server = {
     api.post<{ profile: ServerProfile }>('/profile/import-local', data),
   resetProgress: () => api.post<{ profile: ServerProfile }>('/profile/reset'),
   setKeybinds: (keybinds: Record<string, string>) => api.post<{ profile: ServerProfile }>('/profile/keybinds', { keybinds }),
+  levelUpPlane: (planeId: PlaneId) => api.post<{ profile: ServerProfile }>(`/profile/plane/${planeId}/level-up`),
+  tierUpPlane: (planeId: PlaneId) => api.post<{ profile: ServerProfile }>(`/profile/plane/${planeId}/tier-up`),
 
   levelComplete: (level: number, stars: number, crystals: number) =>
     api.post<{ profile: ServerProfile; reward: RewardResult & { firstClear: boolean } }>('/events/level-complete', { level, stars, crystals }),

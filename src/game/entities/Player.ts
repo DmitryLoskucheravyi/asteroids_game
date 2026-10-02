@@ -18,7 +18,7 @@ export class Player {
   invulnerable = 0;
   private time = 0;
 
-  constructor(readonly spec: PlaneSpec) {}
+  constructor(readonly spec: PlaneSpec, readonly tier = 1, readonly level = 1) {}
 
   get radius(): number {
     return this.spec.radius;
@@ -106,7 +106,7 @@ export class Player {
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
     ctx.rotate(this.angle + Math.PI / 2);
-    drawPlane(ctx, this.spec.id, SPRITE_SIZE, this.time);
+    drawPlane(ctx, this.spec.id, SPRITE_SIZE, this.time, this.tier, this.level);
     ctx.restore();
 
     if (this.shield) {

@@ -445,6 +445,73 @@ const SHIPS: Record<PlaneId, ShipDef> = {
   phoenix: { parts: phoenixParts(), anim: phoenixAnim },
 };
 
+// ---------- тір-скіни та піпси рівня ----------
+
+/** Колір тіру за номером тіру (1 — без тінту, виглядає як базовий корпус). Експортується для UI (бейджі/зірки в ангарі). */
+export const TIER_COLORS: Record<number, string> = { 1: '', 2: '#8fd8ff', 3: '#c08aff', 4: '#ffd24a' };
+
+/** Змішує колір у бік target на amount (0..1), зберігаючи загальну яскравість деталі. */
+function tintToward(base: string, target: string, amount: number): string {
+  const [r1, g1, b1] = parseColor(base);
+  const [r2, g2, b2] = parseColor(target);
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * amount);
+  return `rgb(${mix(r1, r2)},${mix(g1, g2)},${mix(b1, b2)})`;
+}
+
+function overallBBox(parts: Part[]): [number, number, number, number] {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of parts) {
+    if (p.kind === 'dot') continue;
+    const [x0, y0, x1, y1] = bboxOf(p);
+    if (x0 < minX) minX = x0;
+    if (y0 < minY) minY = y0;
+    if (x1 > maxX) maxX = x1;
+    if (y1 > maxY) maxY = y1;
+  }
+  return [minX, minY, maxX, maxY];
+}
+
+/**
+ * Тір > 1 підфарбовує корпус у бік тірового кольору (деталі з flat — вікна, двигуни — лишає чистими)
+ * і додає декоративні акценти (кінчики крил, "енергетична" лінія по хребту) поверх силуету,
+ * не змінюючи саму геометрію — впізнаваність корабля зберігається.
+ */
+function applyTierSkin(parts: Part[], tier: number): Part[] {
+  if (tier <= 1) return parts;
+  const tint = TIER_COLORS[Math.min(tier, 4)];
+  const amount = 0.16 + tier * 0.07;
+  const recolored = parts.map((p) => {
+    if (p.kind === 'hole' || p.kind === 'dot' || p.flat) return p;
+    return { ...p, base: tintToward(p.base, tint, amount) };
+  });
+  const [minX, minY, maxX, maxY] = overallBBox(parts);
+  const midY = (minY + maxY) / 2;
+  const deco: Part[] = [dot(minX + 0.6, midY, tint), dot(maxX - 0.6, midY, tint)];
+  const spineSteps = tier; // більше рисок на корпусі з кожним тіром
+  for (let i = 0; i < spineSteps; i++) {
+    const y = minY + ((i + 1) / (spineSteps + 1)) * (maxY - minY);
+    deco.push(rect(-0.7, y - 1.1, 1.4, 2.2, tint, true));
+  }
+  if (tier >= 4) deco.push(dot(-1.6, minY + 2.2, '#ffffff'), dot(1.6, minY + 2.2, '#ffffff'));
+  return [...recolored, ...deco];
+}
+
+/** 1..4 маленькі піпси тірового кольору на фюзеляжі — показують рівень прокачки в межах тіру. */
+function levelPips(parts: Part[], tier: number, level: number): Part[] {
+  if (level <= 1) return [];
+  const tint = TIER_COLORS[Math.max(2, Math.min(tier, 4))] || '#8fd8ff';
+  const [minX, , maxX, maxY] = overallBBox(parts);
+  const cx = (minX + maxX) / 2;
+  const pips: Part[] = [];
+  const spacing = 2.6;
+  const start = cx - ((level - 1) * spacing) / 2;
+  for (let i = 0; i < level - 1; i++) pips.push(dot(start + i * spacing, maxY - 2, tint));
+  return pips;
+}
+
 // ---------- растеризатор (тверда піксельна сітка, без згладжування) ----------
 
 /** Розмір сітки (пікселів на сторону) і світових одиниць на один піксель. */
@@ -616,15 +683,22 @@ function canvasFrom(data: ImageData): HTMLCanvasElement {
 
 // ---------- кеш і публічне API ----------
 
-const bodyCache = new Map<PlaneId, HTMLCanvasElement>();
-const iconCache = new Map<PlaneId, string>();
+const bodyCache = new Map<string, HTMLCanvasElement>();
+const iconCache = new Map<string, string>();
 let animScratch: HTMLCanvasElement | null = null;
 
-function bodyCanvas(id: PlaneId): HTMLCanvasElement {
-  let c = bodyCache.get(id);
+function skinnedParts(id: PlaneId, tier: number, level: number): Part[] {
+  const base = SHIPS[id].parts;
+  const skinned = applyTierSkin(base, tier);
+  return [...skinned, ...levelPips(base, tier, level)];
+}
+
+function bodyCanvas(id: PlaneId, tier: number, level: number): HTMLCanvasElement {
+  const key = `${id}:${tier}:${level}`;
+  let c = bodyCache.get(key);
   if (c) return c;
-  c = canvasFrom(rasterize(SHIPS[id].parts, true));
-  bodyCache.set(id, c);
+  c = canvasFrom(rasterize(skinnedParts(id, tier, level), true));
+  bodyCache.set(key, c);
   return c;
 }
 
@@ -632,13 +706,14 @@ function bodyCanvas(id: PlaneId): HTMLCanvasElement {
  * Малює літак з центром у поточному початку координат, ніс угору.
  * size — розмір у пікселях світу для квадрата 64 одиниці. Масштабування — без
  * згладжування (nearest-neighbor), щоб пікселі лишались чіткими квадратами.
+ * tier/level — прокачка (1 — базовий вигляд без змін).
  */
-export function drawPlane(ctx: Ctx, id: PlaneId, size: number, t: number): void {
+export function drawPlane(ctx: Ctx, id: PlaneId, size: number, t: number, tier = 1, level = 1): void {
   const k = size / 64;
   const s = UNITS * k;
   const prevSmooth = ctx.imageSmoothingEnabled;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(bodyCanvas(id), -s / 2, -s / 2, s, s);
+  ctx.drawImage(bodyCanvas(id, tier, level), -s / 2, -s / 2, s, s);
   const anim = SHIPS[id].anim?.(t);
   if (anim && anim.length) {
     if (!animScratch) {
@@ -655,13 +730,14 @@ export function drawPlane(ctx: Ctx, id: PlaneId, size: number, t: number): void 
 }
 
 /** Картинка літака для HTML (ангар, меню) — data URL, генерується один раз. CSS має додати image-rendering: pixelated. */
-export function planeIconUrl(id: PlaneId): string {
-  let url = iconCache.get(id);
+export function planeIconUrl(id: PlaneId, tier = 1, level = 1): string {
+  const key = `${id}:${tier}:${level}`;
+  let url = iconCache.get(key);
   if (url) return url;
   const def = SHIPS[id];
-  const parts = def.anim ? [...def.parts, ...def.anim(0.4)] : def.parts;
+  const parts = def.anim ? [...skinnedParts(id, tier, level), ...def.anim(0.4)] : skinnedParts(id, tier, level);
   const c = canvasFrom(rasterize(parts, true));
   url = c.toDataURL('image/png');
-  iconCache.set(id, url);
+  iconCache.set(key, url);
   return url;
 }

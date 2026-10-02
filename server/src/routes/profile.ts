@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { User } from '../models/User.js';
+import type { HydratedDocument } from 'mongoose';
+import { User, type UserDoc } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
 import { ensureQuestSlots } from '../progress.js';
-import { isPlaneId, PLANE_PRICES } from '../content/planes.js';
+import { isPlaneId, PLANE_PRICES, MAX_TIER, MAX_LEVEL_IN_TIER, levelUpCost, tierUpCost } from '../content/planes.js';
 
 export const profileRouter = Router();
 profileRouter.use(requireAuth);
@@ -58,6 +59,75 @@ profileRouter.post('/buy-plane', async (req: AuthedRequest, res) => {
   user.coins -= price;
   user.ownedPlanes.push(planeId);
   user.selectedPlane = planeId;
+  await user.save();
+  res.json({ profile: serializeProfile(user) });
+});
+
+function findOrCreateProgress(user: HydratedDocument<UserDoc>, planeId: string) {
+  let p = user.planeProgress.find((x) => x.planeId === planeId);
+  if (!p) {
+    user.planeProgress.push({ planeId, tier: 1, level: 1 });
+    p = user.planeProgress[user.planeProgress.length - 1];
+  }
+  return p;
+}
+
+profileRouter.post('/plane/:planeId/level-up', async (req: AuthedRequest, res) => {
+  const { planeId } = req.params;
+  const user = await User.findById(req.userId);
+  if (!user) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  if (!isPlaneId(planeId) || !user.ownedPlanes.includes(planeId)) {
+    res.status(400).json({ error: 'not_owned' });
+    return;
+  }
+  const progress = findOrCreateProgress(user, planeId);
+  if (progress.level >= MAX_LEVEL_IN_TIER) {
+    res.status(409).json({ error: 'max_level' });
+    return;
+  }
+  const cost = levelUpCost(PLANE_PRICES[planeId], progress.tier, progress.level);
+  if (user.coins < cost) {
+    res.status(402).json({ error: 'not_enough_coins' });
+    return;
+  }
+  user.coins -= cost;
+  progress.level += 1;
+  await user.save();
+  res.json({ profile: serializeProfile(user) });
+});
+
+profileRouter.post('/plane/:planeId/tier-up', async (req: AuthedRequest, res) => {
+  const { planeId } = req.params;
+  const user = await User.findById(req.userId);
+  if (!user) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  if (!isPlaneId(planeId) || !user.ownedPlanes.includes(planeId)) {
+    res.status(400).json({ error: 'not_owned' });
+    return;
+  }
+  const progress = findOrCreateProgress(user, planeId);
+  if (progress.tier >= MAX_TIER) {
+    res.status(409).json({ error: 'max_tier' });
+    return;
+  }
+  if (progress.level < MAX_LEVEL_IN_TIER) {
+    res.status(409).json({ error: 'level_not_maxed' });
+    return;
+  }
+  const cost = tierUpCost(PLANE_PRICES[planeId], progress.tier);
+  if (user.coins < cost.coins || user.crystals < cost.crystals) {
+    res.status(402).json({ error: 'not_enough_resources' });
+    return;
+  }
+  user.coins -= cost.coins;
+  user.crystals -= cost.crystals;
+  progress.tier += 1;
+  progress.level = 1;
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });
@@ -129,10 +199,12 @@ profileRouter.post('/reset', async (req: AuthedRequest, res) => {
     return;
   }
   user.coins = 0;
+  user.crystals = 0;
   user.xp = 0;
   user.level = 1;
   user.selectedPlane = 'falcon';
   user.ownedPlanes = ['falcon'];
+  user.planeProgress.splice(0, user.planeProgress.length);
   user.stars = [];
   user.unlocked = 1;
   user.survivalTop.splice(0, user.survivalTop.length);

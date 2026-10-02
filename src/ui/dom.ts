@@ -28,8 +28,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
 }
 
 /** Елемент з SVG-іконкою. */
-export function icon(svg: string, cls = 'ico'): HTMLSpanElement {
-  return h('span', { class: cls, html: svg, 'aria-hidden': 'true' });
+export function icon(svg: string, cls = 'ico', style?: string): HTMLSpanElement {
+  return h('span', { class: cls, html: svg, 'aria-hidden': 'true', style });
 }
 
 /** Кнопка зі звуками наведення/кліку. */
@@ -83,4 +83,9 @@ export const Icons = {
 /** Бейдж з кількістю коінс. */
 export function coinBadge(amount: number, cls = 'coin-badge'): HTMLElement {
   return h('span', { class: cls }, icon(Icons.coin, 'ico coin'), h('span', { class: 'coin-amount' }, amount.toLocaleString('uk-UA')));
+}
+
+/** Бейдж з кількістю кристалів (рідкісна валюта тір-апів). */
+export function crystalBadge(amount: number, cls = 'coin-badge crystal-badge'): HTMLElement {
+  return h('span', { class: cls }, icon(Icons.crystal, 'ico crystal'), h('span', { class: 'coin-amount' }, amount.toLocaleString('uk-UA')));
 }
