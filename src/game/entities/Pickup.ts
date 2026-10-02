@@ -2,11 +2,12 @@ import { Vec2 } from '../../core/math';
 import { drawGlow } from '../fx';
 import { Entity, type WorldView } from './Entity';
 
-export type PickupKind = 'crystal' | 'shield' | 'freeze' | 'boost';
+export type PickupKind = 'crystal' | 'prism' | 'shield' | 'freeze' | 'boost';
 
 const LIFETIME = 9;
 const COLORS: Record<PickupKind, string> = {
   crystal: 'rgba(255,90,220,1)',
+  prism: 'rgba(255,226,122,1)',
   shield: 'rgba(80,190,255,1)',
   freeze: 'rgba(140,230,255,1)',
   boost: 'rgba(255,200,60,1)',
@@ -43,6 +44,9 @@ export class Pickup extends Entity {
     switch (this.kind) {
       case 'crystal':
         drawCrystal(ctx, time + this.phase);
+        break;
+      case 'prism':
+        drawPrism(ctx, time + this.phase);
         break;
       case 'shield':
         drawShield(ctx);
@@ -82,6 +86,54 @@ function drawCrystal(ctx: CanvasRenderingContext2D, t: number): void {
   ctx.lineTo(0, 4);
   ctx.closePath();
   ctx.fill();
+}
+
+/** Призма — рідкісна валюта, навмисно виглядає інакше за кристал (гранований шестикутник + іскри, золото/біле замість рожевого). */
+function drawPrism(ctx: CanvasRenderingContext2D, t: number): void {
+  const spin = t * 0.6;
+  ctx.save();
+  ctx.rotate(spin);
+  const r = 14;
+  const g = ctx.createLinearGradient(-r, -r, r, r);
+  g.addColorStop(0, '#fffbe6');
+  g.addColorStop(0.5, '#ffe27a');
+  g.addColorStop(1, '#ffb020');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // грані — лінії до центру
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // іскри навколо — те, що відрізняє призму на перший погляд
+  for (let i = 0; i < 3; i++) {
+    const a = -t * 2.2 + (i / 3) * Math.PI * 2;
+    const d = 20 + Math.sin(t * 4 + i) * 3;
+    const sx = Math.cos(a) * d;
+    const sy = Math.sin(a) * d;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function badge(ctx: CanvasRenderingContext2D, fill: string, stroke: string): void {

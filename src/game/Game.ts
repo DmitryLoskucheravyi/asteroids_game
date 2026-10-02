@@ -30,6 +30,8 @@ export interface GameResult {
   stars: number;
   /** Коінс, зібрані кристалами за цей забіг */
   coins: number;
+  /** Призми — рідкісна валюта тір-апів, зібрані за цей забіг */
+  prisms: number;
 }
 
 export interface Viewport {
@@ -135,8 +137,12 @@ export class Game {
   private crystalTimer = 0;
   private bonusTimer = 0;
   private rewardTimer = 0;
+  /** Призма (рідкісна валюта) — перевіряємо шанс раз на 20-30с, а не за фіксованим інтервалом */
+  private prismTimer = 0;
 
   crystals = 0;
+  /** Призми, зібрані за цей забіг (зараховуються в кінці) */
+  prisms = 0;
   /** Коінс, зібрані за цей забіг (зараховуються в кінці) */
   coins = 0;
   difficultyStep = 0;
@@ -196,6 +202,7 @@ export class Game {
     this.shieldRegenTimer = 0;
     this.elapsed = 0;
     this.crystals = 0;
+    this.prisms = 0;
     this.coins = 0;
     this.difficultyStep = 0;
     this.ended = false;
@@ -214,6 +221,7 @@ export class Game {
     this.windTimer = 0;
     this.crystalTimer = 1.5;
     this.bonusTimer = rand(8, 12);
+    this.prismTimer = rand(20, 30);
     this.rewardTimer = 0;
     this.setState('countdown', COUNTDOWN);
   }
@@ -583,12 +591,13 @@ export class Game {
   private collect(kind: PickupKind, at: Vec2): void {
     const colors: Record<PickupKind, string[]> = {
       crystal: ['#ff9cf0', '#ff4fd8', '#ffffff'],
+      prism: ['#fff6c8', '#ffe27a', '#ffffff'],
       shield: ['#9fe3ff', '#3fa9ff', '#ffffff'],
       freeze: ['#e6fbff', '#8fdcff'],
       boost: ['#ffe27a', '#ffb020'],
     };
-    this.particles.emit(at.x, at.y, { count: 22, speed: [60, 220], life: [0.3, 0.7], size: [2, 4], colors: colors[kind] });
-    this.rings.push({ x: at.x, y: at.y, t: 0, dur: 0.35, r0: 10, r1: 60, color: kind === 'crystal' ? '255,120,230' : '150,220,255' });
+    this.particles.emit(at.x, at.y, { count: kind === 'prism' ? 34 : 22, speed: [60, 220], life: [0.3, 0.7], size: [2, 4], colors: colors[kind] });
+    this.rings.push({ x: at.x, y: at.y, t: 0, dur: 0.35, r0: 10, r1: 60, color: kind === 'crystal' ? '255,120,230' : kind === 'prism' ? '255,226,122' : '150,220,255' });
     switch (kind) {
       case 'crystal':
         this.crystals++;
@@ -596,6 +605,13 @@ export class Game {
         Sfx.pickup();
         this.floatText(at.x, at.y - 24, `+${CRYSTAL_COINS}`, '#ffd24a');
         return;
+      case 'prism': {
+        const amount = chance(0.15) ? randInt(2, 3) : 1;
+        this.prisms += amount;
+        Sfx.powerup();
+        this.floatText(at.x, at.y - 24, `+${amount} ◆`, '#ffe27a');
+        return;
+      }
       case 'shield':
         this.player.shield = true;
         Sfx.powerup();
@@ -647,6 +663,7 @@ export class Game {
       crystalTarget: cfg.crystalTarget,
       stars,
       coins: this.coins,
+      prisms: this.prisms,
     });
   }
 
@@ -751,6 +768,13 @@ export class Game {
       const options: PickupKind[] = ['freeze', 'boost'];
       if (!this.player.shield) options.push('shield', 'shield');
       this.spawnPickup(pick(options));
+    }
+
+    // призма — дуже рідкісний дроп рідкісної валюти: шанс перевіряється раз на 20-30с, а не гарантовано
+    this.prismTimer -= dt;
+    if (this.prismTimer <= 0) {
+      this.prismTimer = rand(20, 30);
+      if (chance(0.1)) this.spawnPickup('prism');
     }
   }
 

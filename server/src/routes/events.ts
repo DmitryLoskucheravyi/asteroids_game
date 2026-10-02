@@ -16,10 +16,11 @@ function maybeDropCrate(chance: number): 'common' | undefined {
 }
 
 eventsRouter.post('/level-complete', async (req: AuthedRequest, res) => {
-  const { level, stars, crystals } = req.body ?? {};
+  const { level, stars, crystals, prisms } = req.body ?? {};
   const lvl = Math.min(MAX_LEVEL, Math.max(1, Math.floor(Number(level) || 0)));
   const st = Math.min(3, Math.max(0, Math.floor(Number(stars) || 0)));
   const cry = Math.max(0, Math.floor(Number(crystals) || 0));
+  const prism = Math.max(0, Math.floor(Number(prisms) || 0));
   if (!lvl) {
     res.status(400).json({ error: 'bad_request' });
     return;
@@ -38,7 +39,7 @@ eventsRouter.post('/level-complete', async (req: AuthedRequest, res) => {
   const coins = levelReward(lvl, st, firstClear) + cry * CRYSTAL_COINS;
   const xp = 15 + lvl * 2 + st * 5;
   const crate = maybeDropCrate(firstClear ? 0.2 : 0.1);
-  const result = grantReward(user, { coins, xp, crate }, 'level');
+  const result = grantReward(user, { coins, xp, crate, crystals: prism }, 'level');
 
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'levelsCompleted', 1);
@@ -51,8 +52,9 @@ eventsRouter.post('/level-complete', async (req: AuthedRequest, res) => {
 
 /** Кристали, зібрані до загибелі на рівні кампанії (рівень не пройдено — unlocked/stars не змінюються). */
 eventsRouter.post('/crystals', async (req: AuthedRequest, res) => {
-  const { crystals } = req.body ?? {};
+  const { crystals, prisms } = req.body ?? {};
   const cry = Math.max(0, Math.floor(Number(crystals) || 0));
+  const prism = Math.max(0, Math.floor(Number(prisms) || 0));
 
   const user = await User.findById(req.userId);
   if (!user) {
@@ -61,7 +63,7 @@ eventsRouter.post('/crystals', async (req: AuthedRequest, res) => {
   }
 
   const coins = cry * CRYSTAL_COINS;
-  const result = grantReward(user, { coins }, 'crystals');
+  const result = grantReward(user, { coins, crystals: prism }, 'crystals');
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'crystalsCollected', cry);
 
@@ -70,9 +72,10 @@ eventsRouter.post('/crystals', async (req: AuthedRequest, res) => {
 });
 
 eventsRouter.post('/survival', async (req: AuthedRequest, res) => {
-  const { seconds, crystals } = req.body ?? {};
+  const { seconds, crystals, prisms } = req.body ?? {};
   const secs = Math.max(0, Math.floor(Number(seconds) || 0));
   const cry = Math.max(0, Math.floor(Number(crystals) || 0));
+  const prism = Math.max(0, Math.floor(Number(prisms) || 0));
 
   const user = await User.findById(req.userId);
   if (!user) {
@@ -88,7 +91,7 @@ eventsRouter.post('/survival', async (req: AuthedRequest, res) => {
   const coins = survivalReward(secs) + cry * CRYSTAL_COINS;
   const xp = Math.floor(secs / 4);
   const crate = maybeDropCrate(0.08);
-  const result = grantReward(user, { coins, xp, crate }, 'survival');
+  const result = grantReward(user, { coins, xp, crate, crystals: prism }, 'survival');
 
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'survivalSeconds', secs);

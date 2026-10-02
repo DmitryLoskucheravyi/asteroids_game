@@ -31,6 +31,7 @@ export interface Reward {
   coins?: number;
   xp?: number;
   crate?: CrateType;
+  crystals?: number;
 }
 
 export interface RewardResult {
@@ -39,12 +40,15 @@ export interface RewardResult {
   leveledUp: boolean;
   newLevel: number;
   crateAwarded: CrateType | null;
+  crystals: number;
 }
 
 export function grantReward(user: Doc, reward: Reward, source: string): RewardResult {
   const coins = Math.max(0, Math.floor(reward.coins ?? 0));
   const xpAmount = Math.max(0, Math.floor(reward.xp ?? 0));
+  const crystals = Math.max(0, Math.floor(reward.crystals ?? 0));
   user.coins += coins;
+  user.crystals += crystals;
   const before = user.level;
   const { level, xp } = applyXp({ xp: user.xp, level: user.level }, xpAmount);
   user.level = level;
@@ -54,7 +58,7 @@ export function grantReward(user: Doc, reward: Reward, source: string): RewardRe
     user.crates.push({ crateType: reward.crate, source, acquiredAt: new Date(), openedAt: null });
     crateAwarded = reward.crate;
   }
-  return { coins, xp: xpAmount, leveledUp: level > before, newLevel: level, crateAwarded };
+  return { coins, xp: xpAmount, leveledUp: level > before, newLevel: level, crateAwarded, crystals };
 }
 
 /** Якщо сезон у профілі застарів — скидає очки/клейми/преміум на новий сезон. */

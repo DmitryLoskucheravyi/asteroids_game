@@ -58,6 +58,7 @@ export interface RewardResult {
   leveledUp: boolean;
   newLevel: number;
   crateAwarded: CrateType | null;
+  crystals: number;
 }
 
 export type CrateReward = { kind: 'coins'; amount: number } | { kind: 'plane'; planeId: PlaneId } | { kind: 'xp'; amount: number };
@@ -65,8 +66,8 @@ export type CrateReward = { kind: 'coins'; amount: number } | { kind: 'plane'; p
 export interface PassTierView {
   tier: number;
   bpRequired: number;
-  reward: { coins: number; xp: number; crate?: CrateType };
-  premiumReward: { coins: number; xp: number; crate?: CrateType };
+  reward: { coins: number; xp: number; crate?: CrateType; crystals?: number };
+  premiumReward: { coins: number; xp: number; crate?: CrateType; crystals?: number };
 }
 
 export const Server = {
@@ -83,10 +84,11 @@ export const Server = {
   levelUpPlane: (planeId: PlaneId) => api.post<{ profile: ServerProfile }>(`/profile/plane/${planeId}/level-up`),
   tierUpPlane: (planeId: PlaneId) => api.post<{ profile: ServerProfile }>(`/profile/plane/${planeId}/tier-up`),
 
-  levelComplete: (level: number, stars: number, crystals: number) =>
-    api.post<{ profile: ServerProfile; reward: RewardResult & { firstClear: boolean } }>('/events/level-complete', { level, stars, crystals }),
-  survival: (seconds: number, crystals: number) => api.post<{ profile: ServerProfile; reward: RewardResult & { place: number } }>('/events/survival', { seconds, crystals }),
-  crystalsOnly: (crystals: number) => api.post<{ profile: ServerProfile; reward: RewardResult }>('/events/crystals', { crystals }),
+  levelComplete: (level: number, stars: number, crystals: number, prisms: number) =>
+    api.post<{ profile: ServerProfile; reward: RewardResult & { firstClear: boolean } }>('/events/level-complete', { level, stars, crystals, prisms }),
+  survival: (seconds: number, crystals: number, prisms: number) =>
+    api.post<{ profile: ServerProfile; reward: RewardResult & { place: number } }>('/events/survival', { seconds, crystals, prisms }),
+  crystalsOnly: (crystals: number, prisms: number) => api.post<{ profile: ServerProfile; reward: RewardResult }>('/events/crystals', { crystals, prisms }),
 
   dailyState: () => api.get<{ state: { available: boolean; day: number; reward: number } }>('/daily'),
   dailyClaim: () => api.post<{ profile: ServerProfile; reward: RewardResult & { day: number } }>('/daily/claim'),
