@@ -27,7 +27,7 @@ import type { CrateType } from '../content/crates.js';
  * Ящик за призове місце — випадкової рідкості: вище місце лише підвищує шанси на кращий.
  * Легендарний лишається великою рідкістю навіть за перемогу.
  */
-const PLACE_CRATE_WEIGHTS: Record<number, Record<CrateType, number>> = {
+export const PLACE_CRATE_WEIGHTS: Record<number, Record<CrateType, number>> = {
   1: { common: 38, rare: 36, epic: 18, mythic: 6.5, legendary: 1.5 },
   2: { common: 52, rare: 32, epic: 12, mythic: 3.5, legendary: 0.5 },
   3: { common: 66, rare: 26, epic: 6.5, mythic: 1.35, legendary: 0.15 },

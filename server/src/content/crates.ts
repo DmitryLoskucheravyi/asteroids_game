@@ -23,7 +23,7 @@ export interface Owned {
 
 type Kind = 'coins' | 'xp' | 'crystals' | 'item' | 'weapon' | 'plane';
 
-interface CrateDef {
+export interface CrateDef {
   /** Скільки нагород випадає за одне відкриття */
   rolls: number;
   /** Шанс, що перша нагорода буде "цінною" (предмет/зброя/літак) — лише для найрідкісніших ящиків */
@@ -37,7 +37,7 @@ interface CrateDef {
 }
 
 // Предмети, зброя й особливо літаки — рідкісна удача: основу нагород складають монети, досвід і кристали.
-const CRATES: Record<CrateType, CrateDef> = {
+export const CRATES: Record<CrateType, CrateDef> = {
   common: { rolls: 2, jackpotChance: 0, weights: { coins: 60, xp: 28, crystals: 11, item: 0.8, weapon: 0, plane: 0.15 }, coins: [40, 150], xp: [20, 60], crystals: [1, 3], itemRarities: ['common'] },
   rare: { rolls: 3, jackpotChance: 0, weights: { coins: 50, xp: 25, crystals: 22, item: 2.2, weapon: 0.3, plane: 0.4 }, coins: [150, 400], xp: [60, 140], crystals: [3, 8], itemRarities: ['common', 'rare'] },
   epic: { rolls: 3, jackpotChance: 0, weights: { coins: 45, xp: 22, crystals: 28, item: 3.5, weapon: 0.6, plane: 0.8 }, coins: [300, 700], xp: [120, 260], crystals: [8, 20], itemRarities: ['rare', 'epic'] },
@@ -46,7 +46,7 @@ const CRATES: Record<CrateType, CrateDef> = {
 };
 
 /** Серед доступних предметів дешевші рідкості трапляються значно частіше. */
-const ITEM_RARITY_WEIGHT: Record<ItemRarity, number> = { common: 10, rare: 5, epic: 2.5, mythic: 1.2, legendary: 0.5 };
+export const ITEM_RARITY_WEIGHT: Record<ItemRarity, number> = { common: 10, rare: 5, epic: 2.5, mythic: 1.2, legendary: 0.5 };
 
 function weightedPick<T>(list: readonly T[], weight: (v: T) => number): T {
   const total = list.reduce((s, v) => s + weight(v), 0);
