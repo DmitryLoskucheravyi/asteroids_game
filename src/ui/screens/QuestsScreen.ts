@@ -85,8 +85,11 @@ export class QuestsScreen extends Screen {
 
   protected build(): HTMLElement {
     const quests = Save.data.quests;
-    const daily = quests.filter((q) => q.period === 'daily');
-    const weekly = quests.filter((q) => q.period === 'weekly');
+    // зверху — готові до отримання, далі — у процесі (ближчі до завершення першими), внизу — вже забрані
+    const rank = (q: QuestView): number => (q.claimed ? 2 : q.progress >= q.target ? 0 : 1);
+    const byState = (a: QuestView, b: QuestView): number => rank(a) - rank(b) || b.progress / Math.max(1, b.target) - a.progress / Math.max(1, a.target);
+    const daily = quests.filter((q) => q.period === 'daily').sort(byState);
+    const weekly = quests.filter((q) => q.period === 'weekly').sort(byState);
     return h(
       'div',
       { class: 'page quests' },
