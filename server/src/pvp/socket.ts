@@ -2,7 +2,9 @@ import { Server as IOServer } from 'socket.io';
 import type { Server as HttpServer } from 'node:http';
 import { verifyToken } from '../utils/jwt.js';
 import { User } from '../models/User.js';
-import { enqueue, dequeue, roomFor, onDisconnect, leaveRoom } from './matchmaking.js';
+import { enqueue, enqueueGroup, dequeue, roomFor, onDisconnect, leaveRoom } from './matchmaking.js';
+import type { Entrant } from './room.js';
+import { getParty, getPartyById, setSearching } from '../social/party.js';
 import { DEFAULT_WEAPON_ID } from '../content/weapons.js';
 import { ensureRankSeason, getRank } from '../progress.js';
 import { isQueueMode } from './constants.js';
@@ -23,7 +25,7 @@ export function attachPvp(server: HttpServer): void {
   });
 
   io.on('connection', (socket) => {
-    socket.on('queue:join', async (data?: { mode?: string }) => {
+    socket.on('queue:join', async (data?: { mode?: string; partyId?: string }) => {
       // 'ranked' — старі клієнти, тепер це соло
       const raw = data?.mode === 'ranked' ? 'solo' : data?.mode;
       const mode = isQueueMode(raw) ? raw : 'casual';
@@ -38,7 +40,7 @@ export function attachPvp(server: HttpServer): void {
         const it = user.items.find((i) => (i as unknown as { _id: { toString(): string } })._id.toString() === itemId);
         return it?.defId ?? null;
       };
-      enqueue(io, {
+      const entry: Entrant = {
         socket,
         userId: user._id.toString(),
         nickname: user.nickname,
@@ -49,10 +51,19 @@ export function attachPvp(server: HttpServer): void {
         activeDefId: defIdOf(loadout?.active),
         passiveDefId: defIdOf(loadout?.passive),
         rankPoints: mode === 'casual' ? 0 : getRank(user, mode).points,
-      }, mode);
+      };
+      // група: усі учасники мають стати в чергу; рейтинг групи — середній
+      const party = data?.partyId ? getPartyById(data.partyId) : null;
+      if (party && mode !== 'casual' && party.members.includes(entry.userId) && party.state === 'searching' && party.mode === mode) {
+        entry.groupId = party.id;
+        enqueueGroup(io, entry, mode, party.members.length);
+      } else enqueue(io, entry, mode);
     });
 
     socket.on('queue:leave', () => {
+      // вихід з пошуку зупиняє пошук і для всієї групи
+      const party = getParty(socket.data.userId as string);
+      if (party?.state === 'searching') setSearching(socket.data.userId as string, false);
       dequeue(socket.id);
       leaveRoom(socket.id);
     });

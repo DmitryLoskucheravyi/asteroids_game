@@ -11,6 +11,7 @@ import { passRouter } from './routes/pass.js';
 import { cratesRouter } from './routes/crates.js';
 import { leaderboardRouter } from './routes/leaderboard.js';
 import { friendsRouter } from './routes/friends.js';
+import { partyRouter } from './routes/party.js';
 import { itemsRouter } from './routes/items.js';
 import { attachPvp } from './pvp/socket.js';
 
@@ -32,6 +33,7 @@ async function main(): Promise<void> {
   app.use('/api/items', itemsRouter);
   app.use('/api/leaderboard', leaderboardRouter);
   app.use('/api/friends', friendsRouter);
+  app.use('/api/party', partyRouter);
 
   const httpServer = app.listen(env.port, () => console.log(`[server] слухає на :${env.port}`));
   attachPvp(httpServer);

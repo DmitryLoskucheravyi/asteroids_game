@@ -7905,3 +7905,132 @@ input[type='range'] {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ===================== групи ===================== */
+
+.party-block {
+  margin-top: 16px;
+  border: 0;
+  border-radius: 0;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--plate-edge);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+  padding: 18px 20px;
+}
+
+.party-block h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-family: var(--font-ui);
+}
+
+.party-block h3 small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.party-slots {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.party-slots.s1 {
+  grid-template-columns: minmax(0, 360px);
+}
+
+.party-slots.s2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.party-slots.s3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.party-member {
+  display: grid;
+  grid-template-columns: 40px 1fr 32px auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  min-height: 56px;
+}
+
+.party-member.self {
+  box-shadow: inset 3px 0 0 var(--cyan);
+}
+
+.party-member.empty,
+.party-member.pending {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px dashed var(--line-strong);
+  background: none;
+}
+
+.party-slot-ico {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  color: var(--muted);
+}
+
+.party-invites {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.party-invite {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 210, 74, 0.1);
+  box-shadow: inset 0 0 0 1px var(--burn-2);
+  animation: claim-pulse 1.4s ease-in-out infinite;
+}
+
+.party-invite span {
+  flex: 1;
+  font-weight: 700;
+}
+
+.party-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.party-friends {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.party-friend-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 6px;
+}
+
+.online-go.locked {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .party-slots,
+  .party-slots.s3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

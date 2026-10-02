@@ -3,6 +3,7 @@ import type { HydratedDocument, Types } from 'mongoose';
 import { User, type UserDoc } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { presence } from '../presence.js';
+import { invitesFor } from '../social/party.js';
 import { getRank } from '../progress.js';
 import { ensurePublicId, normalizePublicId } from '../publicId.js';
 
@@ -62,8 +63,8 @@ async function listFor(me: Doc) {
 }
 
 /** Пінг присутності (сам факт запиту оновлює "онлайн" у requireAuth). */
-friendsRouter.get('/ping', (_req, res) => {
-  res.json({ ok: true });
+friendsRouter.get('/ping', (req: AuthedRequest, res) => {
+  res.json({ ok: true, partyInvites: invitesFor(req.userId!).length });
 });
 
 friendsRouter.get('/', async (req: AuthedRequest, res) => {

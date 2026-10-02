@@ -47,6 +47,8 @@ export interface Entrant {
   activeDefId: string | null;
   passiveDefId: string | null;
   rankPoints: number;
+  /** Група (паті): усі її учасники потрапляють в одну команду */
+  groupId?: string | null;
 }
 
 /** Гравець не стріляв і майже не рухався весь матч — ферма/AFK. */
@@ -146,12 +148,29 @@ export class Room {
       const a = (i / this.teams) * Math.PI * 2 + Math.random() * 0.4;
       return { x: WORLD_W / 2 + Math.cos(a) * WORLD_W * 0.36, y: WORLD_H / 2 + Math.sin(a) * WORLD_H * 0.36 };
     });
-    let slot = 0;
-    // гравців розкидаємо по різних командах (перші місця в кожній), боти добирають решту
-    const nextTeam = (): number => {
-      const team = this.teamSize === 1 ? slot : slot % this.teams;
-      slot++;
-      return team;
+    // розподіл по командах: групи цілком у вільну команду, одинаки — туди, де найменше людей, решту добирають боти
+    const teamFill = Array.from({ length: this.teams }, () => 0);
+    const teamOf = new Map<Entrant, number>();
+    const groups = new Map<string, Entrant[]>();
+    for (const e of entrants) if (e.groupId && this.teamSize > 1) groups.set(e.groupId, [...(groups.get(e.groupId) ?? []), e]);
+    for (const members of [...groups.values()].sort((x, y) => y.length - x.length)) {
+      const team = teamFill.findIndex((n) => n + members.length <= this.teamSize);
+      const t = team >= 0 ? team : teamFill.indexOf(Math.min(...teamFill));
+      for (const m of members) teamOf.set(m, t);
+      teamFill[t] += members.length;
+    }
+    for (const e of entrants) {
+      if (teamOf.has(e)) continue;
+      let t = 0;
+      for (let i = 1; i < this.teams; i++) if (teamFill[i] < teamFill[t]) t = i;
+      teamOf.set(e, t);
+      teamFill[t]++;
+    }
+    const nextBotTeam = (): number => {
+      let t = 0;
+      for (let i = 1; i < this.teams; i++) if (teamFill[i] < teamFill[t]) t = i;
+      teamFill[t]++;
+      return t;
     };
 
     for (const e of entrants) {
@@ -172,7 +191,7 @@ export class Room {
         passive?.slot === 'passive' ? passive : null,
         { x: 0, y: 0 },
       );
-      p.team = nextTeam();
+      p.team = teamOf.get(e)!;
       p.pos = this.spawnFor(p.team);
       p.angle = Math.atan2(WORLD_H / 2 - p.pos.y, WORLD_W / 2 - p.pos.x);
       p.rankPoints = e.rankPoints;
@@ -203,7 +222,7 @@ export class Room {
         null,
         { x: 0, y: 0 },
       );
-      p.team = nextTeam();
+      p.team = nextBotTeam();
       p.pos = this.spawnFor(p.team);
       p.angle = Math.atan2(WORLD_H / 2 - p.pos.y, WORLD_W / 2 - p.pos.x);
       p.botState = 'patrol';

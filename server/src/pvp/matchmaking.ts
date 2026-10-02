@@ -19,14 +19,42 @@ function startRoom(io: IOServer, mode: QueueMode): void {
   const queue = queues[mode];
   // у рейтинговому — групуємо гравців близького рейтингу
   if (mode !== 'casual') queue.sort((x, y) => x.rankPoints - y.rankPoints);
-  const entrants = queue.splice(0, MODE_SPEC[mode].roomSize);
+  // беремо цілі групи (учасники групи не розділяються між кімнатами)
+  const size = MODE_SPEC[mode].roomSize;
+  const entrants: QueueEntry[] = [];
+  const taken = new Set<QueueEntry>();
+  for (const e of queue) {
+    if (taken.has(e)) continue;
+    const unit = e.groupId ? queue.filter((x) => x.groupId === e.groupId) : [e];
+    if (entrants.length + unit.length > size) continue;
+    for (const u of unit) {
+      taken.add(u);
+      entrants.push(u);
+    }
+  }
+  queues[mode] = queue.filter((e) => !taken.has(e));
   if (!entrants.length) return;
   const id = `room-${++roomSeq}`;
   const room = new Room(id, io, entrants, mode);
   room.onClose = () => cleanupRoom(id);
   rooms.set(id, room);
   for (const e of entrants) socketRoom.set(e.socket.id, id);
-  if (queue.length && !waitTimers[mode]) waitTimers[mode] = setTimeout(() => startRoom(io, mode), QUEUE_WAIT_MS);
+  if (queues[mode].length && !waitTimers[mode]) waitTimers[mode] = setTimeout(() => startRoom(io, mode), QUEUE_WAIT_MS);
+}
+
+/** Учасники групи, що вже стали в чергу, — поки не зберуться всі. */
+const gathering = new Map<string, QueueEntry[]>();
+
+/** Учасник групи стає в чергу; коли зібрались усі — група йде в чергу цілою. */
+export function enqueueGroup(io: IOServer, entry: QueueEntry, mode: QueueMode, groupSize: number): void {
+  const id = entry.groupId!;
+  const list = (gathering.get(id) ?? []).filter((e) => e.userId !== entry.userId);
+  list.push(entry);
+  gathering.set(id, list);
+  entry.socket.emit('queue:joined', { position: 0, mode, waitingParty: groupSize - list.length });
+  if (list.length < groupSize) return;
+  gathering.delete(id);
+  for (const e of list) enqueue(io, e, mode);
 }
 
 export function enqueue(io: IOServer, entry: QueueEntry, mode: QueueMode): void {
@@ -41,10 +69,21 @@ export function enqueue(io: IOServer, entry: QueueEntry, mode: QueueMode): void 
   if (!waitTimers[mode]) waitTimers[mode] = setTimeout(() => startRoom(io, mode), QUEUE_WAIT_MS);
 }
 
+/** Вийти з черги; якщо гравець у групі — з черги виходить уся група (її учасники побачать це в стані групи). */
 export function dequeue(socketId: string): void {
+  let groupId: string | null | undefined = null;
   for (const q of Object.values(queues)) {
-    const i = q.findIndex((e) => e.socket.id === socketId);
-    if (i >= 0) q.splice(i, 1);
+    const e = q.find((x) => x.socket.id === socketId);
+    if (e) groupId = e.groupId;
+  }
+  for (const [id, list] of gathering) {
+    if (list.some((e) => e.socket.id === socketId)) {
+      groupId = id;
+      gathering.delete(id);
+    }
+  }
+  for (const mode of Object.keys(queues) as QueueMode[]) {
+    queues[mode] = queues[mode].filter((e) => e.socket.id !== socketId && (!groupId || e.groupId !== groupId));
   }
 }
 

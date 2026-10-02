@@ -15,6 +15,8 @@ export const MODE_SPEC: Record<QueueMode, { teamSize: number; roomSize: number }
   squad: { teamSize: 4, roomSize: 16 },
 };
 
+export const TEAM_SIZE_BY_MODE: Record<RankMode, number> = { solo: 1, duo: 2, trio: 3, squad: 4 };
+
 /** Місце команди → еквівалент у шкалі 10 місць (для нагород і RP однаковою таблицею). */
 export function scaledPlace(teamPlace: number, teams: number): number {
   if (teams <= 1) return 1;
