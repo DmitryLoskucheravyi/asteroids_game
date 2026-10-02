@@ -1,4 +1,4 @@
-import type { Socket } from 'socket.io-client';
+import type { GameLink } from '../../net/gameLink';
 import type { App } from '../../app/App';
 import { t, type TKey } from '../../core/i18n';
 import { displayKey, primaryKeyFor, type Action, type BindAction } from '../../core/input';
@@ -52,7 +52,7 @@ export class PvpScreen extends Screen {
 
   constructor(
     app: App,
-    private readonly socket: Socket,
+    private readonly socket: GameLink,
     private readonly initData: MatchInit,
   ) {
     super(app);
@@ -154,7 +154,8 @@ export class PvpScreen extends Screen {
     this.app.input.clear();
     this.game?.dispose();
     if (this.app.game === this.game) this.app.game = null;
-    if (!this.leftViaResult) this.socket.emit('queue:leave');
+    // будь-який вихід з екрана бою (крім переходу до результатів) — вихід з матчу
+    if (!this.leftViaResult) this.socket.close();
   }
 
   private action(a: Action): void {
@@ -200,7 +201,7 @@ export class PvpScreen extends Screen {
         button(t('pvp.leave'), () => {
           m.close();
           this.leftViaResult = true;
-          this.socket.emit('queue:leave');
+          this.socket.close();
           this.app.show(new MainMenuScreen(this.app));
         }, 'btn danger'),
       ],

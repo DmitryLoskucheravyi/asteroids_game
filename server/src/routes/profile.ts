@@ -42,33 +42,6 @@ profileRouter.post('/select-plane', async (req: AuthedRequest, res) => {
   res.json({ profile: serializeProfile(user) });
 });
 
-profileRouter.post('/buy-plane', async (req: AuthedRequest, res) => {
-  const { planeId } = req.body ?? {};
-  const user = await User.findById(req.userId);
-  if (!user) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
-  if (typeof planeId !== 'string' || !isPlaneId(planeId)) {
-    res.status(400).json({ error: 'bad_plane' });
-    return;
-  }
-  if (user.ownedPlanes.includes(planeId)) {
-    res.status(409).json({ error: 'already_owned' });
-    return;
-  }
-  const price = PLANE_PRICES[planeId];
-  if (user.coins < price) {
-    res.status(402).json({ error: 'not_enough_coins' });
-    return;
-  }
-  user.coins -= price;
-  user.ownedPlanes.push(planeId);
-  user.selectedPlane = planeId;
-  await user.save();
-  res.json({ profile: serializeProfile(user) });
-});
-
 function findOrCreateProgress(user: HydratedDocument<UserDoc>, planeId: string) {
   let p = user.planeProgress.find((x) => x.planeId === planeId);
   if (!p) {

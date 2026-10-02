@@ -1,12 +1,9 @@
-import type { Server as IOServer, Socket } from 'socket.io';
-import { User } from '../models/User.js';
-import { grantReward, addBp, ensureQuestSlots, incrementQuestProgress, getRank, setRank } from '../progress.js';
 import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
 import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/weapons.js';
 import { getItemDef, type ItemMeta } from '../content/items.js';
 import { PLANE_IDS, planeCombat } from '../content/planes.js';
 import { updateBot } from './bot.js';
-import { setInMatch } from '../presence.js';
+import type { LeaverPayload, MatchResultsPayload } from './results.js';
 import {
   ROOM_SIZE,
   WORLD_W,
@@ -31,7 +28,6 @@ import {
   MODE_SPEC,
   scaledPlace,
   type QueueMode,
-  type RankMode,
   rollPlaceCrate,
   PICKUP_START,
   PICKUP_MAX,
@@ -39,7 +35,6 @@ import {
   PICKUP_RADIUS,
   CRYSTAL_CHANCE,
 } from './constants.js';
-import type { CrateType } from '../content/crates.js';
 import { botStrength, rankDelta } from '../content/ranks.js';
 import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind, Pickup } from './types.js';
 
@@ -47,7 +42,8 @@ const BOT_NAMES = ['Вихор', 'Корсар', 'Немезида', 'Берку
 let botSeq = 0;
 
 export interface Entrant {
-  socket: Socket;
+  /** Id учасника в матчі (його ж бачить клієнт як selfId) */
+  pid: string;
   userId: string;
   nickname: string;
   planeId: string;
@@ -60,6 +56,25 @@ export interface Entrant {
   /** Група (паті): усі її учасники потрапляють в одну команду */
   groupId?: string | null;
 }
+
+/**
+ * Транспорт кімнати. Кімната не знає, чи це WebSocket, socket.io чи тест: бінарні пакети (Uint8Array)
+ * і JSON-події просто віддаються сюди; except — не слати автору (він уже показав ефект у себе).
+ */
+export interface RoomNet {
+  broadcast(event: string, data: unknown, except?: string): void;
+  send(pid: string, event: string, data: unknown): void;
+}
+
+/** Зовнішній світ кімнати: присутність гравців і запис результатів — справа інших сервісів. */
+export interface RoomHooks {
+  setInMatch(userId: string, inMatch: boolean): void;
+  results(payload: MatchResultsPayload): void;
+  leaver(payload: LeaverPayload): void;
+}
+
+/** Скільки чекаємо, поки всі гравці підʼєднаються до ігрового сервера, перш ніж почати відлік */
+const CONNECT_GRACE_MS = 6000;
 
 /** Гравець не стріляв і майже не рухався весь матч — ферма/AFK. */
 const isIdle = (p: Participant): boolean => !p.isBot && p.shots === 0 && p.travelled < 400;
@@ -137,7 +152,10 @@ export class Room {
   readonly id: string;
   state: MatchState = 'countdown';
   private participants = new Map<string, Participant>();
-  private sockets = new Map<string, Socket>();
+  /** Учасники-люди, що зараз підʼєднані */
+  private conns = new Set<string>();
+  private countdownAt = 0;
+  private graceTimer: ReturnType<typeof setTimeout> | null = null;
   private obstacles: Obstacle[];
   private projectiles: ServerProjectile[] = [];
   private pickups = new Map<number, Pickup>();
@@ -153,9 +171,10 @@ export class Room {
 
   constructor(
     id: string,
-    private readonly io: IOServer,
+    private readonly net: RoomNet,
     entrants: Entrant[],
     readonly mode: QueueMode = 'casual',
+    private readonly hooks: RoomHooks,
   ) {
     this.id = id;
     const { teamSize, roomSize } = MODE_SPEC[mode];
@@ -199,7 +218,7 @@ export class Room {
       const passive = e.passiveDefId ? getItemDef(e.passiveDefId) ?? null : null;
       const p = makeParticipant(
         {
-          id: e.socket.id,
+          id: e.pid,
           userId: e.userId,
           isBot: false,
           nickname: e.nickname,
@@ -217,9 +236,7 @@ export class Room {
       p.angle = Math.atan2(WORLD_H / 2 - p.pos.y, WORLD_W / 2 - p.pos.x);
       p.rankPoints = e.rankPoints;
       this.participants.set(p.id, p);
-      this.sockets.set(e.socket.id, e.socket);
-      e.socket.join(id);
-      setInMatch(e.userId, true);
+      this.hooks.setInMatch(e.userId, true);
     }
 
     while (this.participants.size < roomSize) {
@@ -257,18 +274,57 @@ export class Room {
 
     this.order = [...this.participants.keys()];
     this.order.forEach((pid, i) => this.orderIndex.set(pid, i));
-    this.io.to(id).emit('match:init', {
-      roomId: id,
+    // відлік — коли підʼєднались усі гравці (або минув запас часу)
+    this.graceTimer = setTimeout(() => this.startCountdown(), CONNECT_GRACE_MS);
+  }
+
+  /** Людей у кімнаті за складом (підʼєднаних чи ні) */
+  get humanIds(): string[] {
+    return [...this.participants.values()].filter((p) => !p.isBot).map((p) => p.id);
+  }
+
+  /** Гравець підʼєднався (вперше чи після обриву) — шлемо йому повний стан матчу. */
+  attach(pid: string): boolean {
+    const p = this.participants.get(pid);
+    if (!p || p.isBot || this.ended) return false;
+    this.conns.add(pid);
+    const now = Date.now();
+    const countdownLeft = this.countdownAt ? Math.max(0, COUNTDOWN_MS - (now - this.countdownAt)) : COUNTDOWN_MS;
+    this.net.send(pid, 'match:init', {
+      roomId: this.id,
+      selfId: pid,
       world: { w: WORLD_W, h: WORLD_H },
       obstacles: this.obstacles,
-      participants: this.publicList(Date.now()),
-      countdownMs: COUNTDOWN_MS,
-      mode,
+      participants: this.publicList(now),
+      countdownMs: countdownLeft,
+      mode: this.mode,
       teamSize: this.teamSize,
       timeLimitMs: MATCH_TIME_LIMIT_MS,
       pickups: [...this.pickups.values()],
     });
+    if (this.state === 'active') {
+      this.net.send(pid, 'match:start', { startedAt: this.startedAt });
+      this.encoder.forceKeyframe();
+    } else if (!this.countdownAt && this.humanIds.every((id) => this.conns.has(id))) this.startCountdown();
+    return true;
+  }
 
+  private startCountdown(): void {
+    if (this.countdownAt || this.ended) return;
+    if (this.graceTimer) clearTimeout(this.graceTimer);
+    this.countdownAt = Date.now();
+    // хто так і не підʼєднався — вибуває без штрафу (міг не встигнути через мережу)
+    for (const id of this.humanIds) {
+      if (this.conns.has(id)) continue;
+      const p = this.participants.get(id)!;
+      p.alive = false;
+      p.diedAt = Date.now();
+      if (p.userId) this.hooks.setInMatch(p.userId, false);
+    }
+    if (!this.hasRealPlayers()) {
+      this.destroy();
+      return;
+    }
     setTimeout(() => this.begin(), COUNTDOWN_MS);
   }
 
@@ -308,7 +364,7 @@ export class Room {
     if (this.ended) return;
     this.state = 'active';
     this.startedAt = Date.now();
-    this.io.to(this.id).emit('match:start', { startedAt: this.startedAt });
+    this.net.broadcast('match:start', { startedAt: this.startedAt });
     this.nextTickAt = Date.now() + TICK_MS;
     this.schedule();
   }
@@ -323,7 +379,12 @@ export class Room {
     this.tickHandle = setTimeout(() => {
       let n = 0;
       while (Date.now() >= this.nextTickAt && n < 3 && !this.ended) {
+        const t0 = performance.now();
         this.tick();
+        const ms = performance.now() - t0;
+        this.metrics.ticks++;
+        this.metrics.tickMsTotal += ms;
+        this.metrics.tickMsMax = Math.max(this.metrics.tickMsMax, ms);
         this.nextTickAt += TICK_MS;
         n++;
       }
@@ -345,8 +406,8 @@ export class Room {
 
   /** Розсилка всім у кімнаті з обліком трафіку. */
   private broadcast(event: string, payload: Uint8Array): void {
-    this.metrics.bytesOut += payload.byteLength * this.sockets.size;
-    this.io.to(this.id).emit(event, payload);
+    this.metrics.bytesOut += payload.byteLength * this.conns.size;
+    this.net.broadcast(event, payload);
   }
 
   private netStates(now: number): NetState[] {
@@ -407,7 +468,7 @@ export class Room {
     const crystal = Math.random() < CRYSTAL_CHANCE;
     const p: Pickup = { id: ++this.pickupSeq, kind: crystal ? 'crystal' : 'coin', ...pos, coins: crystal ? 0 : 10 + Math.floor(Math.random() * 16), crystals: crystal ? 1 + (Math.random() < 0.25 ? 1 : 0) : 0 };
     this.pickups.set(p.id, p);
-    if (announce) this.io.to(this.id).emit('match:pickup-spawn', p);
+    if (announce) this.net.broadcast('match:pickup-spawn', p);
   }
 
   /** Збитий літак лишає на місці все, що встиг зібрати. */
@@ -417,7 +478,7 @@ export class Room {
     p.lootCoins = 0;
     p.lootCrystals = 0;
     this.pickups.set(pile.id, pile);
-    this.io.to(this.id).emit('match:pickup-spawn', pile);
+    this.net.broadcast('match:pickup-spawn', pile);
   }
 
   private collectPickups(now: number): void {
@@ -432,17 +493,15 @@ export class Room {
         p.lootCoins += pk.coins;
         p.lootCrystals += pk.crystals;
         this.pickups.delete(pk.id);
-        this.io.to(this.id).emit('match:pickup-taken', { id: pk.id, by: p.id, coins: pk.coins, crystals: pk.crystals });
+        this.net.broadcast('match:pickup-taken', { id: pk.id, by: p.id, coins: pk.coins, crystals: pk.crystals });
       }
     }
   }
 
   /** Розсилка всім у кімнаті, крім автора (він уже показав ефект локально). */
   private relay(fromId: string, event: string, data: unknown): void {
-    if (data instanceof Uint8Array) this.metrics.bytesOut += data.byteLength * Math.max(0, this.sockets.size - 1);
-    const s = this.sockets.get(fromId);
-    if (s) s.to(this.id).emit(event, data);
-    else this.io.to(this.id).emit(event, data);
+    if (data instanceof Uint8Array) this.metrics.bytesOut += data.byteLength * Math.max(0, this.conns.size - 1);
+    this.net.broadcast(event, data, fromId);
   }
 
   onMove(socketId: string, pos: { x: number; y: number }, angle: number, firing: boolean): void {
@@ -523,6 +582,7 @@ export class Room {
       damage,
       splash,
       lagMs,
+      simT: Date.now(),
       angle,
       life: kind === 'missile' ? MISSILE_LIFE : undefined,
     });
@@ -631,7 +691,7 @@ export class Room {
       attacker.kills++;
       this.dropLoot(target);
     }
-    this.io.to(this.id).emit('match:hit', { attackerId: attacker.id, targetId: target.id, hp: target.hp, died, damage: Math.round(damage * 10) / 10 });
+    this.net.broadcast('match:hit', { attackerId: attacker.id, targetId: target.id, hp: target.hp, died, damage: Math.round(damage * 10) / 10 });
     if (died) this.checkEnd();
   }
 
@@ -681,9 +741,14 @@ export class Room {
     if (hit && now >= hit.flareUntil) this.applyDamage(bot, hit, damage, now);
   }
 
-  private updateProjectiles(dt: number, now: number): void {
+  /** Просимулювати снаряди до моменту now: кожен — рівно на час, що минув від його попереднього кроку. */
+  private updateProjectiles(now: number): void {
     const list = [...this.participants.values()];
     for (const pr of this.projectiles) {
+      if (pr.range < 0) continue;
+      const dt = (now - pr.simT) / 1000;
+      if (dt <= 0) continue;
+      pr.simT = now;
       const owner0 = this.participants.get(pr.ownerId);
       if (pr.kind === 'missile') {
         pr.life = (pr.life ?? 0) - dt;
@@ -783,8 +848,9 @@ export class Room {
       if (p.activeItem?.active?.kind === 'nanoRepair' && p.hp < p.maxHp * 0.5) this.useSkill(p, 'nanoRepair', now, p.angle);
     }
     this.recordHistory(now);
-    // кілька підкроків — швидкі кулі не "проскакують" крізь літаки
-    for (let i = 0; i < 2; i++) this.updateProjectiles(dt / 2, now);
+    // два підкроки з власним часом — швидкі кулі не "проскакують" крізь літаки, а ціль не "застигає"
+    this.updateProjectiles(now - TICK_MS / 2);
+    this.updateProjectiles(now);
     if (this.ended) return;
     this.collectPickups(now);
     this.broadcast('match:state', this.encoder.encode(now - this.startedAt, this.netStates(now)));
@@ -799,6 +865,7 @@ export class Room {
     const aliveTeams = new Set(alive.map((p) => p.team));
     const realAlive = alive.some((p) => !p.isBot);
     if (!force && aliveTeams.size > 1 && (realAlive || !this.hasRealPlayers())) return;
+    console.log(`[room ${this.id}] кінець матчу: ${force ? 'час вийшов' : aliveTeams.size <= 1 ? 'лишилась одна команда' : 'живих гравців не лишилось'}`);
     this.ended = true;
     this.state = 'ended';
     if (this.tickHandle) clearTimeout(this.tickHandle);
@@ -854,7 +921,17 @@ export class Room {
       return { before: p.rankPoints, after: Math.max(0, p.rankPoints + delta), delta };
     };
 
-    void this.grantRewards(ranked, rewardOf, rankOf);
+    // нагороди записує сервіс профілю
+    this.hooks.results({
+      matchId: this.id,
+      mode: this.mode,
+      players: ranked
+        .filter((p) => !p.isBot && p.userId)
+        .map((p) => {
+          const r = rewardOf(p);
+          return { userId: p.userId!, place: p.place!, teamPlace: p.teamPlace!, kills: p.kills, damageDealt: p.damageDealt, alive: p.alive, reward: { coins: r.coins, crystals: r.crystals, xp: r.xp, bpXp: r.bpXp, crate: r.crate }, rankAfter: rankOf(p)?.after ?? null };
+        }),
+    });
 
     const results: MatchResultEntry[] = ranked.map((p) => {
       const r = rewardOf(p);
@@ -874,88 +951,40 @@ export class Room {
     });
     // невелика пауза, щоб клієнт встиг показати останній вибух
     setTimeout(() => {
-      this.io.to(this.id).emit('match:end', { results });
-      for (const s of this.sockets.values()) s.leave(this.id);
+      this.net.broadcast('match:end', { results });
       setTimeout(() => this.destroy(), 500);
     }, 1200);
   }
 
-  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; xp: number; crate: CrateType | null }, rankOf: (p: Participant) => { after: number } | null): Promise<void> {
-    for (const p of ranked) {
-      if (p.isBot || !p.userId) continue;
-      try {
-        const user = await User.findById(p.userId);
-        if (!user) continue;
-        const reward = rewardOf(p);
-        grantReward(user, { coins: reward.coins, xp: reward.xp, crystals: reward.crystals, crate: reward.crate ?? undefined }, 'pvp');
-        addBp(user, reward.bpXp);
-        ensureQuestSlots(user);
-        incrementQuestProgress(user, 'pvpMatches', 1);
-        incrementQuestProgress(user, 'pvpKills', p.kills);
-        if (p.place! <= 3) incrementQuestProgress(user, 'pvpTop3', 1);
-        if (p.teamPlace === 1) incrementQuestProgress(user, 'pvpWins', 1);
-        const st = user.stats!;
-        st.pvpMatches += 1;
-        st.pvpKills += p.kills;
-        st.pvpDamage += Math.round(p.damageDealt);
-        st.bestKills = Math.max(st.bestKills, p.kills);
-        if (p.teamPlace === 1) st.pvpWins += 1;
-        if (p.place! <= 3) st.pvpTop3 += 1;
-        if (!p.alive) st.pvpDeaths += 1;
-        const rank = rankOf(p);
-        if (rank) {
-          const mode = this.mode as RankMode;
-          const cur = getRank(user, mode);
-          setRank(user, mode, { ...cur, points: rank.after, best: Math.max(cur.best, rank.after), matches: cur.matches + 1, wins: cur.wins + (p.teamPlace === 1 ? 1 : 0) });
-        }
-        await user.save();
-      } catch {
-        // гравець лишиться без нагороди цього разу — не блокуємо завершення матчу
-      }
-    }
-  }
-
-  /** Вихід із рейтингового матчу посеред бою — зараховується як останнє місце (інакше поразку можна було б "скинути"). */
-  private async penalizeLeaver(p: Participant): Promise<void> {
-    if (!p.userId) return;
-    try {
-      const user = await User.findById(p.userId);
-      if (!user) return;
-      const mode = this.mode as RankMode;
-      const cur = getRank(user, mode);
-      setRank(user, mode, { ...cur, points: Math.max(0, cur.points + rankDelta(ROOM_SIZE, p.kills, p.rankPoints)), matches: cur.matches + 1 });
-      user.stats!.pvpMatches += 1;
-      user.stats!.pvpDeaths += 1;
-      user.stats!.pvpKills += p.kills;
-      await user.save();
-    } catch {
-      // не блокуємо вихід
-    }
-  }
-
-  removeSocket(socketId: string): void {
-    const p = this.participants.get(socketId);
-    if (p && this.mode !== 'casual' && !this.ended && p.alive && !p.isBot) void this.penalizeLeaver(p);
-    if (p?.userId) setInMatch(p.userId, false);
+  /** Гравець відʼєднався або вийшов з матчу. */
+  detach(pid: string): void {
+    if (!this.conns.has(pid)) return;
+    const p = this.participants.get(pid);
+    // вихід посеред рейтингового бою — як останнє місце (інакше поразку можна було б "скинути")
+    if (p && p.userId && this.mode !== 'casual' && !this.ended && p.alive && !p.isBot) this.hooks.leaver({ matchId: this.id, mode: this.mode, userId: p.userId, kills: p.kills, rankPoints: p.rankPoints });
+    if (p?.userId) this.hooks.setInMatch(p.userId, false);
     if (p) {
       if (p.alive) p.diedAt = Date.now();
       p.alive = false;
       p.firing = false;
     }
-    this.sockets.delete(socketId);
+    this.conns.delete(pid);
     if (this.state === 'active') this.checkEnd();
+    // живих людей не лишилось — кімната з самими ботами нікому не потрібна
+    if (!this.ended && !this.hasRealPlayers() && this.countdownAt) this.destroy();
   }
 
   hasRealPlayers(): boolean {
-    return [...this.participants.values()].some((p) => !p.isBot && this.sockets.has(p.id));
+    return [...this.participants.values()].some((p) => !p.isBot && this.conns.has(p.id));
   }
 
   destroy(): void {
     this.ended = true;
-    for (const p of this.participants.values()) if (p.userId) setInMatch(p.userId, false);
+    if (this.graceTimer) clearTimeout(this.graceTimer);
+    for (const p of this.participants.values()) if (p.userId) this.hooks.setInMatch(p.userId, false);
     if (this.tickHandle) clearTimeout(this.tickHandle);
     this.participants.clear();
-    this.sockets.clear();
+    this.conns.clear();
     this.onClose();
     this.onClose = () => {};
   }

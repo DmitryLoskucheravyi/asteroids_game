@@ -30,27 +30,6 @@ passRouter.get('/', async (req: AuthedRequest, res) => {
   });
 });
 
-passRouter.post('/buy-premium', async (req: AuthedRequest, res) => {
-  const user = await User.findById(req.userId);
-  if (!user) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
-  ensureSeason(user);
-  if (user.passPremium) {
-    res.status(409).json({ error: 'already_premium' });
-    return;
-  }
-  if (user.coins < PREMIUM_PASS_PRICE) {
-    res.status(402).json({ error: 'not_enough_coins' });
-    return;
-  }
-  user.coins -= PREMIUM_PASS_PRICE;
-  user.passPremium = true;
-  await user.save();
-  res.json({ profile: serializeProfile(user) });
-});
-
 /** Предмет/зброя/літак з тьєру; якщо вже є — компенсація кристалами, щоб нагорода не "пропадала". */
 function grantExtras(user: HydratedDocument<UserDoc>, r: PassReward): number {
   let refund = 0;

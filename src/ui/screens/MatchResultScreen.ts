@@ -1,4 +1,4 @@
-import type { Socket } from 'socket.io-client';
+import type { GameLink } from '../../net/gameLink';
 import type { App } from '../../app/App';
 import { Sfx } from '../../core/audio';
 import { t, type TKey } from '../../core/i18n';
@@ -38,7 +38,7 @@ export class MatchResultScreen extends Screen {
   constructor(
     app: App,
     private readonly results: MatchResultEntry[],
-    private readonly socket: Socket,
+    private readonly socket: GameLink,
   ) {
     super(app);
   }

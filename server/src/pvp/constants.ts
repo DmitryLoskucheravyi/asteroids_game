@@ -29,7 +29,7 @@ export const WORLD_H = 4500;
 export const TICK_HZ = 30;
 export const TICK_MS = 1000 / TICK_HZ;
 export const COUNTDOWN_MS = 3000;
-export const MATCH_TIME_LIMIT_MS = 4 * 60 * 1000;
+export const MATCH_TIME_LIMIT_MS = Number(process.env.MATCH_TIME_LIMIT_MS) || 4 * 60 * 1000;
 /** Мітка на радарі видима стільки мс після останнього пострілу. */
 export const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
 export const HIT_RADIUS = 20;

@@ -1,4 +1,4 @@
-import type { Socket } from 'socket.io-client';
+import type { GameLink } from '../net/gameLink';
 import { drawAsteroid } from './AsteroidArt';
 import { Sfx } from '../core/audio';
 import { Vec2, angleDiff, clamp } from '../core/math';
@@ -144,7 +144,7 @@ export class PvpGame {
   private lastShotSfx = 0;
 
   constructor(
-    private readonly socket: Socket,
+    private readonly socket: GameLink,
     private readonly input: InputState,
     planeId: PlaneId,
     init: MatchInit,

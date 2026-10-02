@@ -137,3 +137,11 @@ export function setSearching(userId: string, searching: boolean): Party | PartyE
   bump(p);
   return p;
 }
+
+/** Матчмейкер знайшов матч для групи — пошук завершено (після бою група сама в чергу не стане). */
+export function setIdle(partyId: string): void {
+  const p = parties.get(partyId);
+  if (!p || p.state === 'idle') return;
+  p.state = 'idle';
+  bump(p);
+}

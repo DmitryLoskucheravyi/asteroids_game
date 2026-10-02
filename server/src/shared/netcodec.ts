@@ -127,6 +127,11 @@ export class StateEncoder {
 
   constructor(private readonly keyframeEvery = 30) {}
 
+  /** Наступний пакет буде ключовим кадром (новий глядач не має бази для дельт). */
+  forceKeyframe(): void {
+    this.sinceKey = Infinity;
+  }
+
   /** Наступний пакет стану (ключовий кадр — на першому й кожному keyframeEvery-му). */
   encode(t: number, states: readonly NetState[], forceKey = false): Uint8Array {
     const key = forceKey || this.sinceKey >= this.keyframeEvery;

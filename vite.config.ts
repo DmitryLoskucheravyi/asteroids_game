@@ -12,6 +12,8 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8787',
       '/socket.io': { target: 'ws://localhost:8787', ws: true },
+      // бій — окреме WebSocket-зʼєднання з ігровим сервером (через шлюз)
+      '/game': { target: 'ws://localhost:8787', ws: true },
     },
   },
 });

@@ -8,6 +8,7 @@ import { getPlane } from '../../game/planes';
 import { DIVISIONS, RANK_IDS, RANK_MODES, RP_PER_DIVISION, TEAM_SIZE, rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 import { getWeaponDef } from '../../game/weapons';
 import { getSocket } from '../../net/socket';
+import { GameLink } from '../../net/gameLink';
 import { Sfx } from '../../core/audio';
 import { Server, type PartyMember, type PartyView } from '../../core/server';
 import { toast } from '../Modal';
@@ -147,9 +148,23 @@ export class OnlineScreen extends Screen {
     this.searching = true;
     this.render();
     const socket = getSocket();
-    socket.off('match:init');
-    socket.once('match:init', (data: MatchInit) => {
-      this.app.show(new PvpScreen(this.app, socket, data));
+    // матчмейкер знайшов кімнату — підʼєднуємось до ігрового сервера за квитком
+    socket.off('match:assigned');
+    socket.off('queue:error');
+    socket.once('match:assigned', ({ server, ticket }: { server: string; ticket: string }) => {
+      const link = new GameLink(server, ticket);
+      link.once('match:init', (data: MatchInit) => this.app.show(new PvpScreen(this.app, link, data)));
+      link.once('link:closed', () => {
+        if (!this.el?.isConnected) return;
+        this.searching = false;
+        toast(t('online.connectFailed'));
+        this.render();
+      });
+    });
+    socket.once('queue:error', () => {
+      this.searching = false;
+      toast(t('online.connectFailed'));
+      this.render();
     });
     socket.emit('queue:join', { mode: this.mode, partyId });
   }

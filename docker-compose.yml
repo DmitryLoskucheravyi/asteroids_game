@@ -25,5 +25,224 @@ services:
       ME_CONFIG_BASICAUTH_USERNAME: admin
       ME_CONFIG_BASICAUTH_PASSWORD: admin
 
+
+  # ---------- мікросервіси (docker compose --profile full up --build) ----------
+  # Типово (без профілю) піднімається лише база — для розробки сервіси запускає `npm run dev` у server/.
+  auth:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/auth.js
+    depends_on: [mongo]
+    environment:
+      PORT: '8801'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  profile:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/profile.js
+    depends_on: [mongo]
+    environment:
+      PORT: '8802'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  shop:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/shop.js
+    depends_on: [mongo]
+    environment:
+      PORT: '8803'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  crates:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/crates.js
+    depends_on: [mongo]
+    environment:
+      PORT: '8804'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  stats:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/stats.js
+    depends_on: [mongo]
+    environment:
+      PORT: '8805'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  social:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/social.js
+    depends_on: [mongo]
+    environment:
+      PORT: '8806'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  matchmaker:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/matchmaker.js
+    depends_on: [mongo]
+    environment:
+      PORT: '8807'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  game1:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/game.js
+    depends_on: [matchmaker]
+    environment:
+      PORT: '8901'
+      GAME_ID: g1
+      GAME_INTERNAL_URL: http://game1:8901
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  game2:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/game.js
+    depends_on: [matchmaker]
+    environment:
+      PORT: '8902'
+      GAME_ID: g2
+      GAME_INTERNAL_URL: http://game2:8902
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
+  gateway:
+    build: ./server
+    image: asteroids-server
+    profiles: [full]
+    restart: unless-stopped
+    command: node dist/services/gateway.js
+    depends_on: [auth, profile, shop, crates, stats, social, matchmaker]
+    ports:
+      - '8787:8787'
+    environment:
+      PORT: '8787'
+      MONGO_URI: mongodb://asteroids:asteroids@mongo:27017/asteroids?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-internal-token-change-me}
+      GAME_TICKET_SECRET: ${GAME_TICKET_SECRET:-dev-game-ticket-secret-change-me}
+      SERVICE_AUTH_URL: http://auth:8801
+      SERVICE_PROFILE_URL: http://profile:8802
+      SERVICE_SHOP_URL: http://shop:8803
+      SERVICE_CRATES_URL: http://crates:8804
+      SERVICE_STATS_URL: http://stats:8805
+      SERVICE_SOCIAL_URL: http://social:8806
+      SERVICE_MATCHMAKER_URL: http://matchmaker:8807
+
 volumes:
   mongo-data:
