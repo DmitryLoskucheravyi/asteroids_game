@@ -109,7 +109,7 @@ export interface ServerProjectile {
 
 export interface MatchResultEntry {
   /** Що гравець отримав за матч (місце + фраги + джекпот переможця) */
-  reward: { coins: number; crystals: number; crate: 'legendary' | 'epic' | 'rare' | null };
+  reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null };
   jackpot: { coins: number; crystals: number };
   id: string;
   userId: string | null;

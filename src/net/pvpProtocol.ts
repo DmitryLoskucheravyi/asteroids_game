@@ -88,7 +88,7 @@ export interface HitEvent {
 }
 
 export interface MatchResultEntry {
-  reward: { coins: number; crystals: number; crate: 'legendary' | 'epic' | 'rare' | null };
+  reward: { coins: number; crystals: number; crate: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary' | null };
   jackpot: { coins: number; crystals: number };
   id: string;
   userId: string | null;

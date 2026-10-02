@@ -21,8 +21,29 @@ export const FLARE_COOLDOWN_MS = 9000;
 export const FLARE_DURATION_MS = 1400;
 export const FLARE_RADIUS = 95;
 
-/** Гарантований ящик за призове місце. */
-export const PLACE_CRATES: Record<number, 'legendary' | 'epic' | 'rare'> = { 1: 'legendary', 2: 'epic', 3: 'rare' };
+import type { CrateType } from '../content/crates.js';
+
+/**
+ * Ящик за призове місце — випадкової рідкості: вище місце лише підвищує шанси на кращий.
+ * Легендарний лишається великою рідкістю навіть за перемогу.
+ */
+const PLACE_CRATE_WEIGHTS: Record<number, Record<CrateType, number>> = {
+  1: { common: 38, rare: 36, epic: 18, mythic: 6.5, legendary: 1.5 },
+  2: { common: 52, rare: 32, epic: 12, mythic: 3.5, legendary: 0.5 },
+  3: { common: 66, rare: 26, epic: 6.5, mythic: 1.35, legendary: 0.15 },
+};
+
+export function rollPlaceCrate(place: number): CrateType | null {
+  const w = PLACE_CRATE_WEIGHTS[place];
+  if (!w) return null;
+  const entries = Object.entries(w) as [CrateType, number][];
+  let roll = Math.random() * entries.reduce((s, [, v]) => s + v, 0);
+  for (const [type, v] of entries) {
+    if (roll < v) return type;
+    roll -= v;
+  }
+  return 'common';
+}
 
 /** Нагорода за місце в матчі: монети + XP сезонного пропуску. */
 export function matchReward(place: number, kills: number): { coins: number; bpXp: number } {

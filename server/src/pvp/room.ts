@@ -17,13 +17,14 @@ import {
   FLARE_DURATION_MS,
   FLARE_RADIUS,
   matchReward,
-  PLACE_CRATES,
+  rollPlaceCrate,
   PICKUP_START,
   PICKUP_MAX,
   PICKUP_SPAWN_MS,
   PICKUP_RADIUS,
   CRYSTAL_CHANCE,
 } from './constants.js';
+import type { CrateType } from '../content/crates.js';
 import type { Participant, Obstacle, MatchState, PublicParticipant, MatchResultEntry, ServerProjectile, SkillKind, Pickup } from './types.js';
 
 const BOT_NAMES = ['Вихор', 'Корсар', 'Немезида', 'Беркут', 'Скорпіон', 'Фантом-7', 'Ренегат', 'Сокира'];
@@ -536,10 +537,13 @@ export class Room {
       jackpot.coins += p.lootCoins;
       jackpot.crystals += p.lootCrystals;
     }
+    // ящик розігрується один раз на гравця — і для нарахування, і для екрана результатів
+    const crates = new Map(ranked.map((p) => [p.id, rollPlaceCrate(p.place!)]));
     const rewardOf = (p: Participant) => {
       const base = matchReward(p.place!, p.kills);
+      const crate = crates.get(p.id) ?? null;
       const won = p.place === 1;
-      return { coins: base.coins + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, crate: PLACE_CRATES[p.place!] ?? null };
+      return { coins: base.coins + (won ? jackpot.coins : 0), crystals: won ? jackpot.crystals : 0, bpXp: base.bpXp, crate };
     };
 
     void this.grantRewards(ranked, rewardOf);
@@ -565,7 +569,7 @@ export class Room {
     }, 1200);
   }
 
-  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; crate: 'legendary' | 'epic' | 'rare' | null }): Promise<void> {
+  private async grantRewards(ranked: Participant[], rewardOf: (p: Participant) => { coins: number; crystals: number; bpXp: number; crate: CrateType | null }): Promise<void> {
     for (const p of ranked) {
       if (p.isBot || !p.userId) continue;
       try {
