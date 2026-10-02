@@ -3,7 +3,23 @@ import type { PlaneId } from '../game/planes';
 import type { ItemRarity } from '../game/items';
 
 export type CrateType = 'common' | 'rare' | 'legendary';
-export type QuestKind = 'levelsCompleted' | 'crystalsCollected' | 'survivalSeconds' | 'cratesOpened' | 'pvpMatches' | 'pvpKills' | 'pvpTop3' | 'pvpWins' | 'threeStarLevels' | 'planeUpgrades';
+export type QuestKind =
+  | 'levelsCompleted'
+  | 'crystalsCollected'
+  | 'survivalSeconds'
+  | 'cratesOpened'
+  | 'pvpMatches'
+  | 'pvpKills'
+  | 'pvpTop3'
+  | 'pvpWins'
+  | 'threeStarLevels'
+  | 'planeUpgrades'
+  | 'coinsEarned'
+  | 'itemsBought'
+  | 'dailyClaimed'
+  | 'passClaims'
+  | 'questsCompleted'
+  | 'survivalRuns';
 
 export interface QuestView {
   questId: string;

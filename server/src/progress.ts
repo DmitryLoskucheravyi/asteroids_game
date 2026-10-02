@@ -43,8 +43,16 @@ export interface RewardResult {
   crystals: number;
 }
 
+/** Які квести рухає нагорода певного джерела. */
+const SOURCE_QUEST: Partial<Record<string, QuestKind>> = { daily: 'dailyClaimed', pass: 'passClaims', quest: 'questsCompleted' };
+
 export function grantReward(user: Doc, reward: Reward, source: string): RewardResult {
   const coins = Math.max(0, Math.floor(reward.coins ?? 0));
+  ensureQuestSlots(user);
+  // нагороди за самі квести не рахуються в "заробити монети" — інакше квести закривали б одне одного
+  if (source !== 'quest') incrementQuestProgress(user, 'coinsEarned', coins);
+  const sourceQuest = SOURCE_QUEST[source];
+  if (sourceQuest) incrementQuestProgress(user, sourceQuest, 1);
   const xpAmount = Math.max(0, Math.floor(reward.xp ?? 0));
   const crystals = Math.max(0, Math.floor(reward.crystals ?? 0));
   user.coins += coins;

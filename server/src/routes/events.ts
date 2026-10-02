@@ -96,6 +96,7 @@ eventsRouter.post('/survival', async (req: AuthedRequest, res) => {
 
   ensureQuestSlots(user);
   incrementQuestProgress(user, 'survivalSeconds', secs);
+  incrementQuestProgress(user, 'survivalRuns', 1);
   incrementQuestProgress(user, 'crystalsCollected', cry);
   addBp(user, bpForSurvival(secs));
 

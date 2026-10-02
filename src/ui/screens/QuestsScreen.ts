@@ -19,6 +19,12 @@ const QUEST_ICON: Record<QuestView['kind'], string> = {
   pvpWins: Icons.star,
   threeStarLevels: Icons.star,
   planeUpgrades: Icons.bolt,
+  coinsEarned: Icons.coin,
+  itemsBought: Icons.shield,
+  dailyClaimed: Icons.gift,
+  passClaims: Icons.trophy,
+  questsCompleted: Icons.star,
+  survivalRuns: Icons.clock,
 };
 
 /** Завдання: щоденні й тижневі, з прогресом, що тягнеться з профілю (сервер — єдине джерело правди). */

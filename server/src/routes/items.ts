@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { User } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
+import { ensureQuestSlots, incrementQuestProgress } from '../progress.js';
 import { getItemDef } from '../content/items.js';
 import { isPlaneId } from '../content/planes.js';
 import { getWeaponDef } from '../content/weapons.js';
@@ -32,6 +33,8 @@ itemsRouter.post('/buy', async (req: AuthedRequest, res) => {
   }
   user.coins -= def.price;
   user.items.push({ defId: def.id, rarity: def.rarity });
+  ensureQuestSlots(user);
+  incrementQuestProgress(user, 'itemsBought', 1);
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });
@@ -59,6 +62,8 @@ itemsRouter.post('/buy-weapon', async (req: AuthedRequest, res) => {
   }
   user.coins -= def.price;
   user.ownedWeapons.push(def.id);
+  ensureQuestSlots(user);
+  incrementQuestProgress(user, 'itemsBought', 1);
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });
