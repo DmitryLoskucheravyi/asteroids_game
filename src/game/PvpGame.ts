@@ -15,7 +15,8 @@ import { getWeaponDef, DEFAULT_WEAPON_ID, WeaponState, type WeaponDef } from './
 import { Player } from './entities/Player';
 import { Projectile } from './entities/Projectile';
 import { ParticleSystem } from './systems/Particles';
-import { BOOST_MULTIPLIER, FLARE_RADIUS, SkillSystem } from './systems/SkillSystem';
+import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
+import { DECOY_COUNT, FLARE_ACTIVE_MS, FLARE_FADE_MS, decoyPos, hitsDecoy, nearestDecoy, rayDecoy, type FlareBurst } from '../../server/src/shared/flares';
 import type { Viewport } from './Game';
 import type { HitEvent, MatchInit, MatchResultEntry, Obstacle, PickupTaken, PickupView, PublicParticipant, ShotEvent, SkillEvent, SkillKind } from '../net/pvpProtocol';
 
@@ -47,14 +48,6 @@ interface FloatText {
   color: string;
 }
 
-/** Теплова пастка: яскрава іскра, що падає назад від літака. */
-interface Decoy {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-}
 
 interface Missile {
   pos: Vec2;
@@ -119,7 +112,8 @@ export class PvpGame {
   private remote: Projectile[] = [];
   private missiles: Missile[] = [];
   private beams: Beam[] = [];
-  private decoys: Decoy[] = [];
+  /** Пастки на полі (свої й чужі) — іскри рахуються спільною формулою, як на сервері */
+  private flares: FlareBurst[] = [];
   private rings: Ring[] = [];
   private texts: FloatText[] = [];
   private readonly particles = new ParticleSystem();
@@ -430,7 +424,7 @@ export class PvpGame {
   useFlare(): void {
     if (!this.canAct || !this.skills.tryFlare()) return;
     this.emitSkill('flare');
-    this.spawnDecoys(this.player.pos.x, this.player.pos.y, this.aim);
+    this.spawnFlares(this.selfId ?? '', this.player.pos.x, this.player.pos.y, this.aim);
     Sfx.flares();
   }
 
@@ -502,7 +496,7 @@ export class PvpGame {
   private onRemoteSkill(s: SkillEvent): void {
     switch (s.kind) {
       case 'flare':
-        this.spawnDecoys(s.x, s.y, s.angle);
+        this.spawnFlares(s.id, s.x, s.y, s.angle);
         break;
       case 'jump':
         this.particles.emit(s.x, s.y, { count: 16, speed: [20, 90], life: [0.2, 0.5], size: [3, 5], colors: ['#ffffff', '#9fe3ff'] });
@@ -765,14 +759,25 @@ export class PvpGame {
     return false;
   }
 
-  /** Чи збиває пастка ціль снаряд, що підлетів. */
-  private intercepted(pos: Vec2, id: string): boolean {
-    const flaring = id === this.selfId ? this.skills.isFlaring : !!this.participants.get(id)?.flare;
-    if (!flaring) return false;
-    const p = this.renderPos(id);
-    if (!p || Math.hypot(pos.x - p.x, pos.y - p.y) > FLARE_RADIUS) return false;
-    this.particles.emit(pos.x, pos.y, { count: 8, speed: [60, 180], life: [0.2, 0.45], size: [2, 4], colors: ['#ffffff', '#fff1a8', '#ff9a3a'] });
-    return true;
+  /** Час для пасток (мс, годинник клієнта) */
+  private get flareNow(): number {
+    return this.clock * 1000;
+  }
+
+  /** Пастки, що збивають снаряди цього власника (усіх, крім своїх і союзних). */
+  private enemyFlares(ownerId: string | null): FlareBurst[] {
+    return this.flares.filter((f) => f.ownerId !== ownerId && !this.sameTeam(f.ownerId, ownerId));
+  }
+
+  /** Снаряд (крок від a до b) влучив в іскру ворожої пастки — згорає з іскрами. */
+  private intercepted(ownerId: string | null, ax: number, ay: number, bx: number, by: number): boolean {
+    for (const f of this.enemyFlares(ownerId)) {
+      const hit = hitsDecoy(f, this.flareNow, ax, ay, bx, by);
+      if (!hit) continue;
+      this.particles.emit(hit.x, hit.y, { count: 10, speed: [60, 200], life: [0.2, 0.45], size: [2, 4], colors: ['#ffffff', '#fff1a8', '#ff9a3a'] });
+      return true;
+    }
+    return false;
   }
 
   private updateProjectiles(dt: number): void {
@@ -785,12 +790,12 @@ export class PvpGame {
         pr.kill();
         continue;
       }
+      if (this.intercepted(this.selfId, pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y)) {
+        pr.kill();
+        continue;
+      }
       for (const [id, p] of this.participants) {
         if (id === this.selfId || !p.alive || this.isAlly(id)) continue;
-        if (this.intercepted(pr.pos, id)) {
-          pr.kill();
-          break;
-        }
         if (p.phase) continue;
         const rp = this.renderPos(id)!;
         if (Math.hypot(pr.pos.x - rp.x, pr.pos.y - rp.y) < HIT_RADIUS + pr.radius) {
@@ -810,6 +815,10 @@ export class PvpGame {
         pr.kill();
         continue;
       }
+      if (this.intercepted(pr.ownerId, pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y)) {
+        pr.kill();
+        continue;
+      }
       const ids = [...this.participants.keys()];
       if (this.selfId && !ids.includes(this.selfId)) ids.push(this.selfId);
       for (const id of ids) {
@@ -817,10 +826,6 @@ export class PvpGame {
         const p = id === this.selfId ? null : this.participants.get(id);
         const alive = id === this.selfId ? this.selfAlive : !!p?.alive;
         if (!alive) continue;
-        if (this.intercepted(pr.pos, id)) {
-          pr.kill();
-          break;
-        }
         const phase = id === this.selfId ? this.phase > 0 : !!p?.phase;
         if (phase) continue;
         const rp = this.renderPos(id);
@@ -856,11 +861,26 @@ export class PvpGame {
           best = rp;
         }
       }
+      // теплові пастки: іскри приваблюють ракету сильніше за літак
+      for (const f of this.enemyFlares(m.ownerId)) {
+        const dec = nearestDecoy(f, this.flareNow, m.pos.x, m.pos.y);
+        if (dec && dec.d * 0.6 < bestD && Math.abs(angleDiff(m.angle, Math.atan2(dec.y - m.pos.y, dec.x - m.pos.x))) < 1.6) {
+          bestD = dec.d * 0.6;
+          best = dec;
+        }
+      }
       if (best && m.life < 2.2) {
         const want = Math.atan2(best.y - m.pos.y, best.x - m.pos.x);
         m.angle += clamp(angleDiff(m.angle, want), -MISSILE_TURN * dt, MISSILE_TURN * dt);
       }
+      const mx = m.pos.x;
+      const my = m.pos.y;
       m.pos.add(Vec2.fromAngle(m.angle), MISSILE_SPEED * dt);
+      if (this.intercepted(m.ownerId, mx, my, m.pos.x, m.pos.y)) {
+        m.life = 0;
+        this.explosion(m.pos.x, m.pos.y, 0.3);
+        continue;
+      }
       this.particles.emit(m.pos.x, m.pos.y, { count: 1, speed: [10, 40], angle: m.angle + Math.PI, spread: 0.4, life: [0.2, 0.4], size: [2, 4], colors: ['#fff1a8', '#ff8a3a', '#9a9aa8'], drag: 2 });
       if (this.hitsObstacle(m.pos, 4)) {
         m.life = 0;
@@ -869,10 +889,6 @@ export class PvpGame {
       }
       for (const [id, p] of this.participants) {
         if (id === m.ownerId || !p.alive || this.sameTeam(id, m.ownerId)) continue;
-        if (this.intercepted(m.pos, id)) {
-          m.life = 0;
-          break;
-        }
         if (p.phase) continue;
         const rp = id === this.selfId ? this.player.pos : this.renderPos(id)!;
         if (Math.hypot(rp.x - m.pos.x, rp.y - m.pos.y) < HIT_RADIUS + 4) {
@@ -918,12 +934,19 @@ export class PvpGame {
       if (self ? this.phase > 0 : p?.phase) continue;
       const rp = this.renderPos(id);
       if (!rp) continue;
-      const flaring = self ? this.skills.isFlaring : !!p?.flare;
-      const d = hitAt(rp.x, rp.y, flaring ? FLARE_RADIUS * 0.7 : HIT_RADIUS);
+      const d = hitAt(rp.x, rp.y, HIT_RADIUS);
       if (d !== null && d < best) {
         best = d;
-        targetId = flaring ? null : id;
-        blocked = flaring;
+        targetId = id;
+        blocked = false;
+      }
+    }
+    for (const f of this.enemyFlares(ownerId)) {
+      const d = rayDecoy(f, this.flareNow, x, y, dx, dy);
+      if (d !== null && d < best) {
+        best = d;
+        targetId = null;
+        blocked = true;
       }
     }
     return { dist: Math.max(0, best), targetId, blocked };
@@ -953,15 +976,18 @@ export class PvpGame {
       t.y -= 40 * dt;
     }
     this.texts = this.texts.filter((t) => t.t < 0.9);
-    for (const d of this.decoys) {
-      d.life -= dt;
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
-      d.vx *= Math.exp(-1.6 * dt);
-      d.vy *= Math.exp(-1.6 * dt);
-      if (Math.random() < 0.6) this.particles.emit(d.x, d.y, { count: 1, speed: [5, 30], life: [0.3, 0.6], size: [2, 4], colors: ['#fff1a8', '#ff9a3a', '#c8c0d8'], drag: 1 });
+    // шлейф диму за кожною іскрою, поки горить
+    const fnow = this.flareNow;
+    for (const f of this.flares) {
+      const age = fnow - f.t0;
+      if (age > FLARE_ACTIVE_MS + FLARE_FADE_MS) continue;
+      for (let i = 0; i < DECOY_COUNT; i++) {
+        if (Math.random() > 0.55) continue;
+        const pos = decoyPos(f, i, age);
+        this.particles.emit(pos.x, pos.y, { count: 1, speed: [5, 25], life: [0.3, 0.6], size: [2, 3.5], colors: age < FLARE_ACTIVE_MS ? ['#fff1a8', '#ff9a3a', '#c8c0d8'] : ['#8a8496', '#5a5468'], drag: 1 });
+      }
     }
-    this.decoys = this.decoys.filter((d) => d.life > 0);
+    this.flares = this.flares.filter((f) => fnow - f.t0 < FLARE_ACTIVE_MS + FLARE_FADE_MS);
   }
 
   private updateCamera(dt: number): void {
@@ -1012,15 +1038,10 @@ export class PvpGame {
     }
   }
 
-  /** Віяло теплових пасток назад і вбік від курсу. */
-  private spawnDecoys(x: number, y: number, angle: number): void {
-    const back = angle + Math.PI;
-    for (let i = 0; i < 8; i++) {
-      const a = back + (i - 3.5) * 0.32 + (Math.random() - 0.5) * 0.15;
-      const sp = 180 + Math.random() * 120;
-      this.decoys.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1.1 + Math.random() * 0.5 });
-    }
-    this.ring(x, y, FLARE_RADIUS, '255,190,90', 0.35);
+  /** Пастки: віяло іскор назад від літака (та сама формула, що й на сервері). */
+  private spawnFlares(ownerId: string, x: number, y: number, angle: number): void {
+    this.flares.push({ ownerId, x, y, angle, t0: this.flareNow });
+    this.particles.emit(x - Math.cos(angle) * 18, y - Math.sin(angle) * 18, { count: 14, speed: [60, 180], angle: angle + Math.PI, spread: 1.4, life: [0.15, 0.35], size: [2, 4], colors: ['#ffffff', '#fff1a8', '#ffb050'] });
   }
 
   /** Мітки на радарі: чужі кораблі видно лише поки стріляють (і трохи після). */
@@ -1061,7 +1082,20 @@ export class PvpGame {
     this.renderObstacles(ctx);
     this.renderPickups(ctx);
 
-    for (const d of this.decoys) drawGlow(ctx, d.x, d.y, 'rgba(255,200,110,1)', 16 * Math.min(1, d.life), 0.9);
+    for (const f of this.flares) {
+      const age = this.flareNow - f.t0;
+      const k = age < FLARE_ACTIVE_MS ? 1 : Math.max(0, 1 - (age - FLARE_ACTIVE_MS) / FLARE_FADE_MS);
+      if (k <= 0) continue;
+      for (let i = 0; i < DECOY_COUNT; i++) {
+        const pos = decoyPos(f, i, age);
+        const flicker = 0.8 + Math.sin(this.clock * 40 + i * 1.7) * 0.2;
+        drawGlow(ctx, pos.x, pos.y, 'rgba(255,190,90,1)', 18 * k * flicker, 0.85 * k);
+        ctx.fillStyle = `rgba(255,250,225,${k})`;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, 2.6 * k + 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     this.particles.render(ctx);
 
     for (const [id, p] of this.participants) {
@@ -1085,7 +1119,6 @@ export class PvpGame {
         ctx.restore();
       }
       ctx.globalAlpha = 1;
-      if (this.skills.isFlaring) this.renderFlareShield(ctx, this.player.pos.x, this.player.pos.y);
       if (this.slow > 0) this.renderSlow(ctx, this.player.pos.x, this.player.pos.y);
       const me = this.self;
       if (me) this.renderNick(ctx, me.nickname, this.player.pos.x, this.player.pos.y - 40, '220,235,255');
@@ -1304,7 +1337,6 @@ export class PvpGame {
     drawPlane(ctx, spec.id, 60, this.clock, p.tier ?? 1, p.level ?? 1);
     ctx.restore();
     ctx.globalAlpha = 1;
-    if (p.flare) this.renderFlareShield(ctx, x, y);
     if (p.slowed) this.renderSlow(ctx, x, y);
 
     // ім'я і смужка HP над ворогом
@@ -1338,16 +1370,6 @@ export class PvpGame {
     ctx.fillText(name, x + 1, y + 1);
     ctx.fillStyle = `rgba(${rgb},0.62)`;
     ctx.fillText(name, x, y);
-  }
-
-  private renderFlareShield(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-    ctx.strokeStyle = `rgba(255,190,90,${0.35 + Math.sin(this.clock * 30) * 0.15})`;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 8]);
-    ctx.beginPath();
-    ctx.arc(x, y, FLARE_RADIUS * 0.7, this.clock * 3, this.clock * 3 + Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
   }
 
   private renderSlow(ctx: CanvasRenderingContext2D, x: number, y: number): void {

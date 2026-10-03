@@ -1,4 +1,5 @@
 import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
+import { FLARE_ACTIVE_MS, FLARE_COOLDOWN_MS, hitsDecoy, nearestDecoy, rayDecoy, type FlareBurst } from '../shared/flares.js';
 import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/weapons.js';
 import { getItemDef, type ItemMeta } from '../content/items.js';
 import { PLANE_IDS, planeCombat } from '../content/planes.js';
@@ -23,9 +24,6 @@ import {
   COUNTDOWN_MS,
   MATCH_TIME_LIMIT_MS,
   HIT_RADIUS,
-  FLARE_COOLDOWN_MS,
-  FLARE_DURATION_MS,
-  FLARE_RADIUS,
   matchReward,
   MODE_SPEC,
   scaledPlace,
@@ -595,6 +593,18 @@ export class Room {
 
   private readonly history = new Map<string, { t: number; x: number; y: number }[]>();
 
+  /** Активні пастки: іскри летять назад від літака, збивають чужі снаряди */
+  private flares: FlareBurst[] = [];
+
+  /** Пастки, що збивають снаряди цього власника (чужі команди, не свої). */
+  private enemyFlares(owner: Participant | undefined): FlareBurst[] {
+    return this.flares.filter((f) => {
+      if (f.ownerId === owner?.id) return false;
+      const fo = this.participants.get(f.ownerId);
+      return !(owner && fo && this.sameTeam(owner, fo));
+    });
+  }
+
   private recordHistory(now: number): void {
     for (const p of this.participants.values()) {
       let h = this.history.get(p.id);
@@ -645,7 +655,8 @@ export class Room {
     if (kind === 'flare') {
       if (now - p.lastFlareAt < FLARE_COOLDOWN_MS * p.cooldownMul * 0.9) return;
       p.lastFlareAt = now;
-      p.flareUntil = now + FLARE_DURATION_MS;
+      p.flareUntil = now + FLARE_ACTIVE_MS;
+      this.flares.push({ ownerId: p.id, x: p.pos.x, y: p.pos.y, angle: p.angle, t0: now });
     } else if (kind === 'jump') {
       // ривок: позицію шле клієнт — лише дозволяємо одноразовий стрибок у бюджеті руху
       p.moveBudget += JUMP_ALLOWANCE;
@@ -693,8 +704,6 @@ export class Room {
 
   private applyDamage(attacker: Participant, target: Participant, damage: number, now: number): void {
     if (!target.alive || now < target.phaseUntil || this.sameTeam(attacker, target)) return;
-    // під час пасток кулі й ракети збиваються (з невеликим допуском на затримку мережі)
-    if (now < target.flareUntil - 80) return;
     // одне влучання не знімає більше половини максимального HP — ваншот неможливий
     damage = Math.min(damage, target.maxHp * 0.5);
     attacker.damageDealt += Math.min(damage, target.hp);
@@ -747,15 +756,22 @@ export class Room {
     for (const p of this.participants.values()) {
       if (p === bot || !p.alive || now < p.phaseUntil || this.sameTeam(p, bot)) continue;
       const at = this.posAt(p, now - lagMs);
-      // під пастками промінь розсіюється об щит
-      const d = rayHit(at.x, at.y, now < p.flareUntil ? FLARE_RADIUS * 0.7 : HIT_RADIUS);
+      const d = rayHit(at.x, at.y, HIT_RADIUS);
       if (d !== null && d < best) {
         best = d;
         hit = p;
       }
     }
+    // іскри пасток розсіюють промінь
+    for (const f of this.enemyFlares(bot)) {
+      const d = rayDecoy(f, now - lagMs, from.x, from.y, dx, dy);
+      if (d !== null && d < best) {
+        best = d;
+        hit = null;
+      }
+    }
     if (announce) this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: from.x, y: from.y, angle, kind: 'laser', speed: 0 }));
-    if (hit && now >= hit.flareUntil) this.applyDamage(bot, hit, damage, now);
+    if (hit) this.applyDamage(bot, hit, damage, now);
   }
 
   /** Просимулювати снаряди до моменту now: кожен — рівно на час, що минув від його попереднього кроку. */
@@ -786,6 +802,16 @@ export class Room {
             best = at;
           }
         }
+        // теплові пастки: ракета переводить наведення на найближчу іскру попереду
+        for (const f of this.enemyFlares(owner0)) {
+          const dec = nearestDecoy(f, now - pr.lagMs, pr.x, pr.y);
+          if (!dec) continue;
+          const want = Math.atan2(dec.y - pr.y, dec.x - pr.x);
+          if (dec.d * 0.6 < bestD && Math.abs(angDiff(pr.angle ?? 0, want)) < 1.6) {
+            bestD = dec.d * 0.6;
+            best = dec;
+          }
+        }
         if (best) {
           const want = Math.atan2(best.y - pr.y, best.x - pr.x);
           const turn = MISSILE_TURN * dt;
@@ -798,6 +824,18 @@ export class Room {
       const ny = pr.y + pr.vy * dt;
       let dead = false;
       let hit: Participant | null = null;
+      // снаряд, що влучив в іскру пастки, згорає (без сплешу)
+      let intercepted = false;
+      for (const f of this.enemyFlares(owner0)) {
+        if (hitsDecoy(f, now - pr.lagMs, pr.x, pr.y, nx, ny)) {
+          intercepted = true;
+          break;
+        }
+      }
+      if (intercepted) {
+        pr.range = -1;
+        continue;
+      }
       for (const o of this.obstacles) {
         if (segDist(pr.x, pr.y, nx, ny, o.x, o.y) < o.r) {
           dead = true;
@@ -809,10 +847,6 @@ export class Room {
           if (!p.alive || p.id === pr.ownerId || (owner0 && this.sameTeam(owner0, p))) continue;
           const at = this.posAt(p, now - pr.lagMs);
           const d = segDist(pr.x, pr.y, nx, ny, at.x, at.y);
-          if (now < p.flareUntil && d < FLARE_RADIUS) {
-            dead = true;
-            break;
-          }
           if (now < p.phaseUntil) continue;
           if (d < HIT_RADIUS + (pr.kind === 'rocket' ? 6 : pr.kind === 'missile' ? 4 : 0)) {
             hit = p;
@@ -865,6 +899,7 @@ export class Room {
       if (p.activeItem?.active?.kind === 'nanoRepair' && p.hp < p.maxHp * 0.5) this.useSkill(p, 'nanoRepair', now, p.angle);
     }
     this.recordHistory(now);
+    this.flares = this.flares.filter((f) => now - f.t0 < FLARE_ACTIVE_MS + 400);
     // два підкроки з власним часом — швидкі кулі не "проскакують" крізь літаки, а ціль не "застигає"
     this.updateProjectiles(now - TICK_MS / 2);
     this.updateProjectiles(now);
