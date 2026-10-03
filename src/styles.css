@@ -9965,6 +9965,11 @@ input[type='range'] {
   color: var(--muted, #9fb0d0);
 }
 
+.showcase > * {
+  /* сторінка — flex-колонка на всю висоту екрана: без цього полотно стискалось і сторінка не гортались */
+  flex: none;
+}
+
 .showcase-canvas {
   display: block;
   width: 100%;
