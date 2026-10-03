@@ -9705,6 +9705,13 @@ input[type='range'] {
   display: flex;
   gap: 6px;
   align-items: baseline;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.evo-line .ico {
+  flex: none;
+  color: var(--tc);
 }
 
 .evo-line.gun .ico {
@@ -9764,4 +9771,137 @@ input[type='range'] {
 
 .upgrade-news p {
   margin: 2px 0;
+}
+
+/* ---------- анімації слотів скілів ---------- */
+.skill .ico {
+  transition:
+    filter 0.25s,
+    transform 0.25s;
+}
+
+.skill.empty .ico {
+  filter: grayscale(0.85) brightness(0.8);
+}
+
+/* світла кромка сектора перезарядки */
+.skill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(from calc(var(--p) * 360deg), rgba(255, 255, 255, 0.55) 0deg, rgba(255, 255, 255, 0) 14deg, transparent 0);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.skill.empty::after {
+  opacity: calc(min(1, var(--p) * 20));
+}
+
+/* скіл знову готовий: спалах, кільце, підстрибування іконки */
+.skill.just-ready {
+  animation: skill-ready 0.7s ease-out;
+}
+
+.skill.just-ready .ico {
+  animation: skill-ready-ico 0.55s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.skill.just-ready::after {
+  opacity: 1;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 70%);
+  animation: skill-ready-flash 0.6s ease-out forwards;
+}
+
+@keyframes skill-ready {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+    border-color: #fff;
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(255, 255, 255, 0);
+  }
+}
+
+@keyframes skill-ready-ico {
+  0% {
+    transform: scale(0.7);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes skill-ready-flash {
+  from {
+    opacity: 1;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}
+
+/* натиснули: короткий поштовх */
+.skill.just-used {
+  animation: skill-used 0.35s ease-out;
+}
+
+@keyframes skill-used {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.88);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* активний скіл: пульсуюче сяйво і "дихаюча" іконка */
+.skill.active {
+  animation: skill-active 0.9s ease-in-out infinite;
+}
+
+.skill.active .ico {
+  animation: skill-active-ico 0.9s ease-in-out infinite;
+}
+
+@keyframes skill-active {
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(160, 220, 255, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(160, 220, 255, 0.85);
+  }
+}
+
+@keyframes skill-active-ico {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px currentColor);
+  }
+  50% {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skill.active,
+  .skill.active .ico,
+  .skill.just-ready,
+  .skill.just-ready .ico,
+  .skill.just-used {
+    animation: none;
+  }
 }

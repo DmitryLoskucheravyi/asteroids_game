@@ -5,6 +5,7 @@ import { Vec2, angleDiff, clamp } from '../core/math';
 import { mouseSteering, type InputState } from '../core/input';
 import { Save } from '../core/storage';
 import { drawGlow } from './fx';
+import { Vfx, beam, boostFx, lightning, shockwave, trail } from './vfx';
 import { drawCrosshair } from './crosshair';
 import { PvpHazards } from './PvpHazards';
 import { driftPos, windAt } from '../../server/src/shared/hazards';
@@ -65,6 +66,8 @@ interface Missile {
   /** Поворот ×k (сузір'я нови) і колір фірмової гармати */
   turn?: number;
   tint?: string;
+  /** Останні позиції — шлейф диму */
+  hist?: { x: number; y: number }[];
   ownerId: string | null;
   /** 'weapon' — залп зі зброї, 'swarm' — предмет "Рій ракет" (сервер рахує урон по-різному) */
   source: 'weapon' | 'swarm';
@@ -155,6 +158,10 @@ export class PvpGame {
   private remote: Projectile[] = [];
   private missiles: Missile[] = [];
   private beams: Beam[] = [];
+  /** Вибухи, ударні хвилі, спалахи, блискавки */
+  private readonly vfx = new Vfx();
+  /** Фантомні копії літака після ривка */
+  private ghosts: { x: number; y: number; a: number; t: number }[] = [];
   private zones: FxZone[] = [];
   private chains: FxChain[] = [];
   /** Статуси гравців від фірмових гармат: підпал, отрута, оглушення (лише візуал) */
@@ -475,6 +482,13 @@ export class PvpGame {
     Sfx.jump();
     this.emitSkill('jump');
     this.trail(from, this.player.pos, this.player.spec.flame);
+    // фантомні копії вздовж ривка й спалахи на кінцях
+    for (let i = 0; i < 5; i++) {
+      const k = i / 5;
+      this.ghosts.push({ x: from.x + (this.player.pos.x - from.x) * k, y: from.y + (this.player.pos.y - from.y) * k, a: this.player.angle, t: -k * 0.08 });
+    }
+    this.vfx.flash(from.x, from.y, 40, this.player.spec.flame[1], 0.18);
+    this.vfx.wave(this.player.pos.x, this.player.pos.y, 70, this.player.spec.flame[0], 0.35);
   }
 
   // ---------- сканер ----------
@@ -1142,6 +1156,8 @@ export class PvpGame {
       }
       const mx = m.pos.x;
       const my = m.pos.y;
+      (m.hist ??= []).push({ x: mx, y: my });
+      if (m.hist.length > 16) m.hist.shift();
       m.pos.add(Vec2.fromAngle(m.angle), MISSILE_SPEED * dt);
       if (this.intercepted(m.ownerId, mx, my, m.pos.x, m.pos.y) || this.hazards.blocks(mx, my, m.pos.x, m.pos.y, this.hazardTime)) {
         m.life = 0;
@@ -1242,7 +1258,10 @@ export class PvpGame {
     for (const c of this.chains) c.t += dt;
     this.chains = this.chains.filter((c) => c.t < 0.25);
     this.updateStatuses(dt);
-    this.beams = this.beams.filter((b) => b.t < (b.rail ? 0.35 : 0.09));
+    this.beams = this.beams.filter((b) => b.t < beamLife(b));
+    this.vfx.update(dt);
+    for (const g of this.ghosts) g.t += dt;
+    this.ghosts = this.ghosts.filter((g) => g.t < 0.35);
     for (const r of this.rings) r.t += dt;
     this.rings = this.rings.filter((r) => r.t < r.dur);
     for (const t of this.texts) {
@@ -1296,12 +1315,14 @@ export class PvpGame {
   }
 
   private muzzle(x: number, y: number, angle: number, big: boolean): void {
+    this.vfx.flash(x + Math.cos(angle) * 4, y + Math.sin(angle) * 4, big ? 34 : 18, big ? '#ffb050' : '#ffe9a0', big ? 0.1 : 0.06);
     this.particles.emit(x, y, { count: big ? 8 : 2, speed: [60, big ? 220 : 160], angle, spread: big ? 0.6 : 0.3, life: [0.05, big ? 0.25 : 0.1], size: [2, big ? 5 : 3], colors: ['#ffffff', '#ffe27a', '#ff9a3a'], drag: 6 });
   }
 
   private explosion(x: number, y: number, scale = 1): void {
-    this.particles.emit(x, y, { count: Math.round(40 * scale), speed: [60, 340 * scale], life: [0.3, 0.9], size: [3, 7 * scale], colors: ['#ffffff', '#fff1a8', '#ffb020', '#ff5a1f', '#8a8aa0'], drag: 2.5 });
-    this.ring(x, y, 90 * scale, '255,170,80', 0.4);
+    this.particles.emit(x, y, { count: Math.round(28 * scale), speed: [60, 340 * scale], life: [0.3, 0.9], size: [2, 5 * scale], colors: ['#ffffff', '#fff1a8', '#ffb020', '#ff5a1f'], drag: 2.5 });
+    this.vfx.explode(x, y, 34 * scale, '#ff9a3a', 0.6 + scale * 0.25);
+    this.vfx.wave(x, y, 100 * scale, '255,170,80', 0.45);
     if (scale >= 1) this.addShake(6);
   }
 
@@ -1380,6 +1401,17 @@ export class PvpGame {
       this.renderShip(ctx, s.x, s.y, s.a, p, false);
     }
 
+    // фантомні копії ривка
+    for (const g of this.ghosts) {
+      if (g.t < 0) continue;
+      ctx.save();
+      ctx.globalAlpha = 0.45 * (1 - g.t / 0.35);
+      ctx.translate(g.x, g.y);
+      ctx.rotate(g.a + Math.PI / 2);
+      drawPlane(ctx, this.player.spec.id, 60, this.clock, this.player.tier, this.player.level);
+      ctx.restore();
+    }
+    if (this.selfAlive && this.skills.isBoosted && !this.player.spec.feature.noRotate) boostFx(ctx, this.player.pos.x, this.player.pos.y, this.player.angle, this.clock, this.player.spec.flame);
     if (this.selfAlive) {
       ctx.globalAlpha = this.phase > 0 ? 0.4 + Math.sin(this.clock * 20) * 0.1 : 1;
       if (this.player.spec.feature.noRotate) this.player.render(ctx, this.skills.isBoosted);
@@ -1408,29 +1440,18 @@ export class PvpGame {
     for (const pr of this.remote) pr.render(ctx, this.clock);
     for (const m of this.missiles) this.renderMissile(ctx, m);
     ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'source-over';
     for (const b of this.beams) {
-      const k = 1 - b.t / (b.rail ? 0.35 : 0.09);
-      // рейкотрон — товстий блакитний промінь, що повільно гасне
-      ctx.strokeStyle = b.color ? hexToRgba(b.color, 0.6 * k) : b.rail ? `rgba(110,220,255,${0.6 * k})` : b.hostile ? `rgba(255,70,90,${0.45 * k})` : `rgba(200,90,255,${0.45 * k})`;
-      ctx.lineWidth = (b.rail ? 13 * k + 3 : 7) * (b.wide ?? 1);
-      ctx.beginPath();
-      ctx.moveTo(b.x1, b.y1);
-      ctx.lineTo(b.x2, b.y2);
-      ctx.stroke();
-      ctx.strokeStyle = `rgba(255,255,255,${0.9 * k})`;
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      // анімований лазер: імпульси біжать до цілі, ядро пульсує; рейка — подвійна спіраль
+      const color = b.color ?? (b.rail ? '#6edcff' : b.hostile ? '#ff4a6a' : '#c85aff');
+      beam(ctx, b.x1, b.y1, b.x2, b.y2, 1 - b.t / beamLife(b), this.clock, { color, rail: b.rail, wide: b.wide });
     }
     this.renderChains(ctx);
-    ctx.globalCompositeOperation = 'source-over';
+    this.vfx.render(ctx, this.clock);
 
     for (const r of this.rings) {
       const k = r.t / r.dur;
-      ctx.strokeStyle = `rgba(${r.color},${(1 - k) * 0.8})`;
-      ctx.lineWidth = 3 * (1 - k) + 1;
-      ctx.beginPath();
-      ctx.arc(r.x, r.y, r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 3)), 0, Math.PI * 2);
-      ctx.stroke();
+      shockwave(ctx, r.x, r.y, r.r0 + (r.r1 - r.r0) * (1 - Math.pow(1 - k, 3)), k, r.color);
     }
 
     ctx.font = '700 15px Bungee, sans-serif';
@@ -1697,15 +1718,17 @@ export class PvpGame {
         break;
       }
       case 'boom':
-        this.ring(num('x'), num('y'), num('r'), hexToRgb(color), 0.45);
+        this.vfx.wave(num('x'), num('y'), num('r'), color, 0.5);
+        this.vfx.flash(num('x'), num('y'), 46, color, 0.15);
         this.particles.emit(num('x'), num('y'), { count: 24, speed: [80, 260], life: [0.2, 0.5], size: [2, 5], colors: ['#ffffff', color] });
         break;
       case 'strike': {
         // удар блискавки "з неба": вертикальний промінь і кільце
         const x = num('x');
         const y = num('y');
-        this.beams.push({ x1: x + (Math.random() - 0.5) * 60, y1: y - 420, x2: x, y2: y, t: 0, hostile: false, rail: true, color });
-        this.ring(x, y, num('r'), hexToRgb(color), 0.35);
+        this.vfx.bolt(x + (Math.random() - 0.5) * 80, y - 460, x, y, color, 0.3, 3.4);
+        this.vfx.flash(x, y, 50, color, 0.2);
+        this.vfx.wave(x, y, num('r') * 1.4, color, 0.4);
         this.addShake(2);
         break;
       }
@@ -1821,26 +1844,16 @@ export class PvpGame {
   private renderChains(ctx: CanvasRenderingContext2D): void {
     for (const c of this.chains) {
       const k = 1 - c.t / 0.25;
-      ctx.strokeStyle = hexToRgba(c.color, 0.9 * k);
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      for (let i = 0; i + 3 < c.pts.length; i += 2) {
-        const [x1, y1, x2, y2] = [c.pts[i], c.pts[i + 1], c.pts[i + 2], c.pts[i + 3]];
-        ctx.moveTo(x1, y1);
-        for (let s = 1; s <= 5; s++) {
-          const f = s / 5;
-          const j = s < 5 ? (Math.random() - 0.5) * 18 : 0;
-          ctx.lineTo(x1 + (x2 - x1) * f + j, y1 + (y2 - y1) * f + j);
-        }
-      }
-      ctx.stroke();
-      ctx.strokeStyle = `rgba(255,255,255,${0.8 * k})`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      for (let i = 0; i + 3 < c.pts.length; i += 2) lightning(ctx, c.pts[i], c.pts[i + 1], c.pts[i + 2], c.pts[i + 3], c.color, k, i * 17 + Math.floor(this.clock * 30));
     }
   }
 
   private renderMissile(ctx: CanvasRenderingContext2D, m: Missile): void {
+    if (m.hist && m.hist.length > 1) trail(ctx, [...m.hist, m.pos], m.tint ?? (m.remote ? '#ff6a5a' : '#ffb050'), 4, true);
+    // вогонь двигуна, що мерехтить
+    const fx = m.pos.x - Math.cos(m.angle) * 8;
+    const fy = m.pos.y - Math.sin(m.angle) * 8;
+    drawGlow(ctx, fx, fy, 'rgba(255,220,140,1)', 9 + Math.sin(this.clock * 60) * 3, 1);
     ctx.save();
     ctx.translate(m.pos.x, m.pos.y);
     ctx.rotate(m.angle + Math.PI / 2);
@@ -1854,6 +1867,11 @@ export class PvpGame {
 }
 
 /** '#rrggbb' → 'r,g,b' (для кілець) */
+/** Скільки живе слід променя: лазер — коротко, рейка — довше гасне. */
+function beamLife(b: { rail?: boolean }): number {
+  return b.rail ? 0.4 : 0.16;
+}
+
 function hexToRgb(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;

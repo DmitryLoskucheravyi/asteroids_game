@@ -1,6 +1,7 @@
 import { drawAsteroid } from '../AsteroidArt';
 import { Vec2, rand } from '../../core/math';
 import { drawGlow } from '../fx';
+import { beam, starFlare } from '../vfx';
 import { Asteroid } from './Asteroid';
 import { Entity, type WorldView } from './Entity';
 
@@ -58,16 +59,32 @@ export class Mine extends Entity {
     const rate = this.fusing ? 18 : this.armed ? 3 : 8;
     const on = Math.sin(time * rate) > 0;
     if (this.fusing) {
+      // радіус вибуху наповнюється, дуга-таймер добігає кінця
       const k = 1 - this.fuse / MINE_FUSE;
-      ctx.fillStyle = `rgba(255,50,40,${0.12 + k * 0.18})`;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, MINE_BLAST_RADIUS);
+      g.addColorStop(0, `rgba(255,80,40,${0.05 + k * 0.25})`);
+      g.addColorStop(k * 0.95 + 0.01, `rgba(255,60,40,${0.12 + k * 0.2})`);
+      g.addColorStop(1, 'rgba(255,40,30,0)');
+      ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(x, y, MINE_BLAST_RADIUS, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = `rgba(255,80,60,${0.6 + k * 0.4})`;
       ctx.lineWidth = 2;
+      ctx.setLineDash([10, 6]);
+      ctx.lineDashOffset = time * 80;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,230,180,0.95)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, 24, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
       ctx.stroke();
     }
-    if (on) drawGlow(ctx, x, y - 2, 'rgba(255,40,30,1)', this.fusing ? 26 : 16, 0.9);
+    if (on) {
+      drawGlow(ctx, x, y - 2, 'rgba(255,40,30,1)', this.fusing ? 30 : 16, 0.9);
+      if (this.fusing) starFlare(ctx, x, y - 2, 22, '#ff4a3a', 0.8, time * 4);
+    }
   }
 
   render(ctx: CanvasRenderingContext2D, time: number): void {
@@ -75,13 +92,25 @@ export class Mine extends Entity {
     const appear = Math.min(1, this.age / 0.4);
     ctx.globalAlpha = this.armed ? 1 : 0.5;
     if (this.armed && !this.fusing) {
-      ctx.strokeStyle = 'rgba(255,90,70,0.18)';
+      // радар міни: сектор, що обертається, і пунктир радіуса спрацювання
+      ctx.strokeStyle = 'rgba(255,90,70,0.2)';
       ctx.setLineDash([4, 8]);
+      ctx.lineDashOffset = -time * 20;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(x, y, MINE_TRIGGER_RADIUS, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+      const sweep = time * 2.2;
+      const g = ctx.createRadialGradient(x, y, 10, x, y, MINE_TRIGGER_RADIUS);
+      g.addColorStop(0, 'rgba(255,70,50,0.18)');
+      g.addColorStop(1, 'rgba(255,70,50,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, MINE_TRIGGER_RADIUS, sweep, sweep + 0.6);
+      ctx.closePath();
+      ctx.fill();
     }
     // шипи
     ctx.strokeStyle = '#6b6f80';
@@ -155,33 +184,33 @@ export class LaserGate extends Entity {
   render(ctx: CanvasRenderingContext2D, time: number): void {
     ctx.lineCap = 'round';
     if (!this.active) {
+      // заряд: пунктир мерехтить частіше, а в центрі збирається енергія
       const k = this.t / LASER_WARN;
       ctx.strokeStyle = `rgba(255,60,90,${(0.25 + 0.5 * k) * (Math.sin(time * (20 + k * 30)) > -0.3 ? 1 : 0.2)})`;
       ctx.lineWidth = 1 + k * 2;
       ctx.setLineDash([10, 8]);
+      ctx.lineDashOffset = -time * 200;
       ctx.beginPath();
       ctx.moveTo(this.a.x, this.a.y);
       ctx.lineTo(this.b.x, this.b.y);
       ctx.stroke();
       ctx.setLineDash([]);
+      const { x, y } = this.pos;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 10; i++) {
+        const a = i * 0.63 + time * 3;
+        const d = (1 - ((time * 2 + i / 10) % 1)) * 90 * (1 - k * 0.5);
+        ctx.fillStyle = `rgba(255,120,160,${0.8 * k})`;
+        ctx.fillRect(x + Math.cos(a) * d - 1.5, y + Math.sin(a) * d - 1.5, 3, 3);
+      }
+      ctx.restore();
+      drawGlow(ctx, x, y, 'rgba(255,60,110,1)', 20 + k * 40, k);
+      ctx.lineCap = 'butt';
       return;
     }
-    const fade = Math.min(1, (LASER_WARN + LASER_ACTIVE - this.t) * 6);
-    ctx.globalCompositeOperation = 'lighter';
-    const layers: [number, string][] = [
-      [26, `rgba(255,40,90,${0.18 * fade})`],
-      [12, `rgba(255,70,120,${0.5 * fade})`],
-      [4, `rgba(255,230,240,${0.95 * fade})`],
-    ];
-    for (const [w, c] of layers) {
-      ctx.strokeStyle = c;
-      ctx.lineWidth = w + Math.sin(time * 40) * 1.5;
-      ctx.beginPath();
-      ctx.moveTo(this.a.x, this.a.y);
-      ctx.lineTo(this.b.x, this.b.y);
-      ctx.stroke();
-    }
-    ctx.globalCompositeOperation = 'source-over';
+    const fade = Math.min(1, (LASER_WARN + LASER_ACTIVE - this.t) * 6, (this.t - LASER_WARN) * 10 + 0.3);
+    beam(ctx, this.a.x, this.a.y, this.b.x, this.b.y, fade, time, { color: '#ff3c78', width: 11 });
     ctx.lineCap = 'butt';
   }
 }
@@ -244,11 +273,22 @@ export class BossAsteroid extends Asteroid {
     drawAsteroid(ctx, 'boss', this.variant, d);
     ctx.restore();
     if (this.charge > 0) {
-      ctx.strokeStyle = `rgba(255,200,120,${this.charge})`;
-      ctx.lineWidth = 3;
+      // заряд залпу: кільце стискається, лава стікається до каменя
+      const c = this.charge;
+      ctx.strokeStyle = `rgba(255,200,120,${c})`;
+      ctx.lineWidth = 3 + c * 3;
       ctx.beginPath();
-      ctx.arc(this.pos.x, this.pos.y, this.visual * (1.25 - this.charge * 0.15), 0, Math.PI * 2);
+      ctx.arc(this.pos.x, this.pos.y, this.visual * (1.35 - c * 0.25), 0, Math.PI * 2);
       ctx.stroke();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 16; i++) {
+        const a = i * 0.39 + time;
+        const d = this.visual * (1.1 + (1 - ((time * 1.5 + i / 16) % 1)) * 0.9);
+        ctx.fillStyle = `rgba(255,${150 + i * 5},80,${c})`;
+        ctx.fillRect(this.pos.x + Math.cos(a) * d - 2, this.pos.y + Math.sin(a) * d - 2, 4, 4);
+      }
+      ctx.restore();
     }
     if (this.frozen) {
       ctx.strokeStyle = 'rgba(200,235,255,0.8)';

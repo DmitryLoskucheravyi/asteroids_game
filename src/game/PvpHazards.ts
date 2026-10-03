@@ -1,5 +1,6 @@
 import { drawAsteroid } from './AsteroidArt';
 import { drawGlow } from './fx';
+import { cometTail } from './vfx';
 import type { ParticleSystem } from './systems/Particles';
 import { FOG_RADIUS, MINE_BLAST, hazardPos, type ArenaEvent, type Hazard } from '../../server/src/shared/hazards';
 
@@ -96,16 +97,7 @@ export class PvpHazards {
           const sp = Math.hypot(h.vx, h.vy) || 1;
           const ux = -h.vx / sp;
           const uy = -h.vy / sp;
-          const g = ctx.createLinearGradient(0, 0, ux * 160, uy * 160);
-          g.addColorStop(0, 'rgba(255,220,160,0.85)');
-          g.addColorStop(1, 'rgba(255,80,60,0)');
-          ctx.strokeStyle = g;
-          ctx.lineWidth = h.r * 1.4;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.lineTo(ux * 160, uy * 160);
-          ctx.stroke();
+          cometTail(ctx, ux, uy, h.r, clock, h.id);
           drawGlow(ctx, 0, 0, 'rgba(255,160,90,1)', h.r * 2.6, 0.9);
           ctx.rotate(clock * 4 + h.id);
           drawAsteroid(ctx, 'small', h.v, h.r * 2.2);

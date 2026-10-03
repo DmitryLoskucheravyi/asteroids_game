@@ -2,6 +2,7 @@ import { drawPlane } from '../PlaneArt';
 import { Vec2, angleDiff, clamp } from '../../core/math';
 import type { PlaneSpec } from '../planes';
 import { drawGlow } from '../fx';
+import { shieldBubble } from '../vfx';
 
 const SPRITE_SIZE = 64;
 const JUMP_DISTANCE = 190;
@@ -121,15 +122,7 @@ export class Player {
     drawPlane(ctx, this.spec.id, SPRITE_SIZE, this.time, this.tier, this.level);
     ctx.restore();
 
-    if (this.shield) {
-      const r = this.radius + 22 + Math.sin(this.time * 5) * 2;
-      drawGlow(ctx, this.pos.x, this.pos.y, 'rgba(80,190,255,1)', r * 1.3, 0.35);
-      ctx.strokeStyle = 'rgba(150,225,255,0.85)';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(this.pos.x, this.pos.y, r, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    if (this.shield) shieldBubble(ctx, this.pos.x, this.pos.y, this.radius + 22 + Math.sin(this.time * 5) * 1.5, this.time);
   }
 }
 

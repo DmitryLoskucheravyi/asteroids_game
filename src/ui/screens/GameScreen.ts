@@ -1,4 +1,5 @@
 import type { App } from '../../app/App';
+import { animateSkillSlots } from '../skillFx';
 import { toggleFullscreen } from '../../app/App';
 import { Sfx } from '../../core/audio';
 import { levelName, t, type TKey } from '../../core/i18n';
@@ -111,7 +112,7 @@ export class GameScreen extends Screen {
       h('div', { class: 'hud-tl' }, h('div', { class: 'hud-label' }, label), this.hudTime, campaign ? h('div', { class: 'hud-bar' }, this.hudProgress) : null),
       this.hudCenter,
       h('div', { class: 'hud-tr' }, this.hudCoins, fsBtn, this.pauseBtn),
-      h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.item.el, this.passiveSlot),
+      animateSkillSlots(h('div', { class: 'hud-skills' }, this.featSlot, this.shieldSlot, this.slots.freeze.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.item.el, this.passiveSlot)),
       isTouch() ? this.buildJoystick() : null,
     );
     return el;

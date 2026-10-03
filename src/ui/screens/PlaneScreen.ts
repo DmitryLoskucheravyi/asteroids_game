@@ -150,7 +150,7 @@ export class PlaneScreen extends Screen {
         h(
           'span',
           { class: 'evo-lines' },
-          h('span', { class: 'evo-line skill' }, icon(Icons.bolt, 'ico tiny'), tr === 1 ? t(`feat.${p.id}` as TKey) : t(`skillTier.${p.id}.${tr}` as TKey)),
+          h('span', { class: 'evo-line ability' }, icon(Icons.bolt, 'ico tiny'), tr === 1 ? t(`feat.${p.id}` as TKey) : t(`skillTier.${p.id}.${tr}` as TKey)),
           h('span', { class: 'evo-line gun', style: `--sig:${g.color}` }, icon(Icons.star, 'ico tiny'), tr === 1 ? t(`sig.${g.id}` as TKey) : t(`sigTier.${p.id}.${tr}` as TKey)),
         ),
       );

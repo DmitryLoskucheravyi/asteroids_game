@@ -1,4 +1,5 @@
 import type { GameLink } from '../../net/gameLink';
+import { animateSkillSlots } from '../skillFx';
 import type { App } from '../../app/App';
 import { t, type TKey } from '../../core/i18n';
 import { displayKey, primaryKeyFor, type Action, type BindAction } from '../../core/input';
@@ -137,7 +138,7 @@ export class PvpScreen extends Screen {
       h('div', { class: 'hud-tr' }, leaveBtn),
       this.feed,
       this.dead,
-      h('div', { class: 'hud-skills pvp-skills' }, this.slots.weapon.el, this.slots.sig.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.scan.el, this.slots.item.el, passive),
+      animateSkillSlots(h('div', { class: 'hud-skills pvp-skills' }, this.slots.weapon.el, this.slots.sig.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.scan.el, this.slots.item.el, passive)),
       (this.loading = this.loadingScreen()),
     );
   }

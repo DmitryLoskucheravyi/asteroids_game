@@ -1,4 +1,3 @@
-import { Assets } from '../core/assets';
 import { Sfx } from '../core/audio';
 import { levelName, t, type TKey } from '../core/i18n';
 import { mouseSteering, type InputState } from '../core/input';
@@ -14,11 +13,13 @@ import { CRYSTAL_COINS } from './economy';
 import { applyItemPassive, getItemDef, type ActiveEffect } from './items';
 import { effectivePlaneSpec, getPlane, type PlaneFeature, type PlaneId } from './planes';
 import { Projectile } from './entities/Projectile';
+import { drawPlane } from './PlaneArt';
 import { canDestroy } from './weapons';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, FLARE_RADIUS, SkillSystem } from './systems/SkillSystem';
 import { Starfield } from './systems/Starfield';
 import { TierSkills, type SkillHost } from './skillTiers';
+import { Vfx, boostFx, frostOverlay, shockwave } from './vfx';
 
 export type GameMode = 'campaign' | 'survival';
 export type GameState = 'countdown' | 'running' | 'paused' | 'dying' | 'won' | 'lost';
@@ -118,6 +119,10 @@ export class Game {
   private lasers: LaserGate[] = [];
   private shower: Shower | null = null;
   private projectiles: Projectile[] = [];
+  /** Вибухи, ударні хвилі, спалахи */
+  private readonly vfx = new Vfx();
+  /** Фантомні копії літака після ривка */
+  private ghosts: { x: number; y: number; a: number; t: number }[] = [];
 
   width = 1600;
   height = 900;
@@ -245,6 +250,8 @@ export class Game {
     this.lasers = [];
     this.shower = null;
     this.particles.clear();
+    this.vfx.clear();
+    this.ghosts = [];
     this.player.reset(this.width / 2, this.height * 0.62);
     this.player.invulnerable = 0;
     this.tierSkills = new TierSkills(this.skillHost(), this.planeId, this.planeTier);
@@ -338,12 +345,15 @@ export class Game {
     Sfx.freeze();
     this.tierSkills.onFreeze();
     this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.6, r0: 20, r1: Math.max(this.width, this.height), color: '160,220,255' });
+    this.vfx.flash(this.player.pos.x, this.player.pos.y, 90, '#bfe8ff', 0.3);
+    this.particles.emit(this.player.pos.x, this.player.pos.y, { count: 40, speed: [120, 420], life: [0.5, 1.1], size: [2, 4], colors: ['#ffffff', '#cfefff', '#8fd0ff'], drag: 2.5, square: true });
   }
 
   useBoost(): void {
     if (this.state !== 'running' || !this.skills.tryBoost()) return;
     Sfx.boost();
     this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.4, r0: 10, r1: 90, color: '255,200,80' });
+    this.vfx.flash(this.player.exhaust().x, this.player.exhaust().y, 60, '#ffc850', 0.2);
   }
 
   useJump(): void {
@@ -357,6 +367,12 @@ export class Game {
       this.tierSkills.onShockwave(to.clone(), this.feature.dashShockwave, destroyed);
     }
     const [inner, outer] = this.player.spec.flame;
+    for (let i = 0; i < 5; i++) {
+      const k = i / 5;
+      this.ghosts.push({ x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k, a: this.player.angle, t: -k * 0.08 });
+    }
+    this.vfx.flash(from.x, from.y, 44, outer, 0.18);
+    this.vfx.wave(to.x, to.y, 80, inner, 0.35);
     for (let i = 0; i <= 10; i++) {
       const k = i / 10;
       this.particles.emit(from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k, {
@@ -771,7 +787,7 @@ export class Game {
       this.lives--;
       this.tierSkills.onLifeLost(this.lives);
       p.invulnerable = 2.5;
-      this.explosions.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.7, size: 120 });
+      this.vfx.explode(p.pos.x, p.pos.y, (120) * 0.42, '#ff9a3a', 0.7 + 0.25);
       this.shockwave(p.pos, 230, '255,170,80');
       this.floatText(p.pos.x, p.pos.y - 50, t('game.revive'), '#ffb020');
       this.addShake(18);
@@ -782,7 +798,7 @@ export class Game {
     if (this.tierSkills.saveFromDeath()) return;
     // смерть
     this.setState('dying', 1.6);
-    this.explosions.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.9, size: 150 });
+    this.vfx.explode(p.pos.x, p.pos.y, (150) * 0.42, '#ff9a3a', 0.9 + 0.25);
     this.rings.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.7, r0: 20, r1: 260, color: '255,170,80' });
     this.particles.emit(p.pos.x, p.pos.y, { count: 60, speed: [80, 420], life: [0.5, 1.3], size: [3, 7], colors: ['#fff1a8', '#ffb020', '#ff5a1f', '#ff2a2a'], drag: 2.2 });
     this.particles.emit(p.pos.x, p.pos.y, { count: 24, speed: [60, 260], life: [0.8, 1.6], size: [3, 5], colors: ['#8b8fa3', '#5b5f70', '#c9ccd8'], additive: false, square: true, drag: 1.5 });
@@ -1094,7 +1110,7 @@ export class Game {
   private detonate(m: Mine, hurtPlayer: boolean): void {
     m.kill();
     m.detonate = false;
-    this.explosions.push({ x: m.pos.x, y: m.pos.y, t: 0, dur: 0.6, size: MINE_BLAST_RADIUS * 1.6 });
+    this.vfx.explode(m.pos.x, m.pos.y, (MINE_BLAST_RADIUS * 1.6) * 0.42, '#ff9a3a', 0.6 + 0.25);
     this.rings.push({ x: m.pos.x, y: m.pos.y, t: 0, dur: 0.45, r0: 20, r1: MINE_BLAST_RADIUS, color: '255,120,60' });
     this.particles.emit(m.pos.x, m.pos.y, { count: 30, speed: [80, 320], life: [0.3, 0.8], size: [2, 5], colors: ['#fff1a8', '#ffb020', '#ff5a1f'] });
     this.addShake(10);
@@ -1231,6 +1247,9 @@ export class Game {
 
   private updateEffects(dt: number): void {
     for (const e of this.explosions) e.t += dt;
+    this.vfx.update(dt);
+    for (const g of this.ghosts) g.t += dt;
+    this.ghosts = this.ghosts.filter((g) => g.t < 0.35);
     for (const r of this.rings) r.t += dt;
     for (const tx of this.texts) tx.t += dt;
     this.explosions = this.explosions.filter((e) => e.t < e.dur);
@@ -1257,6 +1276,16 @@ export class Game {
     for (const pk of this.pickups) pk.render(ctx, this.clock);
     this.tierSkills?.render(ctx, this.clock);
     this.particles.render(ctx);
+    for (const g of this.ghosts) {
+      if (g.t < 0) continue;
+      ctx.save();
+      ctx.globalAlpha = 0.45 * (1 - g.t / 0.35);
+      ctx.translate(g.x, g.y);
+      ctx.rotate(g.a + Math.PI / 2);
+      drawPlane(ctx, this.player.spec.id, 64, this.clock, this.player.tier, this.player.level);
+      ctx.restore();
+    }
+    if (boosted && this.state === 'running' && !this.player.spec.feature.noRotate) boostFx(ctx, this.player.pos.x, this.player.pos.y, this.player.angle, this.clock, this.player.spec.flame);
     if (this.state !== 'dying' && this.state !== 'lost') this.player.render(ctx, boosted);
     for (const a of this.asteroids) if (!(a instanceof BlackHole)) a.render(ctx, this.clock);
     for (const l of this.lasers) l.render(ctx, this.clock);
@@ -1264,9 +1293,9 @@ export class Game {
     this.renderEffects(ctx);
 
     if (this.frozen && this.state === 'running') {
-      const k = Math.min(1, this.skills.freezeLeft * 2);
-      ctx.fillStyle = `rgba(80,160,255,${0.12 * k})`;
-      ctx.fillRect(0, 0, this.width, this.height);
+      // іній наростає з країв і тане в останні півсекунди
+      const k = Math.min(1, this.skills.freezeLeft * 2, (this.skills.freezeDuration - this.skills.freezeLeft) * 4);
+      frostOverlay(ctx, this.width, this.height, k, this.clock);
     }
 
     const fog = this.tuning().fog;
@@ -1397,22 +1426,11 @@ export class Game {
   }
 
   private renderEffects(ctx: CanvasRenderingContext2D): void {
-    const img = Assets.get('explosion');
-    for (const e of this.explosions) {
-      const k = e.t / e.dur;
-      const s = e.size * (0.5 + k * 0.7);
-      ctx.globalAlpha = 1 - k * k;
-      ctx.drawImage(img, e.x - s / 2, e.y - s / 2, s, s);
-    }
-    ctx.globalAlpha = 1;
+    this.vfx.render(ctx, this.clock);
     for (const r of this.rings) {
       const k = r.t / r.dur;
       const ease = 1 - (1 - k) * (1 - k);
-      ctx.strokeStyle = `rgba(${r.color},${1 - k})`;
-      ctx.lineWidth = 4 * (1 - k) + 1;
-      ctx.beginPath();
-      ctx.arc(r.x, r.y, r.r0 + (r.r1 - r.r0) * ease, 0, Math.PI * 2);
-      ctx.stroke();
+      shockwave(ctx, r.x, r.y, r.r0 + (r.r1 - r.r0) * ease, k, r.color);
     }
     ctx.textAlign = 'center';
     for (const tx of this.texts) {

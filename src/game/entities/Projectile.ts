@@ -1,5 +1,6 @@
 import { Vec2 } from '../../core/math';
 import { Entity, type WorldView } from './Entity';
+import { trail } from '../vfx';
 
 export type ProjectileKind = 'bullet' | 'rocket';
 
@@ -19,6 +20,9 @@ export class Projectile extends Entity {
   readonly hitIds = new Set<string>();
   /** Колір трасера фірмової гармати */
   tint?: string;
+  /** Останні позиції — для шлейфу ракет, плазми й дробу */
+  private readonly hist: { x: number; y: number }[] = [];
+  private age = 0;
 
   constructor(
     readonly kind: ProjectileKind,
@@ -44,6 +48,11 @@ export class Projectile extends Entity {
   }
 
   update(dt: number, world: WorldView): void {
+    this.age += dt;
+    if (this.kind === 'rocket' || this.style) {
+      this.hist.push({ x: this.pos.x, y: this.pos.y });
+      if (this.hist.length > (this.kind === 'rocket' ? 14 : 7)) this.hist.shift();
+    }
     const step = this.vel.length() * dt;
     this.traveled += step;
     this.pos.add(this.vel, dt);
@@ -78,6 +87,13 @@ export class Projectile extends Entity {
   }
 
   render(ctx: CanvasRenderingContext2D, time: number): void {
+    // шлейф: дим за ракетою, енергія за плазмою, жар за дробом
+    if (this.hist.length > 1) {
+      const pts = [...this.hist, { x: this.pos.x, y: this.pos.y }];
+      if (this.style === 'plasma') trail(ctx, pts, this.tint ?? (this.hostile ? '#ff5aa0' : '#5adcff'), 9);
+      else if (this.style === 'pellet') trail(ctx, pts, this.tint ?? (this.hostile ? '#ff7a5a' : '#ffd278'), 3);
+      else trail(ctx, pts, this.tint ?? '#ffa040', 5, true);
+    }
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
     ctx.rotate(this.angle + Math.PI / 2);
@@ -143,7 +159,7 @@ export class Projectile extends Entity {
 
   /** Дріб: дрібна гаряча кулька з коротким слідом. */
   private renderPellet(ctx: CanvasRenderingContext2D): void {
-    const c = this.hostile ? '255,120,90' : '255,210,120';
+    const c = this.tint ? tintRgb(this.tint) : this.hostile ? '255,120,90' : '255,210,120';
     const g = ctx.createLinearGradient(0, 0, 0, 12);
     g.addColorStop(0, `rgba(${c},0.8)`);
     g.addColorStop(1, `rgba(${c},0)`);
@@ -157,7 +173,7 @@ export class Projectile extends Entity {
 
   /** Плазма: пульсуючий блакитний згусток із ореолом і шлейфом. */
   private renderPlasma(ctx: CanvasRenderingContext2D, time: number): void {
-    const c = this.hostile ? '255,90,160' : '90,220,255';
+    const c = this.tint ? tintRgb(this.tint) : this.hostile ? '255,90,160' : '90,220,255';
     const pulse = 1 + Math.sin(time * 30 + this.pos.x * 0.02) * 0.15;
     ctx.globalCompositeOperation = 'lighter';
     const tail = ctx.createLinearGradient(0, 0, 0, 26);
@@ -177,10 +193,21 @@ export class Projectile extends Entity {
     ctx.beginPath();
     ctx.arc(0, 0, 13 * pulse, 0, Math.PI * 2);
     ctx.fill();
+    // електричні розряди навколо згустку
+    ctx.strokeStyle = `rgba(${c},0.9)`;
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 3; i++) {
+      const a = time * 25 + i * 2.1 + this.pos.x * 0.01;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 4, Math.sin(a) * 4);
+      ctx.lineTo(Math.cos(a + 0.4) * 8 + Math.sin(time * 70 + i) * 2, Math.sin(a + 0.4) * 8);
+      ctx.lineTo(Math.cos(a + 0.2) * 12, Math.sin(a + 0.2) * 12);
+      ctx.stroke();
+    }
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#f0fcff';
     ctx.beginPath();
-    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 4.5 * pulse, 0, Math.PI * 2);
     ctx.fill();
   }
 
