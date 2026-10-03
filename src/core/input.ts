@@ -131,7 +131,9 @@ export class InputState {
   }
 
   private down(action: BindAction): boolean {
-    return codesFor(action).some((c) => this.keys.has(c));
+    // клавіша фірмової гармати ніколи не запускає основну стрільбу (старі збереження мали вогонь на X)
+    const sig = action === 'fire' ? codesFor('signature') : [];
+    return codesFor(action).some((c) => this.keys.has(c) && !sig.includes(c));
   }
 
   /** Чи утримується вогонь зараз (клавіатура або сенсорна кнопка). */

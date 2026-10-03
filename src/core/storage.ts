@@ -134,6 +134,14 @@ const defaults = (): SaveData => ({
   },
 });
 
+/** Вогонь, збережений на клавіші фірмової гармати (старий стандарт X), — прибираємо: стрільба лише ЛКМ / Z. */
+function fixKeybinds(kb: Record<string, string>): Record<string, string> {
+  const sig = kb.signature ?? 'KeyX';
+  if (kb.fire !== sig) return kb;
+  const { fire: _drop, ...rest } = kb;
+  return rest;
+}
+
 /** Кеш акаунтного профілю (джерело правди — сервер) + локальні налаштування. */
 class SaveStore {
   data: SaveData = this.load();
@@ -166,7 +174,7 @@ class SaveStore {
         quests: Array.isArray(parsed.quests) ? parsed.quests : [],
         crates: Array.isArray(parsed.crates) ? parsed.crates : [],
         pass: { ...base.pass, ...(parsed.pass ?? {}) },
-        keybinds: { ...(parsed.keybinds ?? {}) },
+        keybinds: fixKeybinds({ ...(parsed.keybinds ?? {}) }),
         items: Array.isArray(parsed.items) ? parsed.items : [],
         loadouts: Array.isArray(parsed.loadouts) ? parsed.loadouts : [],
         ownedWeapons: Array.isArray(parsed.ownedWeapons) && parsed.ownedWeapons.length ? parsed.ownedWeapons : ['machine_gun'],
@@ -205,7 +213,7 @@ class SaveStore {
       quests: p.quests,
       pass: p.pass,
       crates: p.crates,
-      keybinds: p.keybinds,
+      keybinds: fixKeybinds(p.keybinds ?? {}),
       items: p.items,
       loadouts: p.loadouts,
       ownedWeapons: p.ownedWeapons,
