@@ -449,7 +449,7 @@ export class Game {
         const dx = c.x - this.player.pos.x;
         const dy = c.y - this.player.pos.y;
         const d = Math.hypot(dx, dy);
-        axis = d > 18 ? { x: dx / d, y: dy / d } : { x: 0, y: 0 };
+        axis = d > 18 && this.input.thrust() ? { x: dx / d, y: dy / d } : { x: 0, y: 0 };
       }
     }
     if (axis.x !== 0 || axis.y !== 0) this.lastInputAt = this.elapsed;

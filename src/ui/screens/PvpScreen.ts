@@ -12,6 +12,10 @@ import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 /** Кольори команд (смужка на картці, імена тіммейтів у бою — завжди зелені). */
 const TEAM_COLORS = ['#58d2ff', '#ff6a6a', '#ffd24a', '#b77bff', '#4fe08a'];
 import { PvpGame } from '../../game/PvpGame';
+import { signatureFor } from '../../../server/src/shared/signature';
+
+/** Іконка фірмової гармати — за видом пострілу */
+const SIG_ART: Record<string, string> = { bullet: 'machine_gun', rocket: 'rocket_launcher', laser: 'laser', missile: 'homing_salvo', pellet: 'scatter_gun', plasma: 'plasma_cannon', rail: 'railgun' };
 import { ARENA_EVENT_INFO } from '../../game/arenaEvents';
 import { windAt } from '../../../server/src/shared/hazards';
 import { BOOST_DURATION, FLARE_DURATION } from '../../game/systems/SkillSystem';
@@ -49,7 +53,7 @@ export class PvpScreen extends Screen {
   private windArrow: HTMLElement | null = null;
   private feed!: HTMLElement;
   private dead!: HTMLElement;
-  private slots!: Record<'weapon' | 'boost' | 'jump' | 'flare' | 'item' | 'scan', Slot>;
+  private slots!: Record<'weapon' | 'sig' | 'boost' | 'jump' | 'flare' | 'item' | 'scan', Slot>;
   private weaponBar!: HTMLElement;
   private leftViaResult = false;
   private loading: HTMLElement | null = null;
@@ -63,12 +67,13 @@ export class PvpScreen extends Screen {
     super(app);
   }
 
-  private slot(key: string, art: string, bind: BindAction | null, labelKey: TKey, cls = ''): Slot {
+  private slot(key: string, art: string, bind: BindAction | null, labelKey: TKey, cls = '', keyText?: string): Slot {
     const count = h('span', { class: 'sk-count' });
+    const keyLabel = keyText ?? (bind ? displayKey(primaryKeyFor(bind)) : null);
     const el = h(
       'div',
       { class: `skill sk-${key} ${cls}` },
-      h('span', { class: 'sk-inner' }, icon(art), count, bind ? h('span', { class: 'sk-key' }, displayKey(primaryKeyFor(bind))) : null, h('span', { class: 'sk-label' }, t(labelKey))),
+      h('span', { class: 'sk-inner' }, icon(art), count, keyLabel ? h('span', { class: 'sk-key' }, keyLabel) : null, h('span', { class: 'sk-label' }, t(labelKey))),
     );
     return { el, count };
   }
@@ -93,7 +98,9 @@ export class PvpScreen extends Screen {
     const passiveItem = Save.itemById(loadout.passive);
     this.weaponBar = h('i');
     this.slots = {
-      weapon: this.slot('weapon', weaponSvg(weaponId), 'fire', 'hud.weapon', 'sk-art sk-wide'),
+      // основна зброя — ЛКМ; фірмова гармата літака — X
+      weapon: this.slot('weapon', weaponSvg(weaponId), 'fire', 'hud.weapon', 'sk-art sk-wide', t('hud.lmb')),
+      sig: this.slot('sig', weaponSvg(SIG_ART[signatureFor(plane).visual ?? signatureFor(plane).kind]), 'signature', 'hud.signature', 'sk-art sk-sig'),
       boost: this.slot('boost', Icons.bolt, 'boost', 'hud.boost'),
       jump: this.slot('jump', Icons.dash, 'jump', 'hud.jump'),
       flare: this.slot('flare', Icons.flare, 'flare', 'hud.flare'),
@@ -129,7 +136,7 @@ export class PvpScreen extends Screen {
       h('div', { class: 'hud-tr' }, leaveBtn),
       this.feed,
       this.dead,
-      h('div', { class: 'hud-skills pvp-skills' }, this.slots.weapon.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.scan.el, this.slots.item.el, passive),
+      h('div', { class: 'hud-skills pvp-skills' }, this.slots.weapon.el, this.slots.sig.el, this.slots.boost.el, this.slots.jump.el, this.slots.flare.el, this.slots.scan.el, this.slots.item.el, passive),
       (this.loading = this.loadingScreen()),
     );
   }
@@ -187,6 +194,9 @@ export class PvpScreen extends Screen {
         break;
       case 'scan':
         this.game.useScan();
+        break;
+      case 'signature':
+        this.game.useSignature();
         break;
       case 'item':
         this.game.useItem();
@@ -336,6 +346,8 @@ export class PvpScreen extends Screen {
     this.cd(this.slots.flare, sk.flareCooldown <= 0, sk.flareCooldown, sk.flareCooldownMax, sk.isFlaring, sk.flareLeft / FLARE_DURATION);
     if (sk.itemEquipped()) this.cd(this.slots.item, sk.itemCooldown <= 0, sk.itemCooldown, sk.itemCooldownMax, g.phaseLeft > 0);
 
+    const sg = g.signature;
+    this.cd(this.slots.sig, g.sigCooldown <= 0 && g.sigLeft === 0, g.sigCooldown, sg.cooldown, g.sigLeft > 0);
     this.cd(this.slots.scan, g.scanCooldown <= 0, g.scanCooldown, PvpGame.SCAN_COOLDOWN, g.scanBlips.length > 0);
     this.scanTag.hidden = !g.scanBlips.length;
 

@@ -1,8 +1,8 @@
 import { Save } from './storage';
 
-export type Action = 'freeze' | 'boost' | 'jump' | 'pause' | 'item' | 'flare' | 'scan';
-/** 'fire' — утримувана дія (стрільба), не дискретна emit()-подія, тому окремо від Action. */
-export type BindAction = 'up' | 'down' | 'left' | 'right' | 'fire' | Action;
+export type Action = 'freeze' | 'boost' | 'jump' | 'pause' | 'item' | 'flare' | 'scan' | 'signature';
+/** 'fire' і 'thrust' — утримувані дії (стрільба, тяга), не дискретні emit()-події, тому окремо від Action. */
+export type BindAction = 'up' | 'down' | 'left' | 'right' | 'thrust' | 'fire' | Action;
 
 /** Дефолтні клавіші (декілька варіантів на дію) — використовуються, доки гравець не перебʼє дію своєю. */
 export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
@@ -10,17 +10,21 @@ export const DEFAULT_KEYBINDS: Record<BindAction, string[]> = {
   down: ['ArrowDown', 'KeyS'],
   left: ['ArrowLeft', 'KeyA'],
   right: ['ArrowRight', 'KeyD'],
-  fire: ['KeyX'],
+  // тяга: літак летить, лише поки її тримають (без неї — зависає на місці)
+  thrust: ['Space'],
+  // основна зброя — ЛКМ (завжди) або Z; X — фірмова гармата літака
+  fire: ['KeyZ'],
+  signature: ['KeyX'],
   freeze: ['Digit1', 'Numpad1', 'KeyE'],
   boost: ['Digit2', 'Numpad2', 'KeyQ'],
-  jump: ['Space', 'ShiftLeft', 'ShiftRight'],
+  jump: ['ShiftLeft', 'ShiftRight'],
   item: ['Digit4', 'Numpad4', 'KeyR'],
   flare: ['Digit3', 'Numpad3', 'KeyC'],
   scan: ['KeyF', 'Digit5', 'Numpad5'],
   pause: ['Escape', 'KeyP'],
 };
 
-export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'fire', 'freeze', 'boost', 'jump', 'flare', 'item', 'scan', 'pause'];
+export const BINDABLE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right', 'thrust', 'fire', 'signature', 'freeze', 'boost', 'jump', 'flare', 'item', 'scan', 'pause'];
 
 /** Дії руху — у схемі «миша» вимкнені (літак летить за курсором). */
 export const MOVE_ACTIONS: readonly BindAction[] = ['up', 'down', 'left', 'right'];
@@ -112,6 +116,7 @@ export class InputState {
     if (codesFor('item').includes(code)) return 'item';
     if (codesFor('flare').includes(code)) return 'flare';
     if (codesFor('scan').includes(code)) return 'scan';
+    if (codesFor('signature').includes(code)) return 'signature';
     if (codesFor('pause').includes(code)) return 'pause';
     return null;
   }
@@ -131,7 +136,13 @@ export class InputState {
 
   /** Чи утримується вогонь зараз (клавіатура або сенсорна кнопка). */
   firing(): boolean {
-    return this.down('fire') || this.touchFiring || (mouseSteering() && this.mouseDown);
+    // ЛКМ стріляє основною зброєю в будь-якій схемі керування
+    return this.down('fire') || this.touchFiring || this.mouseDown;
+  }
+
+  /** Чи тримає гравець тягу (Space) — без неї літак не летить. */
+  thrust(): boolean {
+    return this.down('thrust');
   }
 
   /** Курсор у координатах видимої області гри (0..ширина світу на екрані), або null. */

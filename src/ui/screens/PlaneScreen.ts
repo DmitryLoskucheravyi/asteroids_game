@@ -16,6 +16,7 @@ import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
 import { HangarScreen } from './HangarScreen';
 import { StoreScreen } from './StoreScreen';
+import { signatureFor } from '../../../server/src/shared/signature';
 import { CRATE_ONLY_PLANES, SEASON_PLANE } from '../../../server/src/shared/store';
 import { BattlePassScreen } from './BattlePassScreen';
 import { ItemsScreen, itemPic, statList, weaponPic, weaponStatLines } from './ItemsScreen';
@@ -155,6 +156,23 @@ export class PlaneScreen extends Screen {
         { key: 'stat.dps', value: Math.round(dmg * weapon.fireRate * fireMul * (weapon.salvo ?? 1) * (weapon.pellets ?? 1)).toString() },
         ...weaponStatLines(weapon, damageMul).slice(3),
       ]),
+      (() => {
+        // фірмова гармата літака (X)
+        const g = signatureFor(p.id);
+        const per = (g.pellets ?? 1) * (g.salvo ?? 1);
+        return h(
+          'div',
+          { class: 'sig-block', style: `--sig:${g.color}` },
+          h('h4', { class: 'sub-title' }, t('planePage.signature'), ' · ', t(`sig.${g.id}` as TKey)),
+          h('p', { class: 'muted small' }, t(`sigDesc.${g.id}` as TKey)),
+          statList([
+            { key: 'stat.damage', value: `${g.shots * per > 1 ? `${g.shots * per} × ` : ''}${num(g.damage * damageMul)}` },
+            { key: 'stat.itemCooldown', value: `${num(g.cooldown)} s` },
+            ...(g.range ? [{ key: 'stat.range' as TKey, value: String(g.range) }] : []),
+            ...(g.splash ? [{ key: 'stat.radius' as TKey, value: String(g.splash) }] : []),
+          ]),
+        );
+      })(),
       h('h4', { class: 'sub-title' }, t('planePage.skills')),
       statList([
         { key: 'control.jump', value: `${(JUMP_COOLDOWN * (spec.feature.jumpCooldownMul ?? 1) * cdMul).toFixed(1)} s` },

@@ -66,6 +66,9 @@ export interface Participant {
   /** Анти-чит: бюджет пострілів (token bucket) і бюджет переміщення (px) */
   shotTokens: number;
   shotTokensAt: number;
+  /** Бюджет пострілів фірмової гармати (окремо від основної зброї) */
+  sigTokens?: number;
+  sigTokensAt?: number;
   moveBudget: number;
   lastMoveAt: number;
   lastJumpAt: number;

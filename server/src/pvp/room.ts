@@ -1,4 +1,5 @@
 import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
+import { signatureFor, signatureVolley } from '../shared/signature.js';
 import { clampLevel, itemBonusMul, itemCooldownMul, itemHpMul, itemPowerMul, weaponDamageMul } from '../shared/gear.js';
 import { HazardSystem } from './hazards.js';
 import { driftPos, obstacleHp, windAt, type HazardKind } from '../shared/hazards.js';
@@ -587,10 +588,14 @@ export class Room {
    * Гравець вистрілив. Сервер перевіряє зброю й темп, сам симулює снаряд і сам вирішує, у кого він влучив.
    * Компенсація лагу: цілі перевіряються там, де їх бачив стрілець (viewT), але не далі MAX_REWIND_MS назад.
    */
-  onShot(socketId: string, data: { x: number; y: number; angle: number; kind: string; viewT?: number }): void {
+  onShot(socketId: string, data: { x: number; y: number; angle: number; kind: string; viewT?: number; sig?: boolean }): void {
     const p = this.participants.get(socketId);
     if (!p || !p.alive || this.state !== 'active') return;
     if (![data?.x, data?.y, data?.angle].every((n) => typeof n === 'number' && Number.isFinite(n))) return;
+    if (data.sig) {
+      this.onSignatureShot(p, data);
+      return;
+    }
     const def = getWeaponDef(p.weaponId) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
     // тип снаряда — лише той, що в зброї гравця
     if (data.kind !== def.kind) return;
@@ -618,14 +623,41 @@ export class Room {
     this.spawnProjectile(p, def.kind, origin, data.angle, damage, def.splashRadius ?? 0, lagMs);
   }
 
+  /**
+   * Постріл фірмової гармати літака (X). Окремий бюджет: не більше одного залпу за перезарядку
+   * (із запасом на нерівну доставку). Урон — від гармати й бонусів літака/предметів.
+   */
+  private onSignatureShot(p: Participant, data: { x: number; y: number; angle: number; kind: string; viewT?: number }): void {
+    const g = signatureFor(p.planeId);
+    if (data.kind !== g.kind) return;
+    const now = Date.now();
+    const volley = signatureVolley(g);
+    const perSec = (volley / g.cooldown) * 1.3;
+    p.sigTokens = Math.min(volley + 2, p.sigTokensAt ? (p.sigTokens ?? 0) + ((now - p.sigTokensAt) / 1000) * perSec : volley + 2);
+    p.sigTokensAt = now;
+    if ((p.sigTokens ?? 0) < 1) return;
+    p.sigTokens = (p.sigTokens ?? 0) - 1;
+    const origin = Math.hypot(data.x - p.pos.x, data.y - p.pos.y) < 120 ? { x: data.x, y: data.y } : { x: p.pos.x + Math.cos(data.angle) * 24, y: p.pos.y + Math.sin(data.angle) * 24 };
+    const lagMs = this.lagFor(data.viewT, now);
+    p.lastFiredAt = now;
+    p.shots++;
+    this.relay(p.id, 'match:shot', encodeShot({ owner: this.indexOf(p.id), x: origin.x, y: origin.y, angle: data.angle, kind: g.visual ?? g.kind, speed: g.kind === 'missile' ? MISSILE_SPEED : g.speed }));
+    const damage = g.damage * p.damageMul;
+    if (g.kind === 'laser') {
+      this.fireLaser(p, origin, data.angle, g.range ?? PROJECTILE_RANGE.laser, damage, lagMs, false);
+      return;
+    }
+    this.spawnProjectile(p, g.kind, origin, data.angle, damage, g.splash ?? 0, lagMs, { speed: g.speed, range: g.range });
+  }
+
   /** На скільки мс відмотати цілі для пострілу, який гравець зробив, бачачи світ на момент viewT. */
   private lagFor(viewT: number | undefined, now: number): number {
     if (typeof viewT !== 'number' || !Number.isFinite(viewT) || !viewT) return CLIENT_INTERP_MS;
     return Math.max(0, Math.min(MAX_REWIND_MS, now - (this.startedAt + viewT)));
   }
 
-  private spawnProjectile(owner: Participant, kind: 'bullet' | 'rocket' | 'missile', from: { x: number; y: number }, angle: number, damage: number, splash: number, lagMs: number): void {
-    const speed = kind === 'missile' ? MISSILE_SPEED : getWeaponDef(owner.weaponId)?.projectileSpeed ?? 900;
+  private spawnProjectile(owner: Participant, kind: 'bullet' | 'rocket' | 'missile', from: { x: number; y: number }, angle: number, damage: number, splash: number, lagMs: number, over?: { speed?: number; range?: number }): void {
+    const speed = kind === 'missile' ? MISSILE_SPEED : over?.speed ?? getWeaponDef(owner.weaponId)?.projectileSpeed ?? 900;
     this.projectiles.push({
       ownerId: owner.id,
       kind,
@@ -635,7 +667,7 @@ export class Room {
       vy: Math.sin(angle) * speed,
       traveled: 0,
       // у куль може бути своя дальність (дробовик б'є недалеко)
-      range: kind === 'bullet' ? getWeaponDef(owner.weaponId)?.range ?? PROJECTILE_RANGE.bullet : PROJECTILE_RANGE[kind],
+      range: over?.range ?? (kind === 'bullet' ? getWeaponDef(owner.weaponId)?.range ?? PROJECTILE_RANGE.bullet : PROJECTILE_RANGE[kind]),
       damage,
       splash,
       lagMs,

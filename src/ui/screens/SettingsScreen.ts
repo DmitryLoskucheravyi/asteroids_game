@@ -24,8 +24,8 @@ const TABS: [Tab, string, TKey][] = [
 
 /** Секції біндів: рух, бій, система. */
 const BIND_GROUPS: [TKey, readonly BindAction[]][] = [
-  ['settings.sec.movement', MOVE_ACTIONS],
-  ['settings.sec.combat', ['fire', 'boost', 'jump', 'flare', 'item', 'scan', 'freeze']],
+  ['settings.sec.movement', [...MOVE_ACTIONS, 'thrust']],
+  ['settings.sec.combat', ['fire', 'signature', 'boost', 'jump', 'flare', 'item', 'scan', 'freeze']],
   ['settings.sec.system', ['pause']],
 ];
 
@@ -143,13 +143,15 @@ export class SettingsScreen extends Screen {
       h('p', { class: 'muted small set-note' }, t(mouse ? 'settings.scheme.mouseHint' : 'settings.scheme.keyboardHint')),
     );
     const groups = BIND_GROUPS.map(([title, actions]) => {
-      const off = mouse && title === 'settings.sec.movement';
+      const moveOff = mouse && title === 'settings.sec.movement';
       return this.section(
         title,
-        off ? h('p', { class: 'muted small set-note' }, t('settings.movementOff')) : null,
+        moveOff ? h('p', { class: 'muted small set-note' }, t('settings.movementOff')) : null,
         ...actions.map((action) => {
+          // у схемі «миша» вимкнені лише клавіші напрямку — тяга працює
+          const off = moveOff && action !== 'thrust';
           const btn = button(displayKey(primaryKeyFor(action)), () => this.startListening(action, btn), 'btn key-btn', off ? { disabled: true } : {});
-          const hint = action === 'fire' && mouse ? t('settings.fireMouseHint') : action === 'scan' ? t('settings.scanHint') : undefined;
+          const hint = action === 'fire' ? t('settings.fireMouseHint') : action === 'scan' ? t('settings.scanHint') : action === 'thrust' ? t('settings.thrustHint') : action === 'signature' ? t('settings.signatureHint') : undefined;
           return this.row(t(`control.${action}` as TKey), btn, hint, off);
         }),
       );

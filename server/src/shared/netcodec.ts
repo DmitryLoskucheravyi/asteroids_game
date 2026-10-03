@@ -308,6 +308,8 @@ export interface NetFire {
   kind: ShotKind;
   /** Час сервера, який бачив клієнт у момент пострілу (для компенсації лагу), мс від старту матчу */
   viewT: number;
+  /** Постріл фірмової гармати літака (а не основної зброї) */
+  sig?: boolean;
 }
 
 export function encodeFire(f: NetFire): Uint8Array {
@@ -317,7 +319,8 @@ export function encodeFire(f: NetFire): Uint8Array {
   v.setUint16(1, qPos(f.x));
   v.setUint16(3, qPos(f.y));
   v.setUint16(5, qAng(f.angle));
-  v.setUint8(7, Math.max(0, SHOT_KINDS.indexOf(f.kind)));
+  // старший біт — фірмова гармата
+  v.setUint8(7, Math.max(0, SHOT_KINDS.indexOf(f.kind)) | (f.sig ? 0x80 : 0));
   v.setUint32(8, Math.max(0, Math.round(f.viewT)));
   return b;
 }
@@ -325,5 +328,6 @@ export function encodeFire(f: NetFire): Uint8Array {
 export function decodeFire(data: ArrayBuffer | ArrayBufferView): NetFire | null {
   const v = view(data);
   if (v.byteLength < 12 || v.getUint8(0) !== MSG.FIRE) return null;
-  return { x: v.getUint16(1) / POS_Q, y: v.getUint16(3) / POS_Q, angle: dAng(v.getUint16(5)), kind: SHOT_KINDS[v.getUint8(7)] ?? 'bullet', viewT: v.getUint32(8) };
+  const k = v.getUint8(7);
+  return { x: v.getUint16(1) / POS_Q, y: v.getUint16(3) / POS_Q, angle: dAng(v.getUint16(5)), kind: SHOT_KINDS[k & 0x7f] ?? 'bullet', viewT: v.getUint32(8), sig: (k & 0x80) !== 0 };
 }

@@ -15,6 +15,7 @@ import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from '.
 import { decodeShot, decodeState, encodeFire, encodeMove, type ShotKind, type StatePatch } from '../../server/src/shared/netcodec';
 import { INTERP_DELAY_MS, ServerClock, SnapshotBuffer } from '../net/interp';
 import { scaledItem, scaledWeapon } from './gearScale';
+import { signatureFor, type SignatureGun } from '../../server/src/shared/signature';
 import { getWeaponDef, DEFAULT_WEAPON_ID, WeaponState, type WeaponDef } from './weapons';
 import { Player } from './entities/Player';
 import { Projectile } from './entities/Projectile';
@@ -74,6 +75,8 @@ interface Beam {
   hostile: boolean;
   /** Рейкотрон — товстіший блакитний промінь, що довше гасне */
   rail?: boolean;
+  /** Колір променя фірмової гармати */
+  color?: string;
 }
 
 /** Плавне відображення чужих літаків між серверними тіками (20 Гц). */
@@ -165,6 +168,7 @@ export class PvpGame {
     this.baseFireMul = 1 + (this.passiveDef?.combat?.fireRate ?? 0);
     this.active = this.activeDef?.active ?? null;
     this.maxHp = planeCombat(base, progress).hp + (this.passiveDef?.combat?.hp ?? 0);
+    this.signature = signatureFor(planeId);
     const baseWeapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
     this.weapon = scaledWeapon(baseWeapon, Save.weaponLevel(baseWeapon.id));
     this.gun = new WeaponState(this.weapon);
@@ -224,8 +228,8 @@ export class PvpGame {
   }
 
   /** Свій постріл → сервер (бінарно, з моментом, який бачив гравець, — для компенсації лагу). */
-  private fire(x: number, y: number, angle: number, kind: ShotKind): void {
-    this.socket.emit('match:shot', encodeFire({ x, y, angle, kind, viewT: this.serverClock.now() - INTERP_DELAY_MS }));
+  private fire(x: number, y: number, angle: number, kind: ShotKind, sig = false): void {
+    this.socket.emit('match:shot', encodeFire({ x, y, angle, kind, viewT: this.serverClock.now() - INTERP_DELAY_MS, sig }));
   }
 
   /** Пакет стану (ключовий кадр або дельта) → учасники + буфери інтерполяції. */
@@ -444,6 +448,76 @@ export class PvpGame {
   /** Скільки секунд тому було сканування (для анімації радара) */
   scanAge = Infinity;
 
+  // ---------- фірмова гармата (X) ----------
+
+  /** Своя гармата цього літака: залп, потім перезарядка */
+  readonly signature: SignatureGun;
+  sigCooldown = 0;
+  /** Скільки пострілів залпу ще лишилось і до наступного — секунд */
+  sigLeft = 0;
+  private sigTimer = 0;
+
+  useSignature(): void {
+    if (!this.canAct || this.sigCooldown > 0 || this.sigLeft > 0) return;
+    this.sigLeft = this.signature.shots;
+    this.sigTimer = 0;
+  }
+
+  private updateSignature(dt: number): void {
+    this.sigCooldown = Math.max(0, this.sigCooldown - dt);
+    if (this.sigLeft <= 0) return;
+    this.sigTimer -= dt;
+    while (this.sigTimer <= 0 && this.sigLeft > 0) {
+      this.fireSignatureShot();
+      this.sigLeft--;
+      this.sigTimer += this.signature.interval / 1000;
+    }
+    // перезарядка — після останнього пострілу залпу
+    if (this.sigLeft === 0) this.sigCooldown = this.signature.cooldown;
+  }
+
+  private fireSignatureShot(): void {
+    const g = this.signature;
+    const pos = this.nose();
+    const angle = this.aim + (Math.random() - 0.5) * 2 * (g.spread ?? 0);
+    if (g.kind === 'laser') {
+      const ray = this.raycast(pos.x, pos.y, angle, g.range ?? 600, this.selfId);
+      const x2 = pos.x + Math.cos(angle) * ray.dist;
+      const y2 = pos.y + Math.sin(angle) * ray.dist;
+      this.beams.push({ x1: pos.x, y1: pos.y, x2, y2, t: 0, hostile: false, rail: g.visual === 'rail', color: g.color });
+      this.fire(pos.x, pos.y, angle, 'laser', true);
+      if (this.clock - this.lastShotSfx > 0.08) {
+        this.lastShotSfx = this.clock;
+        Sfx.laserZap();
+      }
+      return;
+    }
+    if (g.kind === 'missile') {
+      const n = g.salvo ?? 2;
+      for (let i = 0; i < n; i++) {
+        const a = angle + (i - (n - 1) / 2) * 0.32;
+        this.missiles.push({ pos: pos.clone(), angle: a, life: 2.2, remote: false, ownerId: this.selfId, source: 'weapon' });
+        this.fire(pos.x, pos.y, a, 'missile', true);
+      }
+      Sfx.boost();
+      return;
+    }
+    const style = g.visual === 'pellet' || g.visual === 'plasma' ? g.visual : undefined;
+    const n = g.pellets ?? 1;
+    for (let i = 0; i < n; i++) {
+      // кільце — рівномірно на всі боки; дріб — віялом
+      const a = g.ring ? this.aim + (i / n) * Math.PI * 2 : n > 1 ? this.aim + (Math.random() - 0.5) * 2 * (g.spread ?? 0.2) : angle;
+      this.projectiles.push(new Projectile(g.kind, pos.clone(), a, g.speed, g.damage, g.splash ?? 0, false, this.selfId, g.range, style));
+      this.fire(pos.x, pos.y, a, g.kind, true);
+    }
+    this.muzzle(pos.x, pos.y, angle, g.kind === 'rocket');
+    if (g.kind === 'rocket') Sfx.bossShot();
+    else if (this.clock - this.lastShotSfx > 0.05) {
+      this.lastShotSfx = this.clock;
+      Sfx.shot();
+    }
+  }
+
   useScan(): void {
     if (!this.canAct || this.scanCooldown > 0) return;
     this.scanCooldown = PvpGame.SCAN_COOLDOWN;
@@ -611,6 +685,7 @@ export class PvpGame {
     if (this.canAct) {
       this.fly(dt);
       this.updateGun(dt);
+      this.updateSignature(dt);
       this.sendTimer -= dt;
       if (this.sendTimer <= 0) {
         this.sendTimer = SEND_EVERY;
@@ -655,10 +730,11 @@ export class PvpGame {
       p.speedMultiplier = boost * slow;
       let move = axis;
       if (cursor) {
+        // тарілка летить до курсора лише з тягою (пробіл)
         const dx = cursor.x - p.pos.x;
         const dy = cursor.y - p.pos.y;
         const d = Math.hypot(dx, dy);
-        move = d > 30 ? { x: dx / d, y: dy / d } : { x: 0, y: 0 };
+        move = d > 30 && this.input.thrust() ? { x: dx / d, y: dy / d } : { x: 0, y: 0 };
       }
       p.update(dt, move, this.worldW, this.worldH);
       if (p.vel.length() > 40) this.aim += angleDiff(this.aim, p.vel.angle()) * Math.min(1, dt * 10);
@@ -677,7 +753,9 @@ export class PvpGame {
       }
       if (want !== null) p.angle += clamp(angleDiff(p.angle, want), -turnRate * dt, turnRate * dt);
       const max = spec.maxSpeed * boost * slow;
-      const target = cursor || mag > 0.2 ? max : max * 0.55;
+      // літак летить лише з тягою (пробіл) або клавішами руху; без них — гальмує й зависає
+      const thrusting = this.input.thrust() || (!cursor && mag > 0.2);
+      const target = thrusting ? max : 0;
       const accel = spec.accel * 0.3;
       this.speed += clamp(target - this.speed, -accel * dt, accel * dt);
       p.vel.set(Math.cos(p.angle) * this.speed, Math.sin(p.angle) * this.speed);
@@ -1194,7 +1272,7 @@ export class PvpGame {
     for (const b of this.beams) {
       const k = 1 - b.t / (b.rail ? 0.35 : 0.09);
       // рейкотрон — товстий блакитний промінь, що повільно гасне
-      ctx.strokeStyle = b.rail ? `rgba(110,220,255,${0.6 * k})` : b.hostile ? `rgba(255,70,90,${0.45 * k})` : `rgba(200,90,255,${0.45 * k})`;
+      ctx.strokeStyle = b.color ? hexToRgba(b.color, 0.6 * k) : b.rail ? `rgba(110,220,255,${0.6 * k})` : b.hostile ? `rgba(255,70,90,${0.45 * k})` : `rgba(200,90,255,${0.45 * k})`;
       ctx.lineWidth = b.rail ? 13 * k + 3 : 7;
       ctx.beginPath();
       ctx.moveTo(b.x1, b.y1);
@@ -1463,7 +1541,7 @@ export class PvpGame {
   }
 }
 
-function hexToRgba(hex: string): string {
+function hexToRgba(hex: string, alpha = 1): string {
   const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},1)`;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
