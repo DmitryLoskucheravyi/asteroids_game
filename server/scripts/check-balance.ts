@@ -46,7 +46,7 @@ const pi = (id: string, tier: number, level: number) => {
   return c.hp * c.damageMul;
 };
 // EPI зі звіту: HP × урон ÷ (хітбокс / 15) — малий хітбокс теж є живучістю
-const HITBOX: Record<string, number> = { falcon: 15, phantom: 13, blaze: 16, wasp: 11, collector: 16, swift: 14, titan: 17, chronos: 14, viper: 13, thunder: 15, bastion: 17, ufo: 15, nova: 14, phoenix: 14 };
+const HITBOX: Record<string, number> = { falcon: 15, phantom: 13, blaze: 16, wasp: 11, collector: 16, swift: 14, titan: 17, chronos: 14, viper: 13, thunder: 15, bastion: 17, ufo: 15, nova: 14, phoenix: 14, eclipse: 14 };
 const fresh = PLANE_IDS.map((id) => pi(id, 1, 1) / (HITBOX[id] / 15));
 check('Розкид свіжих літаків (EPI) ≤ 1.3×', Math.max(...fresh) / Math.min(...fresh) <= 1.3, (Math.max(...fresh) / Math.min(...fresh)).toFixed(2));
 

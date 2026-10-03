@@ -16,7 +16,8 @@ import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
 import { HangarScreen } from './HangarScreen';
 import { StoreScreen } from './StoreScreen';
-import { CRATE_ONLY_PLANES } from '../../../server/src/shared/store';
+import { CRATE_ONLY_PLANES, SEASON_PLANE } from '../../../server/src/shared/store';
+import { BattlePassScreen } from './BattlePassScreen';
 import { ItemsScreen, itemPic, statList, weaponPic, weaponStatLines } from './ItemsScreen';
 import { screenHeader, starsRow } from './LevelSelectScreen';
 
@@ -59,7 +60,10 @@ export class PlaneScreen extends Screen {
     const selected = this.owned && Save.data.plane === p.id;
 
     let action: HTMLElement;
-    if (!this.owned && CRATE_ONLY_PLANES.includes(p.id)) {
+    if (!this.owned && p.id === SEASON_PLANE) {
+      // сезонний — лише з останнього тьєру преміум-пропуску
+      action = h('div', { class: 'buy-row' }, h('span', { class: 'crate-only-tag season' }, icon(Icons.star, 'ico'), t('planes.seasonOnly')), button(t('menu.pass'), () => this.app.show(new BattlePassScreen(this.app)), 'btn small'));
+    } else if (!this.owned && CRATE_ONLY_PLANES.includes(p.id)) {
       // ексклюзив — не продається, лише випадає з ящиків
       action = h('div', { class: 'buy-row' }, h('span', { class: 'crate-only-tag' }, icon(Icons.gift, 'ico'), t('planes.crateOnly')), button(t('store.title'), () => this.app.show(new StoreScreen(this.app)), 'btn small'));
     } else if (!this.owned) {

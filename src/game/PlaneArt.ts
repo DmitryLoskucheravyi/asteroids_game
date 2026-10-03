@@ -509,6 +509,33 @@ function novaAnim(t: number): Part[] {
   return [...navLights(28, -5, t), ellipse(0, 5, r, r, '#ffd8ff', true), flicker(0, 28.5, 3, 2, t, '#f0e0ff', '#a06aff')];
 }
 
+/** Затемнення — сезонний літак: чорний корпус, золота корона навколо "диска", що світиться. */
+function eclipseParts(): Part[] {
+  const black = '#1c1a2a';
+  const gold = '#f0b030';
+  const wingL = [-4, -4, -29, 6, -30, 12, -18, 15, -5, 14];
+  const tailL = [-3, 18, -11, 27, -8, 29, -2.5, 25];
+  const hull = sym([0, -32, -2.6, -24, -4.6, -10, -5, 16, -3.4, 27, -1.6, 29]);
+  return [
+    poly(tailL, shade(gold, -0.25)),
+    poly(mirror(tailL), shade(gold, -0.25)),
+    poly(wingL, black),
+    poly(mirror(wingL), black),
+    poly([-29, 6, -30, 12, -24, 13.5, -24, 8], gold, true),
+    poly(mirror([-29, 6, -30, 12, -24, 13.5, -24, 8]), gold, true),
+    poly(hull, black),
+    rect(-0.7, -22, 1.4, 40, gold, true),
+    ellipse(0, 2, 7.5, 7.5, gold),
+    ellipse(0, 2, 5.2, 5.2, '#0a0812', true),
+    nozzle(0, 29, 4.4, 2.6),
+    ...canopy(0, -15, 2.4, 5.6, '#ffe08a'),
+  ];
+}
+function eclipseAnim(t: number): Part[] {
+  const r = 1.6 + Math.abs(Math.sin(t * 3)) * 1.4;
+  return [...navLights(29, 9, t), ellipse(0, 2, r, r, '#fff1b0', true), flicker(0, 29.5, 2.8, 1.8, t, '#fff6c8', '#ffb020')];
+}
+
 const SHIPS: Record<PlaneId, ShipDef> = {
   falcon: { parts: falconParts(), anim: falconAnim },
   phantom: { parts: phantomParts(), anim: phantomAnim },
@@ -524,6 +551,7 @@ const SHIPS: Record<PlaneId, ShipDef> = {
   ufo: { parts: ufoParts(), anim: ufoAnim },
   nova: { parts: novaParts(), anim: novaAnim },
   phoenix: { parts: phoenixParts(), anim: phoenixAnim },
+  eclipse: { parts: eclipseParts(), anim: eclipseAnim },
 };
 
 // ---------- тір-скіни та піпси рівня ----------

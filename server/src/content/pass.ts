@@ -10,6 +10,7 @@ export function currentSeason(now = Date.now()): { id: string; startsAt: Date; e
 }
 
 import type { CrateType } from './crates.js';
+import { SEASON_PLANE } from '../shared/store.js';
 
 /** Нагорода тьєру: валюта/досвід + (іноді) ящик, предмет, зброя або літак. */
 export type PassReward = {
@@ -41,29 +42,29 @@ for (let t = 1, sum = 0; t <= TIER_COUNT; t++) BP_REQUIRED.push((sum += bpStep(t
 
 /** Ціна преміум-пропуску на сезон, у монетах (без реальних платежів). */
 
-/** Особливі тьєри — рідкісні речі (предмети, зброя, літаки) як віхи сезону. */
-// У пропуску — не більше половини каталогу (6 із 12 предметів, 1 зброя, 2 літаки), без дублікатів між треками;
-// решта лишається в магазині, ящиках і нагородах за ранг.
+/**
+ * Особливі тьєри. Літаків, предметів і зброї в пропуску немає (вони — у магазині, ящиках і за ранг);
+ * головна нагорода сезону — ексклюзивний сезонний літак на останньому тьєрі преміум-треку.
+ */
 const FREE_SPECIAL: Record<number, Partial<PassReward>> = {
-  8: { item: 'magnet_booster' },
+  8: { crystals: 10 },
   16: { crate: 'rare' },
-  24: { item: 'targeting_cpu' },
+  24: { crystals: 15 },
   32: { crate: 'rare' },
-  50: { plane: 'swift' },
-  62: { crate: 'rare' },
+  62: { crate: 'epic' },
   74: { crystals: 20 },
-  86: { item: 'overclock_core' },
+  86: { crystals: 25 },
 };
 const PREMIUM_SPECIAL: Record<number, Partial<PassReward>> = {
   6: { crate: 'rare' },
   14: { crystals: 15 },
-  20: { item: 'nano_coating' },
-  28: { weapon: 'homing_salvo' },
+  20: { crystals: 25 },
+  28: { crate: 'epic' },
   40: { crate: 'epic' },
-  64: { item: 'decoy_flare' },
+  64: { crystals: 40 },
   75: { crystals: 40 },
-  95: { item: 'phoenix_heart' },
-  100: { plane: 'thunder' },
+  95: { crate: 'mythic' },
+  100: { plane: SEASON_PLANE },
 };
 
 function crateFor(tier: number, premium: boolean): CrateType {

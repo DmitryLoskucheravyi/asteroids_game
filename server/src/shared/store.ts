@@ -31,6 +31,9 @@ export const GEM_PACKS: readonly GemPack[] = [
 /** Преміум бойового пропуску — лише за геми */
 export const PREMIUM_PASS_GEMS = 400;
 
+/** Сезонний літак — лише з останнього тьєру преміум-пропуску (ні в магазині, ні в ящиках). */
+export const SEASON_PLANE = 'eclipse';
+
 /** Літаки, яких немає в продажу: лише з ящиків (від епічного й вище). */
 export const CRATE_ONLY_PLANES: readonly string[] = ['ufo', 'nova', 'phoenix'];
 export const CRATE_ONLY_MIN: readonly StoreCrate[] = ['epic', 'mythic', 'legendary'];

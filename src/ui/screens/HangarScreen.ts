@@ -6,7 +6,7 @@ import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
 import { MAX_LEVEL_IN_TIER, PLANES, planeCombat, type PlaneId } from '../../game/planes';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { Screen } from '../Screen';
-import { CRATE_ONLY_PLANES } from '../../../server/src/shared/store';
+import { CRATE_ONLY_PLANES, SEASON_PLANE } from '../../../server/src/shared/store';
 import { itemPic } from './ItemsScreen';
 import { screenHeader, starsRow } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
@@ -45,7 +45,9 @@ export class HangarScreen extends Screen {
           h('span', { class: 'hangar-name' }, t(`plane.${p.id}` as TKey)),
           owned
             ? h('span', { class: 'upgrade-head' }, h('span', { class: 'tier-chip', style: tierColor ? `color:${tierColor};border-color:${tierColor}` : undefined }, `${t('planes.tier')} ${progress.tier}`), starsRow(progress.level, MAX_LEVEL_IN_TIER, tierColor))
-            : CRATE_ONLY_PLANES.includes(p.id)
+            : p.id === SEASON_PLANE
+              ? h('span', { class: 'crate-only-tag season' }, icon(Icons.star, 'ico'), t('planes.seasonOnly'))
+              : CRATE_ONLY_PLANES.includes(p.id)
               ? h('span', { class: 'crate-only-tag' }, icon(Icons.gift, 'ico'), t('planes.crateOnly'))
               : coinBadge(p.price, 'coin-badge small'),
           h('span', { class: 'hangar-feat' }, t(`feat.${p.id}` as TKey)),

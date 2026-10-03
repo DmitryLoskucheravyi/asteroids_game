@@ -1,4 +1,4 @@
-export type PlaneId = 'falcon' | 'phantom' | 'blaze' | 'wasp' | 'collector' | 'swift' | 'titan' | 'chronos' | 'viper' | 'thunder' | 'bastion' | 'ufo' | 'nova' | 'phoenix';
+export type PlaneId = 'falcon' | 'phantom' | 'blaze' | 'wasp' | 'collector' | 'swift' | 'titan' | 'chronos' | 'viper' | 'thunder' | 'bastion' | 'ufo' | 'nova' | 'phoenix' | 'eclipse';
 
 /** Унікальна механіка літака. Кожен літак має свою комбінацію. */
 export interface PlaneFeature {
@@ -69,6 +69,7 @@ export const PLANES: readonly PlaneSpec[] = [
   { id: 'ufo', accel: 7000, maxSpeed: 380, drag: 16, radius: 15, flame: ['#c8ffd8', '#3adc78'], feature: { gravityImmune: true, noRotate: true }, price: 2300, combat: { hp: 100, damage: 1.1 } },
   { id: 'nova', accel: 3100, maxSpeed: 455, drag: 6, radius: 14, flame: ['#e8f4ff', '#a06aff'], feature: { extraBoost: 1, dashShockwave: 110, jumpCharges: 2 }, price: 2600, combat: { hp: 100, damage: 1.12 } },
   { id: 'phoenix', accel: 3000, maxSpeed: 460, drag: 6, radius: 14, flame: ['#fff1a8', '#ff5a1f'], feature: { extraLives: 1, extraBoost: 1 }, price: 3000, combat: { hp: 105, damage: 1.1 } },
+  { id: 'eclipse', accel: 3200, maxSpeed: 465, drag: 6, radius: 14, flame: ['#fff6c8', '#ffb020'], feature: { extraBoost: 1, jumpDistanceMul: 1.25, magnetRadius: 160 }, price: 3000, combat: { hp: 104, damage: 1.1 } },
 ];
 
 export const getPlane = (id: PlaneId): PlaneSpec => PLANES.find((p) => p.id === id) ?? PLANES[0];
@@ -137,6 +138,7 @@ const TIER_FEATURE_BONUS: Partial<Record<PlaneId, (feature: PlaneFeature, tier: 
   viper: (f, tier) => ({ ...f, jumpCooldownMul: Math.max(0.45, (f.jumpCooldownMul ?? 1) - 0.05 * (tier - 1)) }),
   bastion: (f, tier) => ({ ...f, shieldRegen: Math.max(8, (f.shieldRegen ?? 16) - 2 * (tier - 1)) }),
   nova: (f, tier) => ({ ...f, dashShockwave: (f.dashShockwave ?? 0) + 25 * (tier - 1) }),
+  eclipse: (f, tier) => ({ ...f, magnetRadius: (f.magnetRadius ?? 0) + 30 * (tier - 1) }),
   phoenix: (f, tier) => ({ ...f, extraBoost: (f.extraBoost ?? 0) + (tier >= 3 ? 1 : 0) }),
 };
 

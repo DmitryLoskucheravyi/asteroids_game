@@ -6,7 +6,7 @@ import { ensureQuestSlots, incrementQuestProgress, ensureSeason } from '../progr
 import { getItemDef } from '../content/items.js';
 import { getWeaponDef } from '../content/weapons.js';
 import { isPlaneId, PLANE_PRICES } from '../content/planes.js';
-import { CRATE_ONLY_PLANES, CRATE_PRICES, GEM_PACKS, PREMIUM_PASS_GEMS } from '../shared/store.js';
+import { CRATE_ONLY_PLANES, CRATE_PRICES, GEM_PACKS, PREMIUM_PASS_GEMS, SEASON_PLANE } from '../shared/store.js';
 import { isCrateType } from '../content/crates.js';
 import { grantReward } from '../progress.js';
 import { MAX_GEAR_LEVEL, itemUpgradeCost, weaponUpgradeCost } from '../shared/gear.js';
@@ -87,7 +87,7 @@ shopRouter.post('/profile/buy-plane', async (req: AuthedRequest, res) => {
     res.status(400).json({ error: 'bad_plane' });
     return;
   }
-  if (CRATE_ONLY_PLANES.includes(planeId)) {
+  if (CRATE_ONLY_PLANES.includes(planeId) || planeId === SEASON_PLANE) {
     res.status(403).json({ error: 'crate_only' });
     return;
   }
