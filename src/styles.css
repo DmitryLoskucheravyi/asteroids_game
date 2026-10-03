@@ -9027,3 +9027,162 @@ input[type='range'] {
   background: linear-gradient(180deg, color-mix(in srgb, var(--c) 70%, #fff) 0 28%, var(--c) 28% 100%);
   box-shadow: 0 0 8px color-mix(in srgb, var(--c) 55%, transparent);
 }
+
+/* ===================== івенти арени ===================== */
+
+.mode-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ev);
+}
+
+.mode-event .ico {
+  width: 13px;
+  height: 13px;
+}
+
+.arena-event {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 14px;
+  padding: 12px 18px;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--ev) 16%, transparent), var(--plate) 55%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ev) 40%, transparent), inset 3px 0 0 var(--ev);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+
+.arena-event-ico {
+  width: 40px;
+  height: 40px;
+  color: var(--ev);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--ev) 60%, transparent));
+}
+
+.arena-event-ico svg {
+  width: 100%;
+  height: 100%;
+}
+
+.arena-event-text small {
+  color: var(--muted);
+}
+
+.arena-event-text b {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  color: var(--ev);
+}
+
+.arena-event-text p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 80ch;
+}
+
+.arena-event-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.arena-event-time .ico {
+  width: 16px;
+  height: 16px;
+}
+
+.pvp-event {
+  position: absolute;
+  top: 112px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ev);
+  background: rgba(10, 9, 24, 0.7);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ev) 45%, transparent);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.pvp-event .ico {
+  width: 15px;
+  height: 15px;
+}
+
+.wind-arrow {
+  display: inline-block;
+  font-size: 14px;
+  line-height: 1;
+  transition: transform 0.4s linear;
+}
+
+.load-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 12px;
+  font-weight: 700;
+  color: var(--ev);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ev) 50%, transparent);
+}
+
+.load-event .ico {
+  width: 16px;
+  height: 16px;
+}
+
+/* порожнє місце в групі — кнопка запрошення */
+.party-member.empty.clickable {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.party-member.empty.clickable:hover,
+.party-member.empty.clickable:focus-visible {
+  border-color: var(--burn-2);
+  background: rgba(255, 150, 40, 0.06);
+  outline: none;
+}
+
+.party-empty-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slot-invite-modal .modal-panel {
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  text-align: left;
+}
+
+.slot-invite-h {
+  margin: 14px 0 8px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.slot-invite-result {
+  margin-top: 10px;
+}

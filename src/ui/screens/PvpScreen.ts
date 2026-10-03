@@ -12,6 +12,8 @@ import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 /** Кольори команд (смужка на картці, імена тіммейтів у бою — завжди зелені). */
 const TEAM_COLORS = ['#58d2ff', '#ff6a6a', '#ffd24a', '#b77bff', '#4fe08a'];
 import { PvpGame } from '../../game/PvpGame';
+import { ARENA_EVENT_INFO } from '../../game/arenaEvents';
+import { windAt } from '../../../server/src/shared/hazards';
 import { BOOST_DURATION, FLARE_DURATION } from '../../game/systems/SkillSystem';
 import type { MatchInit, MatchResultEntry } from '../../net/pvpProtocol';
 import { Icons, button, h, icon } from '../dom';
@@ -43,6 +45,8 @@ export class PvpScreen extends Screen {
   private lootCrystals!: HTMLElement;
   private radarCanvas!: HTMLCanvasElement;
   private scanTag!: HTMLElement;
+  /** Стрілка напряму сонячного вітру (лише в цьому івенті) */
+  private windArrow: HTMLElement | null = null;
   private feed!: HTMLElement;
   private dead!: HTMLElement;
   private slots!: Record<'weapon' | 'boost' | 'jump' | 'flare' | 'item' | 'scan', Slot>;
@@ -120,6 +124,7 @@ export class PvpScreen extends Screen {
         ),
       ),
       h('div', { class: 'pvp-top' }, this.timer, h('div', { class: 'pvp-counters' }, h('span', { class: 'pvp-chip', title: t((this.initData.teamSize ?? 1) > 1 ? 'pvp.teamsAlive' : 'pvp.alive') }, icon(Icons.heart, 'ico'), this.alive)), h('div', { class: 'pvp-loot', title: t('pvp.lootHint') }, h('span', { class: 'pvp-chip loot-coin' }, icon(Icons.coin, 'ico'), this.lootCoins), h('span', { class: 'pvp-chip loot-crystal' }, icon(Icons.crystal, 'ico'), this.lootCrystals))),
+      this.eventChip(),
       h('div', { class: 'pvp-kills', title: t('matchresult.kills') }, h('span', { class: 'pvp-kills-ico', html: Icons.boss }), this.kills, h('small', {}, t('pvp.killsLabel'))),
       h('div', { class: 'hud-tr' }, leaveBtn),
       this.feed,
@@ -194,6 +199,15 @@ export class PvpScreen extends Screen {
     }
   }
 
+  /** Івент арени під таймером; для вітру — стрілка, що показує, куди дме. */
+  private eventChip(): HTMLElement | null {
+    const kind = this.initData.event;
+    if (!kind) return null;
+    const ev = ARENA_EVENT_INFO[kind];
+    this.windArrow = kind === 'wind' ? h('span', { class: 'wind-arrow' }, '➜') : null;
+    return h('div', { class: 'pvp-event', style: `--ev:${ev.color}`, title: t(ev.descKey) }, icon(ev.icon, 'ico'), h('span', {}, t(ev.nameKey)), this.windArrow);
+  }
+
   private pushFeed(text: string, kind: 'kill' | 'self'): void {
     const row = h('div', { class: `frag-row${kind === 'self' ? ' mine' : ''}` }, text);
     this.feed.prepend(row);
@@ -259,7 +273,13 @@ export class PvpScreen extends Screen {
     return h(
       'div',
       { class: `pvp-loading${ranked ? ' ranked' : ''}`, style: `--count:${init.countdownMs}ms` },
-      h('div', { class: 'load-head' }, h('small', {}, ranked ? `${t('online.ranked')} · ${t(`mode.${init.mode}` as TKey)}` : t('online.casual')), h('h2', {}, t('pvp.matchFound'))),
+      h(
+        'div',
+        { class: 'load-head' },
+        h('small', {}, ranked ? `${t('online.ranked')} · ${t(`mode.${init.mode}` as TKey)}` : t('online.casual')),
+        h('h2', {}, t('pvp.matchFound')),
+        init.event ? h('span', { class: 'load-event', style: `--ev:${ARENA_EVENT_INFO[init.event].color}` }, icon(ARENA_EVENT_INFO[init.event].icon, 'ico'), `${t('event.label')}: ${t(ARENA_EVENT_INFO[init.event].nameKey)}`) : null,
+      ),
       h('div', { class: `load-grid${teamSize > 1 ? ` teams t${teamSize}` : ''}` }, ...cards),
       h('div', { class: 'load-foot' }, h('div', { class: 'load-bar' }, h('i')), h('span', { class: 'load-status' }, t('pvp.preparing')), h('p', { class: 'load-tip' }, t(tips[Math.floor(Math.random() * tips.length)]))),
     );
@@ -318,6 +338,8 @@ export class PvpScreen extends Screen {
 
     this.cd(this.slots.scan, g.scanCooldown <= 0, g.scanCooldown, PvpGame.SCAN_COOLDOWN, g.scanBlips.length > 0);
     this.scanTag.hidden = !g.scanBlips.length;
+
+    if (this.windArrow) this.windArrow.style.transform = `rotate(${Math.atan2(windAt(g.hazardTime).y, windAt(g.hazardTime).x)}rad)`;
 
     this.renderRadar();
   }

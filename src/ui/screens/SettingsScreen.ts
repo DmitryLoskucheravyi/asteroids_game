@@ -136,7 +136,10 @@ export class SettingsScreen extends Screen {
     const mouse = s.controlScheme === 'mouse';
     const scheme = this.section(
       'settings.sec.scheme',
-      this.row(t('settings.scheme'), this.seg<ControlScheme>([['keyboard', t('settings.scheme.keyboard')], ['mouse', t('settings.scheme.mouse')]], s.controlScheme, (v) => (s.controlScheme = v))),
+      this.row(t('settings.scheme'), this.seg<ControlScheme>([['mouse', t('settings.scheme.mouse')], ['keyboard', t('settings.scheme.keyboard')]], s.controlScheme, (v) => {
+        s.controlScheme = v;
+        s.controlSchemeChosen = true;
+      })),
       h('p', { class: 'muted small set-note' }, t(mouse ? 'settings.scheme.mouseHint' : 'settings.scheme.keyboardHint')),
     );
     const groups = BIND_GROUPS.map(([title, actions]) => {

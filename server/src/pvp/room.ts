@@ -1,4 +1,6 @@
 import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
+import { HazardSystem } from './hazards.js';
+import { windAt, type HazardKind } from '../shared/hazards.js';
 import { FLARE_ACTIVE_MS, FLARE_COOLDOWN_MS, hitsDecoy, nearestDecoy, rayDecoy, type FlareBurst } from '../shared/flares.js';
 import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/weapons.js';
 import { getItemDef, type ItemMeta } from '../content/items.js';
@@ -155,6 +157,8 @@ export class Room {
   private participants = new Map<string, Participant>();
   /** Учасники-люди, що зараз підʼєднані */
   private conns = new Set<string>();
+  /** Перешкоди арени: метеорити + івент режиму */
+  readonly hz: HazardSystem;
   private countdownAt = 0;
   private graceTimer: ReturnType<typeof setTimeout> | null = null;
   private obstacles: Obstacle[];
@@ -178,6 +182,17 @@ export class Room {
     private readonly hooks: RoomHooks,
   ) {
     this.id = id;
+    this.hz = new HazardSystem(mode, {
+      planes: () => [...this.participants.values()].filter((p) => p.alive),
+      obstacles: () => this.obstacles,
+      broadcast: (event, data) => this.net.broadcast(event, data),
+      envDamage: (target, damage, kind) => this.applyEnvDamage(target, damage, kind, Date.now()),
+      dropPile: (x, y, coins, crystals) => {
+        const pile: Pickup = { id: ++this.pickupSeq, kind: 'pile', x, y, coins, crystals };
+        this.pickups.set(pile.id, pile);
+        this.net.broadcast('match:pickup-spawn', pile);
+      },
+    });
     const { teamSize, roomSize } = MODE_SPEC[mode];
     this.teamSize = teamSize;
     this.teams = roomSize / teamSize;
@@ -302,6 +317,8 @@ export class Room {
       teamSize: this.teamSize,
       timeLimitMs: MATCH_TIME_LIMIT_MS,
       pickups: [...this.pickups.values()],
+      event: this.hz.event,
+      hazards: this.hz.snapshot(),
     });
     if (this.state === 'active') {
       this.net.send(pid, 'match:start', { startedAt: this.startedAt });
@@ -721,6 +738,23 @@ export class Room {
     if (died) this.checkEnd();
   }
 
+  /** Шкода від перешкод арени: без автора, фраг нікому не зараховується. */
+  private applyEnvDamage(target: Participant, damage: number, kind: HazardKind, now: number): void {
+    if (!target.alive || now < target.phaseUntil) return;
+    damage = Math.min(damage, target.maxHp * 0.5);
+    target.hp = Math.max(0, target.hp - damage);
+    target.botLastHitAt = now;
+    const died = target.hp <= 0;
+    if (died) {
+      target.alive = false;
+      target.diedAt = now;
+      target.firing = false;
+      this.dropLoot(target);
+    }
+    this.net.broadcast('match:hit', { attackerId: `hz:${kind}`, targetId: target.id, hp: target.hp, died, damage: Math.round(damage * 10) / 10 });
+    if (died) this.checkEnd();
+  }
+
   private spawnBotShot(bot: Participant, angle: number): void {
     const def = getWeaponDef(bot.weaponId) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
     const nose = { x: bot.pos.x + Math.cos(bot.angle) * 24, y: bot.pos.y + Math.sin(bot.angle) * 24 };
@@ -769,6 +803,12 @@ export class Room {
         best = d;
         hit = null;
       }
+    }
+    // перешкода арени — лише якщо вона стоїть першою на промені (тоді й отримує шкоду)
+    const hzHit = this.hz.rayHit(from.x, from.y, dx, dy, best, now - this.startedAt, damage);
+    if (hzHit) {
+      best = hzHit.dist;
+      hit = null;
     }
     if (announce) this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: from.x, y: from.y, angle, kind: 'laser', speed: 0 }));
     if (hit) this.applyDamage(bot, hit, damage, now);
@@ -832,7 +872,7 @@ export class Room {
           break;
         }
       }
-      if (intercepted) {
+      if (intercepted || this.hz.hitByProjectile(pr.x, pr.y, nx, ny, pr.damage, now - this.startedAt)) {
         pr.range = -1;
         continue;
       }
@@ -898,11 +938,22 @@ export class Room {
       if (actions.flare) this.useSkill(p, 'flare', now, p.angle);
       if (p.activeItem?.active?.kind === 'nanoRepair' && p.hp < p.maxHp * 0.5) this.useSkill(p, 'nanoRepair', now, p.angle);
     }
+    // сонячний вітер зносить і ботів (гравців — їхні клієнти)
+    if (this.hz.event === 'wind') {
+      const w = windAt(now - this.startedAt);
+      for (const p of list) {
+        if (!p.isBot || !p.alive) continue;
+        p.pos.x = Math.max(0, Math.min(WORLD_W, p.pos.x + w.x * dt));
+        p.pos.y = Math.max(0, Math.min(WORLD_H, p.pos.y + w.y * dt));
+      }
+    }
     this.recordHistory(now);
     this.flares = this.flares.filter((f) => now - f.t0 < FLARE_ACTIVE_MS + 400);
     // два підкроки з власним часом — швидкі кулі не "проскакують" крізь літаки, а ціль не "застигає"
     this.updateProjectiles(now - TICK_MS / 2);
     this.updateProjectiles(now);
+    if (this.ended) return;
+    this.hz.update(now - this.startedAt, dt);
     if (this.ended) return;
     this.collectPickups(now);
     this.broadcast('match:state', this.encoder.encode(now - this.startedAt, this.netStates(now)));

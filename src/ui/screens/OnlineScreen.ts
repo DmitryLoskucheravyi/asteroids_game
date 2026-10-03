@@ -8,10 +8,12 @@ import { getSocket } from '../../net/socket';
 import { GameLink } from '../../net/gameLink';
 import { profileLink } from '../PlayerProfile';
 import { gearSlots } from '../GearSlots';
+import { ARENA_EVENT_INFO, eventTimeLeft } from '../../game/arenaEvents';
+import { arenaEventFor } from '../../../server/src/shared/hazards';
 import { ItemsScreen } from './ItemsScreen';
 import { Sfx } from '../../core/audio';
 import { Server, type PartyMember, type PartyView } from '../../core/server';
-import { toast } from '../Modal';
+import { Modal, toast } from '../Modal';
 import type { PlaneId } from '../../game/planes';
 import type { MatchInit } from '../../net/pvpProtocol';
 import { Icons, button, h, icon } from '../dom';
@@ -38,7 +40,15 @@ export class OnlineScreen extends Screen {
 
   private modeTab(mode: Mode, ic: string, labelKey: TKey, subKey: TKey): HTMLElement {
     return button(
-      h('span', { class: 'mode-inner' }, ic.includes('viewBox="0 0 64 64"') ? h('span', { class: 'mode-emblem', html: ic }) : icon(ic, 'ico'), h('span', { class: 'mode-text' }, h('b', {}, t(labelKey)), h('small', {}, t(subKey)))),
+      h(
+        'span',
+        { class: 'mode-inner' },
+        ic.includes('viewBox="0 0 64 64"') ? h('span', { class: 'mode-emblem', html: ic }) : icon(ic, 'ico'),
+        h('span', { class: 'mode-text' }, h('b', {}, t(labelKey)), h('small', {}, t(subKey)), (() => {
+          const ev = ARENA_EVENT_INFO[arenaEventFor(mode).kind];
+          return h('span', { class: 'mode-event', style: `--ev:${ev.color}` }, icon(ev.icon, 'ico'), t(ev.nameKey));
+        })()),
+      ),
       () => {
         if (this.searching) return;
         // у групі режим перемикає лідер (і він змінюється для всіх); соло групою недоступне
@@ -257,6 +267,72 @@ export class OnlineScreen extends Screen {
     ), m.self ? null : m.publicId);
   }
 
+  /** Вікно з порожнього місця групи: запросити друга, а якщо його ще нема — додати за ID. */
+  private openSlotInvite(): void {
+    const friends = (this.partyView?.friends ?? []).filter((f) => !f.inParty).sort((a, b) => (a.status === 'offline' ? 1 : 0) - (b.status === 'offline' ? 1 : 0));
+    const invite = async (publicId: string): Promise<void> => {
+      await this.partyAct('invite', { publicId, mode: this.mode });
+      m.close();
+    };
+    const input = h('input', { type: 'text', placeholder: '#ABCD234567', maxlength: 15, 'aria-label': t('friends.searchLabel') }) as HTMLInputElement;
+    const result = h('div', { class: 'slot-invite-result' });
+    const search = async (): Promise<void> => {
+      const q = input.value.trim();
+      if (!q) return;
+      result.replaceChildren();
+      try {
+        const { player, relation } = await Server.findPlayer(q);
+        const action =
+          relation === 'friend'
+            ? button(t('party.invite'), () => void invite(player.publicId), 'btn small primary')
+            : relation === 'none' || relation === 'incoming'
+              ? button(t(relation === 'none' ? 'friends.add' : 'friends.accept'), async () => {
+                  await Server.friendAction(relation === 'none' ? 'request' : 'accept', player.publicId);
+                  Sfx.pickup();
+                  toast(t(relation === 'none' ? 'friends.requestSent' : 'friends.accepted'));
+                  m.close();
+                  void this.refreshParty();
+                }, 'btn small primary')
+              : h('span', { class: 'muted small' }, t(`friends.rel.${relation}` as TKey));
+        result.append(this.memberRow({ ...player, inParty: false }, [action]));
+      } catch {
+        result.append(h('p', { class: 'muted small' }, t('friends.notFound')));
+      }
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') void search();
+    });
+    const m = new Modal({
+      cls: 'slot-invite-modal',
+      title: t('party.slotTitle'),
+      body: [
+        h('h3', { class: 'slot-invite-h' }, t('party.inviteFriends')),
+        friends.length
+          ? h('div', { class: 'party-friend-list' }, ...friends.map((f) => this.memberRow(f, [button(t('party.invite'), () => void invite(f.publicId), 'btn small primary')])))
+          : h('p', { class: 'muted small' }, t('party.noFriendsYet')),
+        h('h3', { class: 'slot-invite-h' }, t('party.addById')),
+        h('div', { class: 'friend-search-row' }, input, button(t('friends.searchBtn'), () => void search(), 'btn primary')),
+        result,
+      ],
+      actions: [button(t('common.close'), () => m.close(), 'btn')],
+      onEscape: () => m.close(),
+    }).open();
+    input.focus();
+  }
+
+  /** Що зараз в арені цього режиму й скільки ще триватиме. */
+  private eventBanner(): HTMLElement {
+    const { kind, endsAt } = arenaEventFor(this.mode);
+    const ev = ARENA_EVENT_INFO[kind];
+    return h(
+      'section',
+      { class: 'arena-event', style: `--ev:${ev.color}` },
+      h('span', { class: 'arena-event-ico', html: ev.icon }),
+      h('div', { class: 'arena-event-text' }, h('small', {}, `${t('event.now')} · ${t(this.mode === 'casual' ? 'online.casual' : (`mode.${this.mode}` as TKey))}`), h('b', {}, t(ev.nameKey)), h('p', {}, t(ev.descKey))),
+      h('span', { class: 'arena-event-time' }, icon(Icons.clock, 'ico'), t('event.endsIn', { t: eventTimeLeft(endsAt) })),
+    );
+  }
+
   private partyBlock(): HTMLElement {
     const v = this.partyView;
     const party = v?.party ?? null;
@@ -281,9 +357,11 @@ export class OnlineScreen extends Screen {
       for (const m of party.invited) slots.push(h('div', { class: 'party-member pending' }, h('span', { class: 'party-slot-ico' }, '…'), h('div', { class: 'friend-info' }, h('b', {}, m.nickname), h('small', {}, t('party.waiting')))));
     } else slots.push(this.memberRow({ publicId: Save.data.publicId ?? '', nickname: Save.data.nickname, level: Save.data.level, plane: Save.data.plane, rankPoints: this.mode !== 'casual' ? Save.rank(this.mode as RankMode).points : 0, status: 'online', leader: true, self: true }, []));
     const filled = slots.length;
-    for (let i = filled; i < size; i++) slots.push(h('div', { class: 'party-member empty' }, h('span', { class: 'party-slot-ico' }, '+'), h('small', { class: 'muted' }, t('party.emptySlot'))));
-
     const canInvite = teamMode && leader && filled < size && party?.state !== 'searching';
+    for (let i = filled; i < size; i++) {
+      const inner = [h('span', { class: 'party-slot-ico' }, '+'), h('small', { class: 'muted' }, t(canInvite ? 'party.emptySlotInvite' : 'party.emptySlot'))];
+      slots.push(canInvite ? button(h('span', { class: 'party-empty-inner' }, ...inner), () => this.openSlotInvite(), 'party-member empty clickable') : h('div', { class: 'party-member empty' }, ...inner));
+    }
     const friends = (v?.friends ?? []).filter((f) => !f.inParty).sort((a, b) => (a.status === 'offline' ? 1 : 0) - (b.status === 'offline' ? 1 : 0));
 
     return h(
@@ -323,6 +401,7 @@ export class OnlineScreen extends Screen {
           return this.modeTab(m, rankEmblem(r.id, r.roman, m), `mode.${m}` as TKey, `mode.${m}Sub` as TKey);
         }),
       ),
+      this.eventBanner(),
       h('div', { class: `online-layout${ranked ? ' ranked' : ''}` }, h('div', { class: 'online-col' }, ranked ? this.rankCard() : null, this.loadoutCard()), ranked ? this.ladder() : h('section', { class: 'card' }, h('p', { class: 'muted' }, t('online.subtitle')))),
       h(
         'div',

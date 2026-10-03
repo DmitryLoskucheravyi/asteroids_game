@@ -64,6 +64,8 @@ export interface SaveData {
     playMode: PlayMode;
     /** Керування: клавіші (WASD / стрілки) або літак летить за курсором миші */
     controlScheme: ControlScheme;
+    /** Гравець сам обрав схему (тоді не чіпаємо її при зміні стандарту) */
+    controlSchemeChosen?: boolean;
     crosshair: CrosshairSettings;
   };
 }
@@ -122,7 +124,7 @@ const defaults = (): SaveData => ({
     volume: 0.7,
     shake: true,
     playMode: 'campaign',
-    controlScheme: 'keyboard',
+    controlScheme: 'mouse',
     crosshair: { ...DEFAULT_CROSSHAIR },
   },
 });
@@ -146,6 +148,8 @@ class SaveStore {
           ...((parsed.settings as { playMode?: string } | undefined)?.playMode === 'ranked' ? { playMode: 'solo' as const } : {}),
           // нові поля прицілу доповнюються значеннями за замовчуванням
           crosshair: { ...DEFAULT_CROSSHAIR, ...(parsed.settings?.crosshair ?? {}) },
+          // стандарт — миша; хто не обирав схему сам, переходить на неї
+          ...(parsed.settings?.controlSchemeChosen ? {} : { controlScheme: 'mouse' as const }),
         },
         stars: Array.isArray(parsed.stars) ? parsed.stars : [],
         survivalTop: Array.isArray(parsed.survivalTop) ? parsed.survivalTop : [],

@@ -6,6 +6,9 @@ import { mouseSteering, type InputState } from '../core/input';
 import { Save } from '../core/storage';
 import { drawGlow } from './fx';
 import { drawCrosshair } from './crosshair';
+import { PvpHazards } from './PvpHazards';
+import { windAt } from '../../server/src/shared/hazards';
+import { t as tr, type TKey } from '../core/i18n';
 import { drawPlane } from './PlaneArt';
 import { PVP_PROGRESS_SCALE, effectivePlaneSpec, getPlane, planeCombat, type PlaneId } from './planes';
 import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from './items';
@@ -18,6 +21,7 @@ import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, SkillSystem } from './systems/SkillSystem';
 import { DECOY_COUNT, FLARE_ACTIVE_MS, FLARE_FADE_MS, decoyPos, hitsDecoy, nearestDecoy, rayDecoy, type FlareBurst } from '../../server/src/shared/flares';
 import type { Viewport } from './Game';
+import type { Hazard } from '../../server/src/shared/hazards';
 import type { HitEvent, MatchInit, MatchResultEntry, Obstacle, PickupTaken, PickupView, PublicParticipant, ShotEvent, SkillEvent, SkillKind } from '../net/pvpProtocol';
 
 const RADAR_VISIBLE_AFTER_FIRE_MS = 1300;
@@ -114,6 +118,8 @@ export class PvpGame {
   private beams: Beam[] = [];
   /** Пастки на полі (свої й чужі) — іскри рахуються спільною формулою, як на сервері */
   private flares: FlareBurst[] = [];
+  /** Перешкоди арени (метеорити + івент режиму) */
+  hazards!: PvpHazards;
   private rings: Ring[] = [];
   private texts: FloatText[] = [];
   private readonly particles = new ParticleSystem();
@@ -161,7 +167,13 @@ export class PvpGame {
     this.skills.reset({ ...spec.feature, extraFreeze: -1 }, this.active?.cooldown ?? 0, cooldownMul);
 
     this.selfId = socket.id ?? null;
+    this.hazards = new PvpHazards(init.event ?? null, this.particles, (x, y, big) => this.explosion(x, y, big ? 1.4 : 0.6));
+    this.hazards.add(init.hazards ?? []);
     this.applyInit(init);
+    this.on('match:hz', (d: { add: Hazard[] }) => this.hazards.add(d.add));
+    this.on('match:hz-gone', (d: { id: number; x: number; y: number; boom: boolean }) => this.hazards.gone(d));
+    this.on('match:hz-sync', (d: { s: [number, number, number, number, number, number][] }) => this.hazards.sync(d.s));
+    this.on('match:hz-fuse', (d: { id: number; at: number }) => this.hazards.fuse(d));
 
     this.on('match:start', () => {
       this.state = 'active';
@@ -547,7 +559,8 @@ export class PvpGame {
       if (pos) this.explosion(pos.x, pos.y);
       Sfx.explode();
       if (isSelf) this.killerId = h.attackerId;
-      this.onFeed(`${attacker?.nickname ?? '?'}  ✕  ${target?.nickname ?? '?'}`, isSelf || h.attackerId === this.selfId ? 'self' : 'kill');
+      const by = h.attackerId.startsWith('hz:') ? `☄ ${tr(`pvp.hz.${h.attackerId.slice(3)}` as TKey)}` : attacker?.nickname ?? '?';
+      this.onFeed(`${by}  ✕  ${target?.nickname ?? '?'}`, isSelf || h.attackerId === this.selfId ? 'self' : 'kill');
     }
   }
 
@@ -643,6 +656,11 @@ export class PvpGame {
       p.vel.set(Math.cos(p.angle) * this.speed, Math.sin(p.angle) * this.speed);
       p.pos.add(p.vel, dt);
       this.aim = p.angle;
+    }
+    if (this.hazards.event === 'wind' && this.state === 'active') {
+      const w = windAt(this.hazardTime);
+      p.pos.x = clamp(p.pos.x + w.x * dt, 0, this.worldW);
+      p.pos.y = clamp(p.pos.y + w.y * dt, 0, this.worldH);
     }
     this.collide();
 
@@ -759,6 +777,11 @@ export class PvpGame {
     return false;
   }
 
+  /** Час перешкод — мс від старту матчу за годинником сервера */
+  get hazardTime(): number {
+    return this.serverClock.ready ? this.serverClock.now() : 0;
+  }
+
   /** Час для пасток (мс, годинник клієнта) */
   private get flareNow(): number {
     return this.clock * 1000;
@@ -790,7 +813,7 @@ export class PvpGame {
         pr.kill();
         continue;
       }
-      if (this.intercepted(this.selfId, pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y)) {
+      if (this.intercepted(this.selfId, pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y) || this.hazards.blocks(pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y, this.hazardTime)) {
         pr.kill();
         continue;
       }
@@ -815,7 +838,7 @@ export class PvpGame {
         pr.kill();
         continue;
       }
-      if (this.intercepted(pr.ownerId, pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y)) {
+      if (this.intercepted(pr.ownerId, pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y) || this.hazards.blocks(pr.pos.x - pr.vel.x * dt, pr.pos.y - pr.vel.y * dt, pr.pos.x, pr.pos.y, this.hazardTime)) {
         pr.kill();
         continue;
       }
@@ -876,7 +899,7 @@ export class PvpGame {
       const mx = m.pos.x;
       const my = m.pos.y;
       m.pos.add(Vec2.fromAngle(m.angle), MISSILE_SPEED * dt);
-      if (this.intercepted(m.ownerId, mx, my, m.pos.x, m.pos.y)) {
+      if (this.intercepted(m.ownerId, mx, my, m.pos.x, m.pos.y) || this.hazards.blocks(mx, my, m.pos.x, m.pos.y, this.hazardTime)) {
         m.life = 0;
         this.explosion(m.pos.x, m.pos.y, 0.3);
         continue;
@@ -1080,6 +1103,7 @@ export class PvpGame {
 
     this.renderWorldBounds(ctx, w, h);
     this.renderObstacles(ctx);
+    this.hazards.renderBodies(ctx, this.hazardTime, this.clock, { l: this.cameraX - this.width / 2 - 200, r: this.cameraX + this.width / 2 + 200, t: this.cameraY - this.height / 2 - 200, b: this.cameraY + this.height / 2 + 200 });
     this.renderPickups(ctx);
 
     for (const f of this.flares) {
@@ -1165,6 +1189,13 @@ export class PvpGame {
     }
     ctx.globalAlpha = 1;
 
+    ctx.restore();
+
+    // туман: видно лише коло навколо свого літака; попередження й міни світять крізь нього
+    if (this.hazards.event === 'fog') PvpHazards.renderFog(ctx, w, h, this.selfAlive ? ox + this.player.pos.x : w / 2, this.selfAlive ? oy + this.player.pos.y : h / 2);
+    ctx.save();
+    ctx.translate(ox, oy);
+    this.hazards.renderWarnings(ctx, this.hazardTime, this.clock);
     ctx.restore();
 
     if (this.state === 'countdown' && this.countdownLeft > 0) {

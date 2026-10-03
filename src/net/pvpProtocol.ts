@@ -1,3 +1,4 @@
+import type { ArenaEvent, Hazard } from '../../server/src/shared/hazards';
 // Дзеркалить server/src/pvp/types.ts (публічна частина).
 export interface Vec {
   x: number;
@@ -63,6 +64,9 @@ export interface MatchInit {
   mode?: 'casual' | 'solo' | 'duo' | 'trio' | 'squad';
   teamSize?: number;
   pickups: PickupView[];
+  /** Івент режиму й перешкоди, що вже на полі */
+  event?: ArenaEvent;
+  hazards?: Hazard[];
 }
 
 export interface ShotEvent {
