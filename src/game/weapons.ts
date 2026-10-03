@@ -26,6 +26,10 @@ export interface WeaponDef {
   range?: number;
   /** Залп — скільки ракет за один постріл */
   salvo?: number;
+  /** Дробовик: стільки куль за один постріл */
+  pellets?: number;
+  /** Особливий вигляд пострілу (фізика — за kind) */
+  visual?: 'pellet' | 'plasma' | 'rail';
   /** 0 — стартова зброя, доступна всім безкоштовно */
   price: number;
 }
@@ -59,6 +63,24 @@ export const WEAPON_DEFS: readonly WeaponDef[] = [
     burst: { shots: 48, cooldown: 2.4 },
     price: 1200,
   },
+  {
+    id: 'scatter_gun',
+    kind: 'bullet',
+    nameKey: 'weapon.scatterGun',
+    descKey: 'weaponDesc.scatterGun',
+    fireRate: 1.6,
+    projectileSpeed: 1000,
+    damage: 3.2,
+    ammo: 6,
+    reloadTime: 2.2,
+    spread: 0.17,
+    pellets: 6,
+    range: 560,
+    visual: 'pellet',
+    price: 1500,
+  },
+  { id: 'plasma_cannon', kind: 'rocket', nameKey: 'weapon.plasmaCannon', descKey: 'weaponDesc.plasmaCannon', fireRate: 3, projectileSpeed: 640, damage: 15, splashRadius: 70, ammo: 12, reloadTime: 2.4, visual: 'plasma', price: 2100 },
+  { id: 'railgun', kind: 'laser', nameKey: 'weapon.railgun', descKey: 'weaponDesc.railgun', fireRate: 0.75, projectileSpeed: 0, damage: 27, range: 1100, ammo: 3, reloadTime: 2.8, visual: 'rail', price: 2600 },
   { id: 'homing_salvo', kind: 'missile', nameKey: 'weapon.homingSalvo', descKey: 'weaponDesc.homingSalvo', fireRate: 1.5, projectileSpeed: 520, damage: 11, salvo: 3, ammo: 4, reloadTime: 3.2, price: 1800 },
 ];
 

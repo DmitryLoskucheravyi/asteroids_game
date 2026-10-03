@@ -58,10 +58,14 @@ export const ITEM_DEFS: readonly ItemDef[] = [
   { id: 'overclock_core', slot: 'passive', rarity: 'mythic', nameKey: 'item.overclockCore', descKey: 'itemDesc.overclockCore', feature: { jumpCooldownMul: 0.9 }, combat: { damage: 0.1, fireRate: 0.1, cooldown: 0.1 }, price: 4200, color: '#ff4fa8' },
   { id: 'phoenix_heart', slot: 'passive', rarity: 'legendary', nameKey: 'item.phoenixHeart', descKey: 'itemDesc.phoenixHeart', feature: { extraLives: 1, startShield: true }, combat: { damage: 0.15, hp: 30 }, price: 7500, color: '#ffc23a' },
   // ---- активи ----
+  { id: 'gyro_stabilizer', slot: 'passive', rarity: 'rare', nameKey: 'item.gyroStabilizer', descKey: 'itemDesc.gyroStabilizer', feature: { jumpCooldownMul: 0.95 }, combat: { damage: 0.06, speed: 0.05, fireRate: 0.06 }, price: 1100, color: '#7fe0ff' },
+  { id: 'reactive_armor', slot: 'passive', rarity: 'epic', nameKey: 'item.reactiveArmor', descKey: 'itemDesc.reactiveArmor', feature: { startShield: true }, combat: { damage: 0.06, hp: 25, cooldown: 0.05 }, price: 2600, color: '#ff9a3a' },
   { id: 'nano_repair', slot: 'active', rarity: 'common', nameKey: 'item.nanoRepair', descKey: 'itemDesc.nanoRepair', active: { kind: 'nanoRepair', cooldown: 24, power: 18 }, combat: { damage: 0.04 }, price: 380, color: '#4fe08a' },
   { id: 'emp_pulse', slot: 'active', rarity: 'rare', nameKey: 'item.empPulse', descKey: 'itemDesc.empPulse', active: { kind: 'emp', cooldown: 16, duration: 2.5, radius: 260, power: 20 }, combat: { damage: 0.06 }, price: 1000, color: '#9fe3ff' },
   { id: 'decoy_flare', slot: 'active', rarity: 'epic', nameKey: 'item.phaseShift', descKey: 'itemDesc.phaseShift', active: { kind: 'phase', cooldown: 18, duration: 2 }, combat: { damage: 0.08 }, price: 2400, color: '#c9a7ff' },
   { id: 'overdrive', slot: 'active', rarity: 'mythic', nameKey: 'item.overdrive', descKey: 'itemDesc.overdrive', active: { kind: 'overdrive', cooldown: 22, duration: 4 }, combat: { damage: 0.1 }, price: 4500, color: '#ff5a3a' },
+  { id: 'repair_drone', slot: 'active', rarity: 'rare', nameKey: 'item.repairDrone', descKey: 'itemDesc.repairDrone', active: { kind: 'nanoRepair', cooldown: 28, power: 28 }, combat: { damage: 0.05 }, price: 1200, color: '#6aff9a' },
+  { id: 'storm_core', slot: 'active', rarity: 'mythic', nameKey: 'item.stormCore', descKey: 'itemDesc.stormCore', active: { kind: 'emp', cooldown: 20, duration: 3, radius: 340, power: 26 }, combat: { damage: 0.1 }, price: 4800, color: '#b48aff' },
   { id: 'missile_swarm', slot: 'active', rarity: 'legendary', nameKey: 'item.missileSwarm', descKey: 'itemDesc.missileSwarm', active: { kind: 'swarm', cooldown: 24, power: 10 }, combat: { damage: 0.12 }, price: 8000, color: '#ffd24a' },
 ];
 

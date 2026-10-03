@@ -21,6 +21,10 @@ export class Projectile extends Entity {
     /** Ворожий снаряд (PvP) — інший колір трасера */
     readonly hostile = false,
     readonly ownerId: string | null = null,
+    /** Своя дальність (дробовик б'є недалеко) */
+    private readonly range?: number,
+    /** Особливий вигляд: дріб або згусток плазми */
+    readonly style?: 'pellet' | 'plasma',
   ) {
     super(pos, Vec2.fromAngle(angle, speed), kind === 'rocket' ? 6 : 2.5);
     this.angle = angle;
@@ -30,14 +34,16 @@ export class Projectile extends Entity {
     const step = this.vel.length() * dt;
     this.traveled += step;
     this.pos.add(this.vel, dt);
-    if (this.traveled > RANGE[this.kind] || this.isOutside(world.width, world.height, 40)) this.kill();
+    if (this.traveled > (this.range ?? RANGE[this.kind]) || this.isOutside(world.width, world.height, 40)) this.kill();
   }
 
   render(ctx: CanvasRenderingContext2D, time: number): void {
     ctx.save();
     ctx.translate(this.pos.x, this.pos.y);
     ctx.rotate(this.angle + Math.PI / 2);
-    if (this.kind === 'bullet') this.renderBullet(ctx, time);
+    if (this.style === 'plasma') this.renderPlasma(ctx, time);
+    else if (this.style === 'pellet') this.renderPellet(ctx);
+    else if (this.kind === 'bullet') this.renderBullet(ctx, time);
     else this.renderRocket(ctx, time);
     ctx.restore();
   }
@@ -91,6 +97,49 @@ export class Projectile extends Entity {
     ctx.fillStyle = `rgb(${core})`;
     ctx.beginPath();
     ctx.ellipse(0, -1, w * 0.85, 3.2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /** Дріб: дрібна гаряча кулька з коротким слідом. */
+  private renderPellet(ctx: CanvasRenderingContext2D): void {
+    const c = this.hostile ? '255,120,90' : '255,210,120';
+    const g = ctx.createLinearGradient(0, 0, 0, 12);
+    g.addColorStop(0, `rgba(${c},0.8)`);
+    g.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(-1, 0, 2, 12);
+    ctx.fillStyle = '#fff6e0';
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /** Плазма: пульсуючий блакитний згусток із ореолом і шлейфом. */
+  private renderPlasma(ctx: CanvasRenderingContext2D, time: number): void {
+    const c = this.hostile ? '255,90,160' : '90,220,255';
+    const pulse = 1 + Math.sin(time * 30 + this.pos.x * 0.02) * 0.15;
+    ctx.globalCompositeOperation = 'lighter';
+    const tail = ctx.createLinearGradient(0, 0, 0, 26);
+    tail.addColorStop(0, `rgba(${c},0.6)`);
+    tail.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = tail;
+    ctx.beginPath();
+    ctx.moveTo(-5, 0);
+    ctx.lineTo(5, 0);
+    ctx.lineTo(0, 26);
+    ctx.closePath();
+    ctx.fill();
+    const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, 13 * pulse);
+    halo.addColorStop(0, `rgba(${c},0.75)`);
+    halo.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(0, 0, 13 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#f0fcff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
     ctx.fill();
   }
 

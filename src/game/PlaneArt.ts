@@ -431,6 +431,84 @@ function phoenixAnim(t: number): Part[] {
   return pts;
 }
 
+
+/** Гадюка — вузький зелений перехоплювач: довгий ніс, передні кріла (канарди), стріловидні крила. */
+function viperParts(): Part[] {
+  const green = '#3fae3a';
+  const wingL = [-4, -2, -24, 14, -26, 19, -16, 18, -4, 12];
+  const canardL = [-3.4, -17, -11, -11, -11, -8, -3.6, -11];
+  const finL = [-3, 17, -10, 27, -7, 29, -2.5, 24];
+  const hull = sym([0, -33, -2, -24, -3.6, -8, -4.4, 12, -3.4, 26, -1.6, 29]);
+  return [
+    poly(wingL, shade(green, -0.12)),
+    poly(mirror(wingL), shade(green, -0.12)),
+    poly(finL, shade(green, -0.32)),
+    poly(mirror(finL), shade(green, -0.32)),
+    poly(canardL, shade(green, -0.22)),
+    poly(mirror(canardL), shade(green, -0.22)),
+    poly(hull, green),
+    rect(-0.8, -4, 1.6, 26, '#1d4a1b', true),
+    rect(-22, 13, 6, 2, '#d8ffb0', true),
+    rect(16, 13, 6, 2, '#d8ffb0', true),
+    nozzle(0, 29, 4, 2.6),
+    ...canopy(0, -14, 2.4, 6.5, '#b8ff7a'),
+  ];
+}
+function viperAnim(t: number): Part[] {
+  return [...navLights(25, 17, t), flicker(0, 29.5, 2.6, 1.8, t, '#e8ffb0', '#6adc2a')];
+}
+
+/** Бастіон — широка броньована "коробка": сталь і помаранчеві броньовані пілони, два двигуни. */
+function bastionParts(): Part[] {
+  const steel = '#7a8296';
+  const orange = '#e8742a';
+  const wingL = [-10, -8, -30, -2, -32, 14, -24, 20, -10, 18];
+  const hull = sym([0, -28, -6, -25, -11, -14, -12, 18, -9, 27, -4, 29]);
+  return [
+    poly(wingL, shade(steel, -0.15)),
+    poly(mirror(wingL), shade(steel, -0.15)),
+    rect(-32, -4, 4.5, 17, orange),
+    rect(27.5, -4, 4.5, 17, orange),
+    rect(-24, 3, 10, 4, '#2a2d38', true),
+    rect(14, 3, 10, 4, '#2a2d38', true),
+    poly(hull, steel),
+    rect(-7, -6, 14, 22, shade(steel, -0.3), true),
+    rect(-7, -6, 14, 3, orange, true),
+    rect(-7, 8, 14, 2, orange, true),
+    rect(-9.5, 26, 6.5, 4, '#2a2d38', true),
+    rect(3, 26, 6.5, 4, '#2a2d38', true),
+    ...canopy(0, -17, 4.4, 4.8, '#ffb070'),
+  ];
+}
+function bastionAnim(t: number): Part[] {
+  return [...navLights(30, -5, t), flicker(-6.2, 30.5, 3.8, 2, t, '#ffe0b0', '#ff7a2a'), flicker(6.2, 30.5, 3.8, 2, t, '#ffe0b0', '#ff7a2a')];
+}
+
+/** Нова — біло-фіолетовий зоряний перехоплювач: крила вперед і енергетичне ядро, що пульсує. */
+function novaParts(): Part[] {
+  const violet = '#7a4ae8';
+  const white = '#e8eeff';
+  const wingL = [-4, 2, -30, -7, -27, 4, -14, 12, -5, 14];
+  const tailL = [-4, 16, -16, 22, -15, 27, -4, 24];
+  const hull = sym([0, -32, -3, -22, -5, -6, -5, 20, -3.4, 28]);
+  return [
+    poly(tailL, shade(violet, -0.25)),
+    poly(mirror(tailL), shade(violet, -0.25)),
+    poly(wingL, violet),
+    poly(mirror(wingL), violet),
+    poly([-29, -6.4, -24, -4.6, -25, -1, -28.5, -1.8], white, true),
+    poly(mirror([-29, -6.4, -24, -4.6, -25, -1, -28.5, -1.8]), white, true),
+    poly(hull, white),
+    poly(sym([0, -6, -3, 0, -3, 12, 0, 16]), shade(violet, -0.1), true),
+    nozzle(0, 28, 5, 2.8),
+    ...canopy(0, -16, 2.6, 6, '#c8a8ff'),
+  ];
+}
+function novaAnim(t: number): Part[] {
+  const r = 2.2 + Math.sin(t * 6) * 0.6;
+  return [...navLights(28, -5, t), ellipse(0, 5, r, r, '#ffd8ff', true), flicker(0, 28.5, 3, 2, t, '#f0e0ff', '#a06aff')];
+}
+
 const SHIPS: Record<PlaneId, ShipDef> = {
   falcon: { parts: falconParts(), anim: falconAnim },
   phantom: { parts: phantomParts(), anim: phantomAnim },
@@ -440,8 +518,11 @@ const SHIPS: Record<PlaneId, ShipDef> = {
   swift: { parts: swiftParts(), anim: swiftAnim },
   titan: { parts: titanParts(), anim: titanAnim },
   chronos: { parts: chronosParts(), anim: chronosAnim },
+  viper: { parts: viperParts(), anim: viperAnim },
   thunder: { parts: thunderParts(), anim: thunderAnim },
+  bastion: { parts: bastionParts(), anim: bastionAnim },
   ufo: { parts: ufoParts(), anim: ufoAnim },
+  nova: { parts: novaParts(), anim: novaAnim },
   phoenix: { parts: phoenixParts(), anim: phoenixAnim },
 };
 

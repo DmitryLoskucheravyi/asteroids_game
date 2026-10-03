@@ -84,7 +84,8 @@ export interface ShotEvent {
   x: number;
   y: number;
   angle: number;
-  kind: 'bullet' | 'rocket' | 'missile' | 'laser';
+  /** Фізика (bullet/rocket/missile/laser) або особливий вигляд (дріб, плазма, рейка) */
+  kind: 'bullet' | 'rocket' | 'missile' | 'laser' | 'pellet' | 'plasma' | 'rail';
   speed: number;
 }
 

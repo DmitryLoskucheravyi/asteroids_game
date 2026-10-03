@@ -7,6 +7,8 @@ export interface OwnedItem {
   id: string;
   defId: string;
   rarity: ItemRarity;
+  /** Рівень прокачки 1..5 */
+  level?: number;
 }
 
 export interface Loadout {
@@ -50,6 +52,8 @@ export interface SaveData {
   items: OwnedItem[];
   loadouts: Loadout[];
   ownedWeapons: string[];
+  /** Рівні прокачки зброї: id → 1..5 */
+  weaponLevels: Record<string, number>;
   ranked: RankedView;
   /** Рейтинг кожного режиму (соло, дуо, тріо, сквад) */
   rankedModes: Partial<Record<'solo' | 'duo' | 'trio' | 'squad', RankedView>>;
@@ -114,6 +118,7 @@ const defaults = (): SaveData => ({
   items: [],
   loadouts: [],
   ownedWeapons: ['machine_gun'],
+  weaponLevels: {},
   ranked: { points: 0, best: 0, matches: 0, wins: 0 },
   rankedModes: {},
   stats: null,
@@ -204,6 +209,7 @@ class SaveStore {
       items: p.items,
       loadouts: p.loadouts,
       ownedWeapons: p.ownedWeapons,
+      weaponLevels: p.weaponLevels ?? {},
       ranked: p.ranked ?? { points: 0, best: 0, matches: 0, wins: 0 },
       stats: p.stats ?? null,
       publicId: p.publicId ?? null,
@@ -276,6 +282,10 @@ class SaveStore {
 
   ownsWeapon(id: string): boolean {
     return this.data.ownedWeapons.includes(id);
+  }
+
+  weaponLevel(id: string | null | undefined): number {
+    return (id && this.data.weaponLevels?.[id]) || 1;
   }
 
   itemById(id: string | null): OwnedItem | undefined {

@@ -56,9 +56,10 @@ export function serializeProfile(user: HydratedDocument<UserDoc>) {
     // рідкість завжди береться з визначення предмета (старі записи могли мати довільну)
     items: user.items
       .filter((it) => getItemDef(it.defId))
-      .map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: getItemDef(it.defId)!.rarity })),
+      .map((it) => ({ id: (it as unknown as { _id: { toString(): string } })._id.toString(), defId: it.defId, rarity: getItemDef(it.defId)!.rarity, level: it.level ?? 1 })),
     loadouts: user.loadouts,
     ownedWeapons: user.ownedWeapons,
+    weaponLevels: (user.weaponLevels ?? {}) as Record<string, number>,
     rankedModes: serializeRankedModes(user),
     stats: serializeStats(user),
     ranked: {

@@ -27,10 +27,14 @@ export const ITEM_DEFS: readonly ItemMeta[] = [
   { id: 'nano_coating', slot: 'passive', rarity: 'epic', price: 2200, combat: { damage: 0.12, hp: 20 } },
   { id: 'overclock_core', slot: 'passive', rarity: 'mythic', price: 4200, combat: { damage: 0.1, fireRate: 0.1, cooldown: 0.1 } },
   { id: 'phoenix_heart', slot: 'passive', rarity: 'legendary', price: 7500, combat: { damage: 0.15, hp: 30 } },
+  { id: 'gyro_stabilizer', slot: 'passive', rarity: 'rare', price: 1100, combat: { damage: 0.06, speed: 0.05, fireRate: 0.06 } },
+  { id: 'reactive_armor', slot: 'passive', rarity: 'epic', price: 2600, combat: { damage: 0.06, hp: 25, cooldown: 0.05 } },
   { id: 'nano_repair', slot: 'active', rarity: 'common', combat: { damage: 0.04 }, price: 380, active: { kind: 'nanoRepair', cooldown: 24, power: 18 } },
   { id: 'emp_pulse', slot: 'active', rarity: 'rare', combat: { damage: 0.06 }, price: 1000, active: { kind: 'emp', cooldown: 16, duration: 2.5, radius: 260, power: 20 } },
   { id: 'decoy_flare', slot: 'active', rarity: 'epic', combat: { damage: 0.08 }, price: 2400, active: { kind: 'phase', cooldown: 18, duration: 2 } },
   { id: 'overdrive', slot: 'active', rarity: 'mythic', combat: { damage: 0.1 }, price: 4500, active: { kind: 'overdrive', cooldown: 22, duration: 4 } },
+  { id: 'repair_drone', slot: 'active', rarity: 'rare', combat: { damage: 0.05 }, price: 1200, active: { kind: 'nanoRepair', cooldown: 28, power: 28 } },
+  { id: 'storm_core', slot: 'active', rarity: 'mythic', combat: { damage: 0.1 }, price: 4800, active: { kind: 'emp', cooldown: 20, duration: 3, radius: 340, power: 26 } },
   { id: 'missile_swarm', slot: 'active', rarity: 'legendary', combat: { damage: 0.12 }, price: 8000, active: { kind: 'swarm', cooldown: 24, power: 10 } },
 ];
 

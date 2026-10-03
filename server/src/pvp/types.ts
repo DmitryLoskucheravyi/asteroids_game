@@ -36,6 +36,8 @@ export interface Participant {
   tier: number;
   level: number;
   weaponId: string;
+  /** Рівень прокачки зброї (боти — 1) */
+  weaponLevel?: number;
   activeItem: ItemMeta | null;
   passiveItem: ItemMeta | null;
   damageMul: number;

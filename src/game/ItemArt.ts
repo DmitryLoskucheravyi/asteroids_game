@@ -62,6 +62,30 @@ const ART: Record<string, (c: string) => string> = {
     <path d="M32 44 48 22" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
     <circle cx="32" cy="44" r="6" fill="${c}" stroke="#0b0a18" stroke-width="2.5"/>
     <path d="M14 54h36" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`,
+  gyro_stabilizer: (c) => `
+    <circle cx="32" cy="32" r="20" fill="#1a1c34" stroke="#0b0a18" stroke-width="2.5"/>
+    <ellipse cx="32" cy="32" rx="20" ry="7" fill="none" stroke="${c}" stroke-width="4" transform="rotate(30 32 32)"/>
+    <ellipse cx="32" cy="32" rx="20" ry="7" fill="none" stroke="#e8ecf5" stroke-width="3" transform="rotate(-40 32 32)"/>
+    <circle cx="32" cy="32" r="6" fill="${c}" stroke="#0b0a18" stroke-width="2.5"/>
+    <circle cx="32" cy="32" r="2" fill="#fff"/>`,
+  reactive_armor: (c) => `
+    <path d="M32 6 54 14v16c0 14-10 24-22 28C20 54 10 44 10 30V14z" fill="#5a6280" stroke="#0b0a18" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M32 12 48 18v12c0 10-7 18-16 21-9-3-16-11-16-21V18z" fill="${c}" stroke="#0b0a18" stroke-width="2"/>
+    ${[22, 32, 42].map((x) => `<rect x="${x - 4}" y="24" width="8" height="8" fill="#ffd8a8" stroke="#0b0a18" stroke-width="1.5"/>`).join('')}
+    <rect x="28" y="35" width="8" height="8" fill="#ffd8a8" stroke="#0b0a18" stroke-width="1.5"/>`,
+  repair_drone: (c) => `
+    <path d="M10 22h14M40 22h14" stroke="#9aa6c0" stroke-width="3" stroke-linecap="round"/>
+    <ellipse cx="17" cy="20" rx="8" ry="2.5" fill="${c}" opacity=".7"/>
+    <ellipse cx="47" cy="20" rx="8" ry="2.5" fill="${c}" opacity=".7"/>
+    <rect x="20" y="22" width="24" height="16" rx="5" fill="#e8ecf5" stroke="#0b0a18" stroke-width="2.5"/>
+    <path d="M32 26v8M28 30h8" stroke="${c}" stroke-width="3" stroke-linecap="round"/>
+    <path d="M26 38l-4 10M38 38l4 10" stroke="#5a6280" stroke-width="3" stroke-linecap="round"/>
+    <path d="M32 44v8" stroke="${c}" stroke-width="2" stroke-dasharray="2 3"/>`,
+  storm_core: (c) => `
+    <circle cx="32" cy="32" r="24" fill="none" stroke="${c}" stroke-width="2" stroke-dasharray="4 5" opacity=".7"/>
+    <circle cx="32" cy="32" r="15" fill="#2a1f45" stroke="#0b0a18" stroke-width="2.5"/>
+    <circle cx="32" cy="32" r="11" fill="${c}" opacity=".35"/>
+    <path d="M35 18l-9 15h7l-4 13 11-17h-7z" fill="#fff4b0" stroke="#0b0a18" stroke-width="2" stroke-linejoin="round"/>`,
   missile_swarm: (c) => `
     ${[
       [14, 40, -20],
@@ -98,6 +122,26 @@ const WEAPON_ART: Record<string, string> = {
     <path d="M50 32h12" stroke="#ff5ad0" stroke-width="4" stroke-linecap="round"/>
     <path d="M50 32h12" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
     <path d="M14 39v10h8V39" fill="#2a1f45" stroke="#0b0a18" stroke-width="2.5"/>`,
+  scatter_gun: `
+    <rect x="6" y="27" width="30" height="12" rx="3" fill="#6a4a30" stroke="#0b0a18" stroke-width="2.5"/>
+    <rect x="34" y="25" width="16" height="8" fill="#9aa6c0" stroke="#0b0a18" stroke-width="2.5"/>
+    <rect x="34" y="33" width="16" height="6" fill="#7a86a0" stroke="#0b0a18" stroke-width="2.5"/>
+    <path d="M12 39v10h9V39" fill="#4a3220" stroke="#0b0a18" stroke-width="2.5"/>
+    ${[[56, 22], [59, 28], [60, 34], [58, 40], [55, 45]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2" fill="#ffd24a"/>`).join('')}`,
+  plasma_cannon: `
+    <rect x="6" y="24" width="34" height="16" rx="6" fill="#2a3a5a" stroke="#0b0a18" stroke-width="2.5"/>
+    <rect x="12" y="28" width="18" height="8" rx="4" fill="#58d2ff" opacity=".85"/>
+    <path d="M40 26h10l4 6-4 6H40z" fill="#9aa6c0" stroke="#0b0a18" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="58" cy="32" r="5" fill="#9fe3ff" stroke="#58d2ff" stroke-width="2"/>
+    <path d="M16 40v10h8V40" fill="#1f2a45" stroke="#0b0a18" stroke-width="2.5"/>`,
+  railgun: `
+    <rect x="4" y="27" width="22" height="12" rx="3" fill="#3a4060" stroke="#0b0a18" stroke-width="2.5"/>
+    <rect x="24" y="24" width="34" height="5" fill="#c8d0e0" stroke="#0b0a18" stroke-width="2"/>
+    <rect x="24" y="35" width="34" height="5" fill="#c8d0e0" stroke="#0b0a18" stroke-width="2"/>
+    <path d="M26 32h34" stroke="#7fe0ff" stroke-width="3"/>
+    <path d="M26 32h34" stroke="#fff" stroke-width="1"/>
+    ${[30, 38, 46].map((x) => `<rect x="${x}" y="29" width="3" height="6" fill="#7fe0ff"/>`).join('')}
+    <path d="M10 39v10h8V39" fill="#262a40" stroke="#0b0a18" stroke-width="2.5"/>`,
   homing_salvo: `
     <rect x="8" y="30" width="40" height="18" rx="3" fill="#3a4a5a" stroke="#0b0a18" stroke-width="2.5"/>
     ${[14, 24, 34]

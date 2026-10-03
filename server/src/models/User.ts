@@ -37,6 +37,8 @@ const PlaneProgressSchema = new Schema(
 const OwnedItemSchema = new Schema({
   defId: { type: String, required: true },
   rarity: { type: String, enum: ['common', 'rare', 'epic', 'mythic', 'legendary'], required: true },
+  /** Рівень прокачки предмета 1..5 */
+  level: { type: Number, default: 1 },
 });
 
 const LoadoutSchema = new Schema(
@@ -119,6 +121,8 @@ const UserSchema = new Schema({
   items: { type: [OwnedItemSchema], default: [] },
   loadouts: { type: [LoadoutSchema], default: [] },
   ownedWeapons: { type: [String], default: ['machine_gun'] },
+  /** Рівні прокачки зброї: weaponId → 1..5 */
+  weaponLevels: { type: Schema.Types.Mixed, default: {} },
 
   /** Рейтинговий режим */
   rankPoints: { type: Number, default: 0 },

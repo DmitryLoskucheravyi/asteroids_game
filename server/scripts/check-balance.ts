@@ -3,6 +3,7 @@ import { RP_BY_PLACE, botStrength, MAX_DIVISION_INDEX, RP_PER_DIVISION } from '.
 import { PLANE_IDS, PLANE_PRICES, levelUpCost, tierUpCost, upgradeRate, MAX_TIER, MAX_LEVEL_IN_TIER, planeCombat } from '../src/content/planes.js';
 import { ITEM_DEFS } from '../src/content/items.js';
 import { WEAPON_DEFS } from '../src/content/weapons.js';
+import { MAX_GEAR_LEVEL, itemHpMul, weaponDamageMul } from '../src/shared/gear.js';
 import { PASS_TIERS } from '../src/content/pass.js';
 
 let failed = 0;
@@ -45,7 +46,7 @@ const pi = (id: string, tier: number, level: number) => {
   return c.hp * c.damageMul;
 };
 // EPI зі звіту: HP × урон ÷ (хітбокс / 15) — малий хітбокс теж є живучістю
-const HITBOX: Record<string, number> = { falcon: 15, phantom: 13, blaze: 16, wasp: 11, collector: 16, swift: 14, titan: 17, chronos: 14, thunder: 15, ufo: 15, phoenix: 14 };
+const HITBOX: Record<string, number> = { falcon: 15, phantom: 13, blaze: 16, wasp: 11, collector: 16, swift: 14, titan: 17, chronos: 14, viper: 13, thunder: 15, bastion: 17, ufo: 15, nova: 14, phoenix: 14 };
 const fresh = PLANE_IDS.map((id) => pi(id, 1, 1) / (HITBOX[id] / 15));
 check('Розкид свіжих літаків (EPI) ≤ 1.3×', Math.max(...fresh) / Math.min(...fresh) <= 1.3, (Math.max(...fresh) / Math.min(...fresh)).toFixed(2));
 
@@ -59,11 +60,13 @@ check('Сумарна скорострільність ≤ +80%', maxFire <= 0.8
 
 // розрив новачок / повна збірка в PvP
 const maxPlane = planeCombat('phoenix', 4, 4);
-const fullPi = (maxPlane.hp + 30) * maxPlane.damageMul * (1 + maxDmg);
+// повна збірка: прокачані на максимум зброя (урон) і пасив (HP)
+const maxItemHp = Math.max(...passives.map((p) => p.combat?.hp ?? 0)) * itemHpMul(MAX_GEAR_LEVEL);
+const fullPi = (maxPlane.hp + maxItemHp) * maxPlane.damageMul * (1 + maxDmg) * weaponDamageMul(MAX_GEAR_LEVEL);
 check('Розрив новачок/максимум ≤ 3×', fullPi / pi('falcon', 1, 1) <= 3, (fullPi / pi('falcon', 1, 1)).toFixed(2));
 
 // зброя: одне влучання ≤ 50% HP найслабшого літака забезпечує кап на сервері; перевіряємо, що без капу ракета не перевищує 100%
-const maxHit = Math.max(...WEAPON_DEFS.map((w) => w.damage)) * maxPlane.damageMul * (1 + maxDmg);
+const maxHit = Math.max(...WEAPON_DEFS.map((w) => w.damage)) * maxPlane.damageMul * (1 + maxDmg) * weaponDamageMul(MAX_GEAR_LEVEL);
 check('Найсильніше влучання < найменшого HP (до капу 50%)', maxHit < Math.min(...PLANE_IDS.map((id) => planeCombat(id, 1, 1).hp)), maxHit.toFixed(1));
 
 // пропуск

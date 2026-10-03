@@ -1,4 +1,5 @@
 import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
+import { clampLevel, itemBonusMul, itemCooldownMul, itemHpMul, itemPowerMul, weaponDamageMul } from '../shared/gear.js';
 import { HazardSystem } from './hazards.js';
 import { driftPos, obstacleHp, windAt, type HazardKind } from '../shared/hazards.js';
 import { FLARE_ACTIVE_MS, FLARE_COOLDOWN_MS, hitsDecoy, nearestDecoy, rayDecoy, type FlareBurst } from '../shared/flares.js';
@@ -54,6 +55,10 @@ export interface Entrant {
   level: number;
   activeDefId: string | null;
   passiveDefId: string | null;
+  /** Рівні прокачки (1..5) */
+  weaponLevel?: number;
+  activeLevel?: number;
+  passiveLevel?: number;
   rankPoints: number;
   /** Група (паті): усі її учасники потрапляють в одну команду */
   groupId?: string | null;
@@ -151,6 +156,25 @@ function makeParticipant(base: Pick<Participant, 'id' | 'userId' | 'isBot' | 'ni
   };
 }
 
+/** Предмет із урахуванням рівня прокачки (бонус урону не змінюється — кап балансу). */
+function scaleItem(meta: ItemMeta | undefined, level: number | undefined): ItemMeta | null {
+  if (!meta) return null;
+  const l = clampLevel(level);
+  if (l === 1) return meta;
+  const c = meta.combat;
+  return {
+    ...meta,
+    combat: c && {
+      ...c,
+      hp: c.hp !== undefined ? Math.round(c.hp * itemHpMul(l)) : undefined,
+      speed: c.speed !== undefined ? c.speed * itemBonusMul(l) : undefined,
+      fireRate: c.fireRate !== undefined ? c.fireRate * itemBonusMul(l) : undefined,
+      cooldown: c.cooldown !== undefined ? c.cooldown * itemBonusMul(l) : undefined,
+    },
+    active: meta.active && { ...meta.active, power: meta.active.power !== undefined ? meta.active.power * itemPowerMul(l) : undefined, cooldown: meta.active.cooldown * itemCooldownMul(l) },
+  };
+}
+
 /** Найкоротша різниця кутів (−π..π). */
 const angDiff = (from: number, to: number): number => {
   let d = (to - from) % (Math.PI * 2);
@@ -238,8 +262,9 @@ export class Room {
     };
 
     for (const e of entrants) {
-      const active = e.activeDefId ? getItemDef(e.activeDefId) ?? null : null;
-      const passive = e.passiveDefId ? getItemDef(e.passiveDefId) ?? null : null;
+      // предмети з урахуванням рівня прокачки
+      const active = e.activeDefId ? scaleItem(getItemDef(e.activeDefId), e.activeLevel) : null;
+      const passive = e.passiveDefId ? scaleItem(getItemDef(e.passiveDefId), e.passiveLevel) : null;
       const p = makeParticipant(
         {
           id: e.pid,
@@ -259,6 +284,7 @@ export class Room {
       p.pos = this.spawnFor(p.team);
       p.angle = Math.atan2(WORLD_H / 2 - p.pos.y, WORLD_W / 2 - p.pos.x);
       p.rankPoints = e.rankPoints;
+      p.weaponLevel = clampLevel(e.weaponLevel);
       this.participants.set(p.id, p);
       this.hooks.setInMatch(e.userId, true);
     }
@@ -276,8 +302,9 @@ export class Room {
           tier: botLevel ? botLevel.tier : 1 + Math.floor(Math.random() * 3),
           level: botLevel ? botLevel.level : 1 + Math.floor(Math.random() * 4),
           weaponId: (() => {
+            // боти беруть різну зброю — зокрема й нову
             const r = Math.random();
-            return r < 0.25 ? 'rocket_launcher' : r < 0.45 ? 'laser' : 'machine_gun';
+            return r < 0.2 ? 'rocket_launcher' : r < 0.35 ? 'laser' : r < 0.45 ? 'scatter_gun' : r < 0.55 ? 'plasma_cannon' : r < 0.6 ? 'railgun' : 'machine_gun';
           })(),
         },
         Math.random() < 0.35 ? getItemDef('nano_repair')! : null,
@@ -569,8 +596,9 @@ export class Room {
     if (data.kind !== def.kind) return;
     const now = Date.now();
     // темп: token bucket на основі скорострільності зброї (з запасом на форсаж і нерівну доставку)
-    const perSec = def.fireRate * (def.salvo ?? 1) * p.fireRateMul * 1.6;
-    p.shotTokens = Math.min(perSec + (def.salvo ?? 1) + 2, (p.shotTokensAt ? p.shotTokens + ((now - p.shotTokensAt) / 1000) * perSec : perSec));
+    const perShot = (def.salvo ?? 1) * (def.pellets ?? 1);
+    const perSec = def.fireRate * perShot * p.fireRateMul * 1.6;
+    p.shotTokens = Math.min(perSec + perShot + 2, (p.shotTokensAt ? p.shotTokens + ((now - p.shotTokensAt) / 1000) * perSec : perSec));
     p.shotTokensAt = now;
     if (p.shotTokens < 1) return;
     p.shotTokens -= 1;
@@ -580,12 +608,14 @@ export class Room {
     p.lastFiredAt = now;
     p.shots++;
     const speed = def.kind === 'missile' ? MISSILE_SPEED : def.projectileSpeed;
-    this.relay(socketId, 'match:shot', encodeShot({ owner: this.indexOf(p.id), x: origin.x, y: origin.y, angle: data.angle, kind: def.kind, speed }));
+    // іншим — особливий вигляд пострілу (дріб, плазма, рейка), фізика — за kind
+    this.relay(socketId, 'match:shot', encodeShot({ owner: this.indexOf(p.id), x: origin.x, y: origin.y, angle: data.angle, kind: def.visual ?? def.kind, speed }));
+    const damage = def.damage * p.damageMul * weaponDamageMul(p.weaponLevel ?? 1);
     if (def.kind === 'laser') {
-      this.fireLaser(p, origin, data.angle, def.range ?? PROJECTILE_RANGE.laser, def.damage * p.damageMul, lagMs, false);
+      this.fireLaser(p, origin, data.angle, def.range ?? PROJECTILE_RANGE.laser, damage, lagMs, false);
       return;
     }
-    this.spawnProjectile(p, def.kind, origin, data.angle, def.damage * p.damageMul, def.splashRadius ?? 0, lagMs);
+    this.spawnProjectile(p, def.kind, origin, data.angle, damage, def.splashRadius ?? 0, lagMs);
   }
 
   /** На скільки мс відмотати цілі для пострілу, який гравець зробив, бачачи світ на момент viewT. */
@@ -604,7 +634,8 @@ export class Room {
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       traveled: 0,
-      range: PROJECTILE_RANGE[kind],
+      // у куль може бути своя дальність (дробовик б'є недалеко)
+      range: kind === 'bullet' ? getWeaponDef(owner.weaponId)?.range ?? PROJECTILE_RANGE.bullet : PROJECTILE_RANGE[kind],
       damage,
       splash,
       lagMs,
@@ -790,8 +821,11 @@ export class Room {
       return;
     }
     if (def.kind !== 'bullet' && def.kind !== 'rocket') return;
-    this.spawnProjectile(bot, def.kind, nose, angle, def.damage * bot.damageMul, def.splashRadius ?? 0, 0);
-    this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: nose.x, y: nose.y, angle, kind: def.kind, speed: def.projectileSpeed }));
+    for (let i = 0; i < (def.pellets ?? 1); i++) {
+      const a = def.pellets ? angle + (Math.random() - 0.5) * 2 * (def.spread ?? 0.15) : angle;
+      this.spawnProjectile(bot, def.kind, nose, a, def.damage * bot.damageMul, def.splashRadius ?? 0, 0);
+      this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: nose.x, y: nose.y, angle: a, kind: def.visual ?? def.kind, speed: def.projectileSpeed }));
+    }
   }
 
   /** Лазер: миттєвий промінь до першої перешкоди або цілі (цілі — на момент, який бачив стрілець). */
@@ -843,7 +877,7 @@ export class Room {
       hit = null;
     }
     if (rock && best === rockDist) this.damageObstacle(rock, damage, now - this.startedAt);
-    if (announce) this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: from.x, y: from.y, angle, kind: 'laser', speed: 0 }));
+    if (announce) this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: from.x, y: from.y, angle, kind: getWeaponDef(bot.weaponId)?.visual === 'rail' ? 'rail' : 'laser', speed: 0 }));
     if (hit) this.applyDamage(bot, hit, damage, now);
   }
 

@@ -36,20 +36,21 @@ void startDbService('profile', (app) => {
     if (user.isModified()) await user.save();
     const progress = user.planeProgress.find((p) => p.planeId === user.selectedPlane);
     const loadout = user.loadouts.find((l) => l.planeId === user.selectedPlane);
-    const defIdOf = (itemId: string | null | undefined): string | null => {
-      if (!itemId) return null;
-      const it = user.items.find((i) => (i as unknown as { _id: { toString(): string } })._id.toString() === itemId);
-      return it?.defId ?? null;
-    };
+    const ownedItem = (itemId: string | null | undefined) => (itemId ? user.items.find((i) => (i as unknown as { _id: { toString(): string } })._id.toString() === itemId) : undefined);
+    const defIdOf = (itemId: string | null | undefined): string | null => ownedItem(itemId)?.defId ?? null;
+    const weaponId = loadout?.weapon ?? DEFAULT_WEAPON_ID;
     res.json({
       userId: user._id.toString(),
       nickname: user.nickname,
       planeId: user.selectedPlane,
-      weaponId: loadout?.weapon ?? DEFAULT_WEAPON_ID,
+      weaponId,
+      weaponLevel: ((user.weaponLevels ?? {}) as Record<string, number>)[weaponId] ?? 1,
       tier: progress?.tier ?? 1,
       level: progress?.level ?? 1,
       activeDefId: defIdOf(loadout?.active),
       passiveDefId: defIdOf(loadout?.passive),
+      activeLevel: ownedItem(loadout?.active)?.level ?? 1,
+      passiveLevel: ownedItem(loadout?.passive)?.level ?? 1,
       rankPoints: mode === 'casual' ? 0 : getRank(user, mode).points,
     });
   });

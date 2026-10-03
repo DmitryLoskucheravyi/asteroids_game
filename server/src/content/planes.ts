@@ -1,6 +1,6 @@
 // Тримати синхронізовано з src/game/planes.ts (id і price) — тут потрібні лише для
 // валідації купівлі й для розіграшу ящиків, геймплейні характеристики лишаються на клієнті.
-export const PLANE_IDS = ['falcon', 'phantom', 'blaze', 'wasp', 'collector', 'swift', 'titan', 'chronos', 'thunder', 'ufo', 'phoenix'] as const;
+export const PLANE_IDS = ['falcon', 'phantom', 'blaze', 'wasp', 'collector', 'swift', 'titan', 'chronos', 'viper', 'thunder', 'bastion', 'ufo', 'nova', 'phoenix'] as const;
 export type PlaneId = (typeof PLANE_IDS)[number];
 
 export const PLANE_PRICES: Record<PlaneId, number> = {
@@ -12,8 +12,11 @@ export const PLANE_PRICES: Record<PlaneId, number> = {
   swift: 800,
   titan: 1100,
   chronos: 1400,
+  viper: 1600,
   thunder: 1800,
+  bastion: 2000,
   ufo: 2300,
+  nova: 2600,
   phoenix: 3000,
 };
 
@@ -51,8 +54,11 @@ const PLANE_COMBAT: Record<PlaneId, { hp: number; damage: number }> = {
   swift: { hp: 98, damage: 1.05 },
   titan: { hp: 136, damage: 0.95 },
   chronos: { hp: 100, damage: 1.05 },
+  viper: { hp: 92, damage: 1.08 },
   thunder: { hp: 105, damage: 1.12 },
+  bastion: { hp: 132, damage: 0.98 },
   ufo: { hp: 100, damage: 1.1 },
+  nova: { hp: 100, damage: 1.12 },
   phoenix: { hp: 105, damage: 1.1 },
 };
 

@@ -1,4 +1,4 @@
-export type PlaneId = 'falcon' | 'phantom' | 'blaze' | 'wasp' | 'collector' | 'swift' | 'titan' | 'chronos' | 'thunder' | 'ufo' | 'phoenix';
+export type PlaneId = 'falcon' | 'phantom' | 'blaze' | 'wasp' | 'collector' | 'swift' | 'titan' | 'chronos' | 'viper' | 'thunder' | 'bastion' | 'ufo' | 'nova' | 'phoenix';
 
 /** Унікальна механіка літака. Кожен літак має свою комбінацію. */
 export interface PlaneFeature {
@@ -63,8 +63,11 @@ export const PLANES: readonly PlaneSpec[] = [
   { id: 'swift', accel: 2900, maxSpeed: 450, drag: 6, radius: 14, flame: ['#d8f6ff', '#28c8f0'], feature: { jumpCharges: 2 }, price: 800, combat: { hp: 98, damage: 1.05 } },
   { id: 'titan', accel: 2100, maxSpeed: 390, drag: 5, radius: 17, flame: ['#fff1a8', '#ffb020'], feature: { startShield: true, shieldRegen: 22 }, price: 1100, combat: { hp: 136, damage: 0.95 } },
   { id: 'chronos', accel: 2700, maxSpeed: 420, drag: 6, radius: 14, flame: ['#e2c2ff', '#8a3cff'], feature: { freezeDurationMul: 2, extraFreeze: 1 }, price: 1400, combat: { hp: 100, damage: 1.05 } },
+  { id: 'viper', accel: 3400, maxSpeed: 470, drag: 6.5, radius: 13, flame: ['#d8ffb0', '#6adc2a'], feature: { jumpCooldownMul: 0.7, boostDurationMul: 1.2 }, price: 1600, combat: { hp: 92, damage: 1.08 } },
   { id: 'thunder', accel: 2800, maxSpeed: 440, drag: 5.5, radius: 15, flame: ['#c8e8ff', '#3a7bff'], feature: { dashShockwave: 150, jumpCooldownMul: 0.85 }, price: 1800, combat: { hp: 105, damage: 1.12 } },
+  { id: 'bastion', accel: 2000, maxSpeed: 370, drag: 5, radius: 17, flame: ['#ffd8b0', '#ff7a2a'], feature: { startShield: true, shieldRegen: 16, extraLives: 1 }, price: 2000, combat: { hp: 132, damage: 0.98 } },
   { id: 'ufo', accel: 7000, maxSpeed: 380, drag: 16, radius: 15, flame: ['#c8ffd8', '#3adc78'], feature: { gravityImmune: true, noRotate: true }, price: 2300, combat: { hp: 100, damage: 1.1 } },
+  { id: 'nova', accel: 3100, maxSpeed: 455, drag: 6, radius: 14, flame: ['#e8f4ff', '#a06aff'], feature: { extraBoost: 1, dashShockwave: 110, jumpCharges: 2 }, price: 2600, combat: { hp: 100, damage: 1.12 } },
   { id: 'phoenix', accel: 3000, maxSpeed: 460, drag: 6, radius: 14, flame: ['#fff1a8', '#ff5a1f'], feature: { extraLives: 1, extraBoost: 1 }, price: 3000, combat: { hp: 105, damage: 1.1 } },
 ];
 
@@ -131,6 +134,9 @@ const TIER_FEATURE_BONUS: Partial<Record<PlaneId, (feature: PlaneFeature, tier: 
   titan: (f, tier) => ({ ...f, shieldRegen: Math.max(10, (f.shieldRegen ?? 22) - 2 * (tier - 1)) }),
   chronos: (f, tier) => ({ ...f, freezeDurationMul: (f.freezeDurationMul ?? 1) + 0.15 * (tier - 1) }),
   thunder: (f, tier) => ({ ...f, dashShockwave: (f.dashShockwave ?? 0) + 20 * (tier - 1) }),
+  viper: (f, tier) => ({ ...f, jumpCooldownMul: Math.max(0.45, (f.jumpCooldownMul ?? 1) - 0.05 * (tier - 1)) }),
+  bastion: (f, tier) => ({ ...f, shieldRegen: Math.max(8, (f.shieldRegen ?? 16) - 2 * (tier - 1)) }),
+  nova: (f, tier) => ({ ...f, dashShockwave: (f.dashShockwave ?? 0) + 25 * (tier - 1) }),
   phoenix: (f, tier) => ({ ...f, extraBoost: (f.extraBoost ?? 0) + (tier >= 3 ? 1 : 0) }),
 };
 

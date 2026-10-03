@@ -37,7 +37,8 @@ const B_FLARE = 1 << 2;
 const B_PHASE = 1 << 3;
 const B_SLOWED = 1 << 4;
 
-export const SHOT_KINDS = ['bullet', 'rocket', 'missile', 'laser'] as const;
+/** Перші чотири — фізика; решта — лише вигляд пострілу для інших гравців */
+export const SHOT_KINDS = ['bullet', 'rocket', 'missile', 'laser', 'pellet', 'plasma', 'rail'] as const;
 export type ShotKind = (typeof SHOT_KINDS)[number];
 
 const clampU16 = (v: number): number => (v < 0 ? 0 : v > 65535 ? 65535 : Math.round(v));

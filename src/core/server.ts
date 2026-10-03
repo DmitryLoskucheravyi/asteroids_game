@@ -69,7 +69,8 @@ export interface ServerProfile {
   keybinds: Record<string, string>;
   crystals: number;
   planeProgress: { planeId: PlaneId; tier: number; level: number }[];
-  items: { id: string; defId: string; rarity: ItemRarity }[];
+  items: { id: string; defId: string; rarity: ItemRarity; level?: number }[];
+  weaponLevels?: Record<string, number>;
   loadouts: { planeId: PlaneId; active: string | null; passive: string | null; weapon: string | null }[];
   ownedWeapons: string[];
   ranked?: RankedView;
@@ -249,6 +250,8 @@ export const Server = {
 
   buyItem: (defId: string) => api.post<{ profile: ServerProfile }>('/items/buy', { defId }),
   buyWeapon: (weaponId: string) => api.post<{ profile: ServerProfile }>('/items/buy-weapon', { weaponId }),
+  /** Прокачати зброю (id зброї) або предмет (_id власного предмета) на 1 рівень */
+  upgradeGear: (kind: 'weapon' | 'item', id: string) => api.post<{ profile: ServerProfile }>('/items/upgrade', { kind, id }),
   setLoadout: (planeId: PlaneId, active: string | null, passive: string | null, weapon: string | null) =>
     api.post<{ profile: ServerProfile }>('/items/loadout', { planeId, active, passive, weapon }),
 };

@@ -21,9 +21,10 @@ export function gearSlots(planeId: PlaneId, onChange: () => void, openShop?: () 
   const weapon = getWeaponDef(l.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
   const active = getItemDef(Save.itemById(l.active)?.defId ?? '');
   const passive = getItemDef(Save.itemById(l.passive)?.defId ?? '');
-  const slot = (s: Slot, svg: string | null, name: string, rarity?: string) =>
+  const lv = (n: number) => (n > 1 ? h('span', { class: 'gear-slot-lv' }, String(n)) : null);
+  const slot = (s: Slot, svg: string | null, name: string, rarity?: string, level = 1) =>
     button(
-      h('span', { class: 'gear-slot-art', html: svg ?? '' }),
+      h('span', { class: 'gear-slot-art', html: svg ?? '' }, lv(level)),
       () => openGearPicker(planeId, s, onChange, openShop),
       `stage-gear gear-slot${svg ? '' : ' empty'} rarity-frame-${rarity ?? 'weapon'}`,
       { title: name, 'aria-label': `${t(s === 'weapon' ? 'items.slotWeapon' : s === 'active' ? 'items.slotActive' : 'items.slotPassive')}: ${name}` },
@@ -31,9 +32,9 @@ export function gearSlots(planeId: PlaneId, onChange: () => void, openShop?: () 
   return h(
     'span',
     { class: 'stage-gears' },
-    slot('weapon', weaponSvg(weapon.id), t(weapon.nameKey)),
-    slot('active', active ? itemSvg(active.id) : null, active ? t(active.nameKey) : t('items.slotActive'), active?.rarity),
-    slot('passive', passive ? itemSvg(passive.id) : null, passive ? t(passive.nameKey) : t('items.slotPassive'), passive?.rarity),
+    slot('weapon', weaponSvg(weapon.id), t(weapon.nameKey), undefined, Save.weaponLevel(weapon.id)),
+    slot('active', active ? itemSvg(active.id) : null, active ? t(active.nameKey) : t('items.slotActive'), active?.rarity, Save.itemById(l.active)?.level),
+    slot('passive', passive ? itemSvg(passive.id) : null, passive ? t(passive.nameKey) : t('items.slotPassive'), passive?.rarity, Save.itemById(l.passive)?.level),
   );
 }
 

@@ -14,6 +14,7 @@ import { PVP_PROGRESS_SCALE, effectivePlaneSpec, getPlane, planeCombat, type Pla
 import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from './items';
 import { decodeShot, decodeState, encodeFire, encodeMove, type ShotKind, type StatePatch } from '../../server/src/shared/netcodec';
 import { INTERP_DELAY_MS, ServerClock, SnapshotBuffer } from '../net/interp';
+import { scaledItem, scaledWeapon } from './gearScale';
 import { getWeaponDef, DEFAULT_WEAPON_ID, WeaponState, type WeaponDef } from './weapons';
 import { Player } from './entities/Player';
 import { Projectile } from './entities/Projectile';
@@ -71,6 +72,8 @@ interface Beam {
   y2: number;
   t: number;
   hostile: boolean;
+  /** Рейкотрон — товстіший блакитний промінь, що довше гасне */
+  rail?: boolean;
 }
 
 /** Плавне відображення чужих літаків між серверними тіками (20 Гц). */
@@ -153,14 +156,17 @@ export class PvpGame {
     const progress = Save.progressFor(planeId);
     const loadout = Save.loadoutFor(planeId);
     const base = getPlane(planeId);
-    this.passiveDef = getItemDef(Save.itemById(loadout.passive)?.defId ?? '');
-    this.activeDef = getItemDef(Save.itemById(loadout.active)?.defId ?? '');
+    const passiveOwned = Save.itemById(loadout.passive);
+    const activeOwned = Save.itemById(loadout.active);
+    this.passiveDef = scaledItem(getItemDef(passiveOwned?.defId ?? ''), passiveOwned?.level);
+    this.activeDef = scaledItem(getItemDef(activeOwned?.defId ?? ''), activeOwned?.level);
     const spec = applyItemPassive(effectivePlaneSpec(base, progress, PVP_PROGRESS_SCALE), this.passiveDef);
     const cooldownMul = 1 - (this.passiveDef?.combat?.cooldown ?? 0);
     this.baseFireMul = 1 + (this.passiveDef?.combat?.fireRate ?? 0);
     this.active = this.activeDef?.active ?? null;
     this.maxHp = planeCombat(base, progress).hp + (this.passiveDef?.combat?.hp ?? 0);
-    this.weapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+    const baseWeapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+    this.weapon = scaledWeapon(baseWeapon, Save.weaponLevel(baseWeapon.id));
     this.gun = new WeaponState(this.weapon);
     this.player = new Player(spec, progress.tier, progress.level);
     // заморозка в PvP не має сенсу — лише форсаж, ривок, пастки і предмет
@@ -498,17 +504,20 @@ export class PvpGame {
       this.missiles.push({ pos, angle: s.angle, life: 2.2, remote: true, ownerId: s.ownerId, source: 'weapon' });
       return;
     }
-    if (s.kind === 'laser') {
-      const ray = this.raycast(s.x, s.y, s.angle, getWeaponDef('laser')?.range ?? 380, s.ownerId);
-      this.beams.push({ x1: s.x, y1: s.y, x2: s.x + Math.cos(s.angle) * ray.dist, y2: s.y + Math.sin(s.angle) * ray.dist, t: 0, hostile: true });
+    if (s.kind === 'laser' || s.kind === 'rail') {
+      const rail = s.kind === 'rail';
+      const ray = this.raycast(s.x, s.y, s.angle, getWeaponDef(rail ? 'railgun' : 'laser')?.range ?? 380, s.ownerId);
+      this.beams.push({ x1: s.x, y1: s.y, x2: s.x + Math.cos(s.angle) * ray.dist, y2: s.y + Math.sin(s.angle) * ray.dist, t: 0, hostile: true, rail });
       if (Vec2.dist(pos, this.player.pos) < 900 && this.clock - this.lastShotSfx > 0.08) {
         this.lastShotSfx = this.clock;
         Sfx.laserZap();
       }
       return;
     }
-    this.remote.push(new Projectile(s.kind, pos, s.angle, s.speed, 0, 0, true, s.ownerId));
-    this.muzzle(s.x, s.y, s.angle, s.kind === 'rocket');
+    const physical = s.kind === 'plasma' ? 'rocket' : s.kind === 'pellet' ? 'bullet' : s.kind;
+    const style = s.kind === 'plasma' || s.kind === 'pellet' ? s.kind : undefined;
+    this.remote.push(new Projectile(physical, pos, s.angle, s.speed, 0, 0, true, s.ownerId, s.kind === 'pellet' ? getWeaponDef('scatter_gun')?.range : undefined, style));
+    this.muzzle(s.x, s.y, s.angle, physical === 'rocket');
     const d = Vec2.dist(pos, this.player.pos);
     if (d < 900 && this.clock - this.lastShotSfx > 0.07) {
       this.lastShotSfx = this.clock;
@@ -742,8 +751,14 @@ export class PvpGame {
       Sfx.boost();
       return;
     }
-    this.projectiles.push(new Projectile(this.weapon.kind as 'bullet' | 'rocket', pos, angle, this.weapon.projectileSpeed, this.weapon.damage, this.weapon.splashRadius ?? 0, false, this.selfId));
-    this.fire(pos.x, pos.y, angle, this.weapon.kind);
+    const style = this.weapon.visual === 'pellet' || this.weapon.visual === 'plasma' ? this.weapon.visual : undefined;
+    // дробовик — віяло з N куль, кожна летить окремо (і окремо перевіряється сервером)
+    const n = this.weapon.pellets ?? 1;
+    for (let i = 0; i < n; i++) {
+      const a = n > 1 ? this.aim + (Math.random() - 0.5) * 2 * (this.weapon.spread ?? 0.15) : angle;
+      this.projectiles.push(new Projectile(this.weapon.kind as 'bullet' | 'rocket', pos.clone(), a, this.weapon.projectileSpeed, this.weapon.damage, this.weapon.splashRadius ?? 0, false, this.selfId, this.weapon.range, style));
+      this.fire(pos.x, pos.y, a, this.weapon.kind);
+    }
     this.muzzle(pos.x, pos.y, angle, this.weapon.kind === 'rocket');
     if (this.weapon.kind === 'rocket') Sfx.bossShot();
     else if (this.clock - this.lastShotSfx > 0.06) {
@@ -998,8 +1013,10 @@ export class PvpGame {
     const ray = this.raycast(from.x, from.y, angle, this.weapon.range ?? 380, this.selfId);
     const x2 = from.x + Math.cos(angle) * ray.dist;
     const y2 = from.y + Math.sin(angle) * ray.dist;
-    this.beams.push({ x1: from.x, y1: from.y, x2, y2, t: 0, hostile: false });
+    const rail = this.weapon.visual === 'rail';
+    this.beams.push({ x1: from.x, y1: from.y, x2, y2, t: 0, hostile: false, rail });
     this.fire(from.x, from.y, angle, 'laser');
+    if (rail) this.addShake(3);
     this.particles.emit(x2, y2, { count: ray.blocked ? 4 : 2, speed: [30, 120], life: [0.1, 0.25], size: [2, 3], colors: ray.blocked ? ['#fff1a8', '#ff9a3a'] : ['#ffffff', '#ff5ad0', '#c070ff'] });
     if (this.clock - this.lastShotSfx > 0.08) {
       this.lastShotSfx = this.clock;
@@ -1010,7 +1027,7 @@ export class PvpGame {
   private updateFx(dt: number): void {
     this.particles.update(dt);
     for (const b of this.beams) b.t += dt;
-    this.beams = this.beams.filter((b) => b.t < 0.09);
+    this.beams = this.beams.filter((b) => b.t < (b.rail ? 0.35 : 0.09));
     for (const r of this.rings) r.t += dt;
     this.rings = this.rings.filter((r) => r.t < r.dur);
     for (const t of this.texts) {
@@ -1175,9 +1192,10 @@ export class PvpGame {
     for (const m of this.missiles) this.renderMissile(ctx, m);
     ctx.globalCompositeOperation = 'lighter';
     for (const b of this.beams) {
-      const k = 1 - b.t / 0.09;
-      ctx.strokeStyle = b.hostile ? `rgba(255,70,90,${0.45 * k})` : `rgba(200,90,255,${0.45 * k})`;
-      ctx.lineWidth = 7;
+      const k = 1 - b.t / (b.rail ? 0.35 : 0.09);
+      // рейкотрон — товстий блакитний промінь, що повільно гасне
+      ctx.strokeStyle = b.rail ? `rgba(110,220,255,${0.6 * k})` : b.hostile ? `rgba(255,70,90,${0.45 * k})` : `rgba(200,90,255,${0.45 * k})`;
+      ctx.lineWidth = b.rail ? 13 * k + 3 : 7;
       ctx.beginPath();
       ctx.moveTo(b.x1, b.y1);
       ctx.lineTo(b.x2, b.y2);

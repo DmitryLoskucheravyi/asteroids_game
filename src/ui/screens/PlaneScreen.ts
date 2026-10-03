@@ -7,6 +7,8 @@ import { ITEM_DEFS, RARITIES, applyItemPassive, getItemDef, itemStatLines, loado
 import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
 import { effectivePlaneSpec, levelUpCost, tierUpCost, MAX_TIER, MAX_LEVEL_IN_TIER, PLANES, planeCombat, type PlaneSpec } from '../../game/planes';
 import { WEAPON_DEFS, getWeaponDef, DEFAULT_WEAPON_ID } from '../../game/weapons';
+import { scaledItem, scaledWeapon } from '../../game/gearScale';
+import { MAX_GEAR_LEVEL, itemUpgradeCost, weaponDamageMul, weaponUpgradeCost } from '../../../server/src/shared/gear';
 import { JUMP_COOLDOWN, FLARE_COOLDOWN } from '../../game/systems/SkillSystem';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { Modal, toast } from '../Modal';
@@ -107,14 +109,15 @@ export class PlaneScreen extends Screen {
     const progress = Save.progressFor(p.id);
     const loadout = Save.loadoutFor(p.id);
     const passive = Save.itemById(loadout.passive);
-    const passiveDef = passive ? getItemDef(passive.defId) : undefined;
+    const passiveDef = passive ? scaledItem(getItemDef(passive.defId), passive.level) : undefined;
     const spec = applyItemPassive(effectivePlaneSpec(p, progress), passiveDef);
     const combat = planeCombat(p, progress);
     const hp = combat.hp + (passiveDef?.combat?.hp ?? 0);
     const activeDef = getItemDef(Save.itemById(loadout.active)?.defId ?? '');
     const damageMul = combat.damageMul * (1 + loadoutDamageBonus(passiveDef, activeDef));
     const fireMul = 1 + (passiveDef?.combat?.fireRate ?? 0);
-    const weapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+    const baseWeapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+    const weapon = scaledWeapon(baseWeapon, Save.weaponLevel(baseWeapon.id));
     const dmg = weapon.damage * damageMul;
 
     // смуга з квадратних сегментів свого кольору; останній сегмент заповнюється частково
@@ -255,6 +258,63 @@ export class PlaneScreen extends Screen {
     );
   }
 
+  /**
+   * Прокачка того, що стоїть у вибраному слоті: рівень (1..5), що дасть наступний рівень, ціна й кнопка.
+   * Сервер знову перевіряє ціну й рівень — тут лише показ.
+   */
+  private upgradeCard(): HTMLElement | null {
+    const l = Save.loadoutFor(this.plane.id);
+    let kind: 'weapon' | 'item';
+    let id: string;
+    let level: number;
+    let cost: { coins: number; crystals: number };
+    let name: string;
+    let gains: string[];
+    if (this.slot === 'weapon') {
+      const w = getWeaponDef(l.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
+      kind = 'weapon';
+      id = w.id;
+      level = Save.weaponLevel(w.id);
+      cost = weaponUpgradeCost(w.price, level);
+      name = t(w.nameKey);
+      gains = [`+${Math.round((weaponDamageMul(level + 1) - weaponDamageMul(level)) * 1000) / 10}% ${t('gear.bonus.damage')}`, `+8% ${t('gear.bonus.capacity')}`, `−5% ${t('gear.bonus.reload')}`];
+    } else {
+      const owned = Save.itemById(l[this.slot]);
+      const def = owned ? getItemDef(owned.defId) : undefined;
+      if (!owned || !def) return null;
+      kind = 'item';
+      id = owned.id;
+      level = owned.level ?? 1;
+      cost = itemUpgradeCost(def.price, def.rarity, level);
+      name = t(def.nameKey);
+      gains = def.slot === 'active' ? [`+10% ${t('gear.bonus.power')}`, `−4% ${t('gear.bonus.cooldown')}`] : [def.combat?.hp ? `+5% ${t('gear.bonus.hp')}` : '', `+6% ${t('gear.bonus.bonus')}`].filter(Boolean);
+    }
+    const maxed = level >= MAX_GEAR_LEVEL;
+    const afford = Save.data.coins >= cost.coins && Save.data.crystals >= cost.crystals;
+    const pips = h('span', { class: 'gear-pips' }, ...Array.from({ length: MAX_GEAR_LEVEL }, (_, i) => h('i', { class: i < level ? 'on' : '' })));
+    const price = h('span', { class: 'buy-label' }, coinBadge(cost.coins, 'coin-badge small'), cost.crystals ? crystalBadge(cost.crystals, 'coin-badge small crystal-badge') : null);
+    return h(
+      'div',
+      { class: `gear-upgrade${maxed ? ' maxed' : ''}` },
+      h('div', { class: 'gear-upgrade-head' }, h('b', {}, name), h('span', { class: 'gear-lvl' }, t('gear.level', { n: level })), pips),
+      maxed
+        ? h('p', { class: 'muted small' }, t('gear.maxed'))
+        : h(
+            'div',
+            { class: 'gear-upgrade-row' },
+            h('div', { class: 'gear-gains' }, h('small', {}, t('gear.next')), ...gains.map((g) => h('span', { class: 'gear-gain' }, g))),
+            button(h('span', { class: 'buy-label' }, icon(Icons.bolt, 'ico'), t('gear.upgrade'), price), async () => {
+              if (!afford) {
+                Sfx.warning();
+                toast(t('gear.noMoney'));
+                return;
+              }
+              if (await this.call(() => Server.upgradeGear(kind, id), () => Sfx.rareReward())) toast(t('gear.upgraded', { n: level + 1 }));
+            }, `btn ${afford ? 'primary' : ''} small gear-up-btn`),
+          ),
+    );
+  }
+
   private inventory(): HTMLElement {
     const l = Save.loadoutFor(this.plane.id);
     const tiles: HTMLElement[] = [];
@@ -264,7 +324,7 @@ export class PlaneScreen extends Screen {
         const on = (l.weapon ?? DEFAULT_WEAPON_ID) === w.id;
         tiles.push(
           button(
-            h('span', { class: 'inv-inner' }, weaponPic(w.id), h('b', {}, t(w.nameKey)), statList(weaponStatLines(w)), h('span', { class: 'inv-state' }, on ? t('items.equipped') : t('items.equip'))),
+            h('span', { class: 'inv-inner' }, weaponPic(w.id), h('span', { class: 'inv-level' }, t('gear.level', { n: Save.weaponLevel(w.id) })), h('b', {}, t(w.nameKey)), statList(weaponStatLines(scaledWeapon(w, Save.weaponLevel(w.id)))), h('span', { class: 'inv-state' }, on ? t('items.equipped') : t('items.equip'))),
             () => void this.equip(w.id),
             `inv-tile${on ? ' on' : ''}`,
           ),
@@ -286,10 +346,11 @@ export class PlaneScreen extends Screen {
               'span',
               { class: 'inv-inner' },
               itemPic(def.id),
+              h('span', { class: 'inv-level' }, t('gear.level', { n: it.level ?? 1 })),
               h('b', {}, t(def.nameKey)),
               h('small', { class: `rarity-${def.rarity}` }, t(`item.rarity.${def.rarity}` as TKey)),
               h('span', { class: 'inv-desc' }, t(def.descKey)),
-              statList(itemStatLines(def)),
+              statList(itemStatLines(scaledItem(def, it.level) ?? def)),
               h('span', { class: 'inv-state' }, on ? t('items.unequip') : t('items.equip')),
             ),
             () => void this.equip(on ? null : it.id),
@@ -312,6 +373,7 @@ export class PlaneScreen extends Screen {
       { class: 'card plane-loadout' },
       h('h3', {}, icon(Icons.shield, 'ico'), t('items.loadout')),
       h('div', { class: 'slot-row' }, this.slotButton('weapon'), this.slotButton('active'), this.slotButton('passive')),
+      this.upgradeCard(),
       this.inventory(),
     );
   }
