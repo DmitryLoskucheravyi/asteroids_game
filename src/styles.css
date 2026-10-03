@@ -9186,3 +9186,136 @@ input[type='range'] {
 .slot-invite-result {
   margin-top: 10px;
 }
+
+/* ===================== група: готовність ===================== */
+
+.ready-chip {
+  display: inline-block;
+  align-self: flex-start;
+  white-space: nowrap;
+  margin-top: 2px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.ready-chip.on {
+  color: #4fe08a;
+  box-shadow: inset 0 0 0 1px rgba(79, 224, 138, 0.5);
+}
+
+.online-go.ready-btn {
+  background: linear-gradient(90deg, #2f9a5a, #4fe08a);
+}
+
+.online-go.ready-btn.is-ready {
+  background: linear-gradient(90deg, #1d5a38, #2f8a52);
+  color: #d8ffe6;
+}
+
+.online-go.waiting {
+  filter: saturate(0.4) brightness(0.8);
+  cursor: not-allowed;
+}
+
+.online-go .launch-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spinner.small {
+  width: 18px;
+  height: 18px;
+  border-width: 3px;
+}
+
+/* ===================== прийняття рейтингового матчу ===================== */
+
+.accept-modal .modal-panel {
+  width: min(460px, calc(100vw - 32px));
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--burn-2), 0 0 60px rgba(255, 150, 40, 0.35);
+  animation: accept-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.accept-mode {
+  margin: -6px 0 10px;
+  font-family: var(--font-ui);
+  color: var(--burn-2);
+}
+
+.accept-timer {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.accept-secs {
+  font-family: var(--font-ui);
+  font-size: 46px;
+  line-height: 1;
+}
+
+.accept-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.accept-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff6a3a, var(--burn-2));
+  transition: width 0.2s linear;
+}
+
+.accept-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 14px 0 6px;
+}
+
+.accept-dots i {
+  width: 14px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.accept-dots i.on {
+  background: #4fe08a;
+  box-shadow: 0 0 8px rgba(79, 224, 138, 0.6);
+}
+
+.accept-count {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.accept-modal .modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 10px;
+}
+
+.accept-btn {
+  font-size: 18px;
+}
+
+.accept-btn.done {
+  filter: saturate(0.4);
+}
+
+@keyframes accept-pop {
+  from {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+}

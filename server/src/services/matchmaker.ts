@@ -1,7 +1,7 @@
 import { Server as IOServer } from 'socket.io';
 import { verifyToken } from '../utils/jwt.js';
 import { isQueueMode } from '../pvp/constants.js';
-import { dequeue, enqueue, enqueueGroup, heartbeat, liveGameServers, queueSizes, type QueueEntry } from '../pvp/matchmaking.js';
+import { acceptMatch, declineMatch, dequeue, enqueue, enqueueGroup, heartbeat, liveGameServers, queueSizes, type QueueEntry } from '../pvp/matchmaking.js';
 import { callService, createApp, listen, notifyService, servicePort } from './common.js';
 
 /**
@@ -68,6 +68,10 @@ io.on('connection', (socket) => {
     notifyService('social', '/internal/party/stop', { userId }, 1);
     dequeue(socket.id);
   });
+
+  // рейтинговий матч знайдено — гравець приймає або відхиляє
+  socket.on('match:accept', (d?: { id?: string }) => acceptMatch(socket.id, String(d?.id ?? '')));
+  socket.on('match:decline', () => declineMatch(socket.id));
 
   socket.on('disconnect', () => dequeue(socket.id));
 });

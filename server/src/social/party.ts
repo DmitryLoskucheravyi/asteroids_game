@@ -14,6 +14,8 @@ export interface Party {
   invites: Map<string, number>;
   mode: RankMode;
   state: 'idle' | 'searching';
+  /** Учасники (крім лідера), що натиснули «Готовий» — без цього лідер не почне пошук */
+  ready: Set<string>;
   /** Змінюється при кожній зміні — клієнт бачить, що треба перерендерити */
   version: number;
 }
@@ -54,13 +56,13 @@ export function invitesFor(userId: string): Party[] {
 }
 
 function create(leaderId: string, mode: RankMode): Party {
-  const p: Party = { id: randomUUID(), leaderId, members: [leaderId], invites: new Map(), mode: mode === 'solo' ? 'duo' : mode, state: 'idle', version: 1 };
+  const p: Party = { id: randomUUID(), leaderId, members: [leaderId], invites: new Map(), mode: mode === 'solo' ? 'duo' : mode, state: 'idle', ready: new Set(), version: 1 };
   parties.set(p.id, p);
   partyOf.set(leaderId, p.id);
   return p;
 }
 
-export type PartyError = 'not_leader' | 'party_full' | 'already_in_party' | 'no_invite' | 'searching' | 'bad_mode';
+export type PartyError = 'not_leader' | 'party_full' | 'already_in_party' | 'no_invite' | 'searching' | 'bad_mode' | 'not_ready';
 
 /** Запросити гравця (група створюється автоматично). */
 export function invite(fromId: string, toId: string, mode: RankMode): Party | PartyError {
@@ -98,12 +100,17 @@ export function leave(userId: string): void {
   if (!p) return;
   p.members = p.members.filter((m) => m !== userId);
   partyOf.delete(userId);
+  p.ready.delete(userId);
   p.state = 'idle';
   if (!p.members.length) {
     parties.delete(p.id);
     return;
   }
-  if (p.leaderId === userId) p.leaderId = p.members[0];
+  if (p.leaderId === userId) {
+    p.leaderId = p.members[0];
+    // новий лідер не "чекає сам на себе"
+    p.ready.delete(p.leaderId);
+  }
   bump(p);
 }
 
@@ -122,6 +129,7 @@ export function setMode(leaderId: string, mode: RankMode): Party | PartyError {
   if (p.state === 'searching') return 'searching';
   if (mode === 'solo' || p.members.length > maxSize(mode)) return 'bad_mode';
   p.mode = mode;
+  p.ready.clear();
   // зайві запрошення відкликаємо, якщо нова команда менша
   while (p.members.length + p.invites.size > maxSize(mode)) p.invites.delete([...p.invites.keys()].pop()!);
   bump(p);
@@ -133,6 +141,7 @@ export function setSearching(userId: string, searching: boolean): Party | PartyE
   if (!p) return 'not_leader';
   // зупинити пошук може будь-хто з групи, почати — лише лідер
   if (searching && p.leaderId !== userId) return 'not_leader';
+  if (searching && !allReady(p)) return 'not_ready';
   p.state = searching ? 'searching' : 'idle';
   bump(p);
   return p;
@@ -143,5 +152,23 @@ export function setIdle(partyId: string): void {
   const p = parties.get(partyId);
   if (!p || p.state === 'idle') return;
   p.state = 'idle';
+  p.ready.clear();
   bump(p);
+}
+
+/** Усі, крім лідера, натиснули «Готовий». */
+export function allReady(p: Party): boolean {
+  return p.members.every((m) => m === p.leaderId || p.ready.has(m));
+}
+
+/** Учасник (не лідер) перемикає «Готовий»; під час пошуку — не можна (спершу скасувати). */
+export function setReady(userId: string, ready: boolean): Party | PartyError {
+  const p = getParty(userId);
+  if (!p) return 'not_leader';
+  if (p.leaderId === userId) return 'not_leader';
+  if (p.state === 'searching') return 'searching';
+  if (ready) p.ready.add(userId);
+  else p.ready.delete(userId);
+  bump(p);
+  return p;
 }

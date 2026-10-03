@@ -42,8 +42,9 @@ async function view(userId: string) {
           state: p.state,
           version: p.version,
           isLeader: p.leaderId === userId,
+          allReady: Party.allReady(p),
           maxSize: Party.maxSize(p.mode),
-          members: p.members.map((m) => byId.get(m)).filter((u): u is Doc => !!u).map((u) => ({ ...member(u, mode), leader: u._id.toString() === p.leaderId, self: u._id.toString() === userId })),
+          members: p.members.map((m) => byId.get(m)).filter((u): u is Doc => !!u).map((u) => ({ ...member(u, mode), leader: u._id.toString() === p.leaderId, self: u._id.toString() === userId, ready: u._id.toString() === p.leaderId || p.ready.has(u._id.toString()) })),
           invited: [...p.invites.keys()].map((m) => byId.get(m)).filter((u): u is Doc => !!u).map((u) => member(u, mode)),
         }
       : null,
@@ -112,3 +113,5 @@ partyRouter.post('/mode', async (req: AuthedRequest, res) => {
 });
 
 partyRouter.post('/search', async (req: AuthedRequest, res) => reply(req, res, Party.setSearching(req.userId!, !!req.body?.searching)));
+
+partyRouter.post('/ready', async (req: AuthedRequest, res) => reply(req, res, Party.setReady(req.userId!, !!req.body?.ready)));

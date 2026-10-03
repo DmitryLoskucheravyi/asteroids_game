@@ -163,7 +163,8 @@ export function updateBot(bot: Participant, others: readonly Participant[], obst
   if ((bot.botCooldownUntil ?? 0) > now) return out;
   if ((bot.botCooldownUntil ?? 0) > 0 && bot.botRounds < 1) bot.botRounds = capacity;
 
-  if (nearest && nearestDist < ATTACK_RANGE + 80 && (bot.botState === 'attack' || bot.botState === 'chase')) {
+  // не далі за дальність своєї зброї (лазер б'є лише зблизька)
+  if (nearest && nearestDist < Math.min(ATTACK_RANGE + 80, (def.range ?? Infinity) + 20) && (bot.botState === 'attack' || bot.botState === 'chase')) {
     const aim = Math.atan2(nearest.pos.y - bot.pos.y, nearest.pos.x - bot.pos.x);
     if (Math.abs(angleDiff(bot.angle, aim)) < 0.3) {
       const interval = 1000 / def.fireRate;

@@ -156,7 +156,24 @@ export class OnlineScreen extends Screen {
     // матчмейкер знайшов кімнату — підʼєднуємось до ігрового сервера за квитком
     socket.off('match:assigned');
     socket.off('queue:error');
+    socket.off('match:found');
+    socket.off('match:found-progress');
+    socket.off('match:found-cancel');
+    // рейтинговий матч знайдено — кожен має прийняти за 20 с
+    socket.on('match:found', (d: { id: string; deadline: number; total: number; accepted: number }) => this.openAccept(d));
+    socket.on('match:found-progress', (d: { accepted: number; total: number }) => this.acceptProgress?.(d.accepted, d.total));
+    socket.on('match:found-cancel', (d: { requeued: boolean; reason: string }) => {
+      this.closeAccept();
+      if (d.requeued) {
+        toast(t('accept.requeued'));
+        return;
+      }
+      this.searching = false;
+      toast(t(d.reason === 'declined' ? 'accept.youDeclined' : 'accept.timedOut'));
+      this.render();
+    });
     socket.once('match:assigned', ({ server, ticket }: { server: string; ticket: string }) => {
+      this.closeAccept();
       const link = new GameLink(server, ticket);
       link.once('match:init', (data: MatchInit) => this.app.show(new PvpScreen(this.app, link, data)));
       link.once('link:closed', () => {
@@ -174,6 +191,64 @@ export class OnlineScreen extends Screen {
     socket.emit('queue:join', { mode: this.mode, partyId });
   }
 
+  private acceptModal: Modal | null = null;
+  private acceptProgress: ((accepted: number, total: number) => void) | null = null;
+  private acceptTimer = 0;
+
+  /** Вікно «Матч знайдено»: прийняти / відхилити, зворотний відлік і скільки гравців уже прийняли. */
+  private openAccept(d: { id: string; deadline: number; total: number; accepted: number }): void {
+    this.closeAccept();
+    Sfx.win();
+    const socket = getSocket();
+    const bar = h('i');
+    const secs = h('b', { class: 'accept-secs' }, '20');
+    const count = h('span', { class: 'accept-count' }, t('accept.count', { n: d.accepted, total: d.total }));
+    const dots = h('div', { class: 'accept-dots' }, ...Array.from({ length: d.total }, () => h('i')));
+    const acceptBtn: HTMLButtonElement = button(t('accept.accept'), () => {
+      socket.emit('match:accept', { id: d.id });
+      acceptBtn.textContent = t('accept.accepted');
+      acceptBtn.setAttribute('aria-disabled', 'true');
+      acceptBtn.classList.add('done');
+      acceptBtn.style.gridColumn = '1 / -1';
+      declineBtn.remove();
+      Sfx.pickup();
+    }, 'btn primary accept-btn', { 'data-autofocus': true });
+    const declineBtn = button(t('accept.decline'), () => {
+      socket.emit('match:decline');
+      this.closeAccept();
+    }, 'btn danger');
+    const total = Math.max(1, d.deadline - Date.now());
+    const tick = () => {
+      const left = Math.max(0, d.deadline - Date.now());
+      bar.style.width = `${(left / total) * 100}%`;
+      secs.textContent = String(Math.ceil(left / 1000));
+    };
+    tick();
+    this.acceptTimer = window.setInterval(tick, 200);
+    this.acceptProgress = (n, tot) => {
+      count.textContent = t('accept.count', { n, total: tot });
+      [...dots.children].forEach((el, i) => el.classList.toggle('on', i < n));
+    };
+    this.acceptModal = new Modal({
+      cls: 'accept-modal',
+      title: t('accept.title'),
+      body: [
+        h('p', { class: 'accept-mode' }, t(`mode.${this.mode}` as TKey)),
+        h('div', { class: 'accept-timer' }, secs, h('div', { class: 'accept-bar' }, bar)),
+        dots,
+        count,
+      ],
+      actions: [declineBtn, acceptBtn],
+    }).open();
+  }
+
+  private closeAccept(): void {
+    window.clearInterval(this.acceptTimer);
+    this.acceptProgress = null;
+    this.acceptModal?.close();
+    this.acceptModal = null;
+  }
+
   private cancelSearch(): void {
     getSocket().emit('queue:leave');
     this.searching = false;
@@ -185,10 +260,49 @@ export class OnlineScreen extends Screen {
     const party = this.partyView?.party;
     if (party && party.members.length > 1 && this.mode !== 'casual') {
       if (!party.isLeader) return;
+      if (!party.allReady) {
+        Sfx.warning();
+        toast(t('party.notAllReady'));
+        return;
+      }
       void this.partyAct('search', { searching: true });
       return;
     }
     this.startSearch();
+  }
+
+  /** Правий нижній кут: стан пошуку або кнопка дії. */
+  private actionArea(): HTMLElement {
+    const ranked = this.mode !== 'casual';
+    return h(
+      'div',
+      { class: 'online-action' },
+      this.searching
+        ? h('div', { class: 'searching' }, h('span', { class: 'spinner' }), ranked ? t('online.searchingMode', { m: t(`mode.${this.mode}` as TKey) }) : t('online.searching'), button(t('online.cancel'), () => this.cancelSearch(), 'btn danger'))
+        : this.actionButton(ranked),
+    );
+  }
+
+  /** Кнопка в правому нижньому куті: пошук, «Готовий» для учасника групи або очікування для лідера. */
+  private actionButton(ranked: boolean): HTMLElement {
+    const party = this.partyView?.party;
+    const inParty = !!party && party.members.length > 1 && ranked;
+    if (inParty && !party!.isLeader) {
+      const me = party!.members.find((m) => m.self);
+      const ready = !!me?.ready;
+      return button(
+        h('span', { class: 'launch-inner' }, icon(ready ? Icons.check : Icons.play), h('b', {}, t(ready ? 'party.readyOn' : 'party.readyBtn'))),
+        () => void this.partyAct('ready', { ready: !ready }),
+        `launch-btn main online-go ready-btn${ready ? ' is-ready' : ''}`,
+        { 'data-autofocus': true },
+      );
+    }
+    if (inParty && !party!.allReady) {
+      const others = party!.members.filter((m) => !m.leader);
+      const n = others.filter((m) => m.ready).length;
+      return button(h('span', { class: 'launch-inner' }, h('span', { class: 'spinner small' }), h('b', {}, t('party.waitingReady', { n, total: others.length }))), () => this.onSearch(), 'launch-btn main online-go waiting');
+    }
+    return button(ranked ? t('online.searchMode', { m: t(`mode.${this.mode}` as TKey) }) : t('online.search'), () => this.onSearch(), `launch-btn main online-go${ranked ? ' ranked' : ''}`, { 'data-autofocus': true });
   }
 
   // ---------- групи ----------
@@ -201,6 +315,7 @@ export class OnlineScreen extends Screen {
 
   onHide(): void {
     window.clearInterval(this.partyPoll);
+    this.closeAccept();
   }
 
   private async refreshParty(): Promise<void> {
@@ -241,6 +356,8 @@ export class OnlineScreen extends Screen {
       return;
     }
     old.replaceWith(this.partyBlock());
+    // кнопка дії залежить від готовності групи — оновлюємо й її
+    this.el.querySelector('.online-action')?.replaceWith(this.actionArea());
   }
 
   private async partyAct(action: Parameters<typeof Server.partyAction>[0], body: Record<string, unknown> = {}): Promise<void> {
@@ -261,7 +378,7 @@ export class OnlineScreen extends Screen {
       'div',
       { class: `party-member${m.self ? ' self' : ''}` },
       h('img', { class: 'friend-plane', src: planeIconUrl((m.plane as PlaneId) ?? 'falcon'), alt: '' }),
-      h('div', { class: 'friend-info' }, h('b', {}, m.leader ? '★ ' : '', m.nickname), h('small', {}, m.publicId), h('span', { class: `friend-status ${m.status}` }, h('i'), t(m.status === 'match' ? 'friends.inMatch' : m.status === 'online' ? 'friends.online' : 'friends.offline'))),
+      h('div', { class: 'friend-info' }, h('b', {}, m.leader ? '★ ' : '', m.nickname), h('small', {}, m.publicId), m.ready !== undefined && (this.partyView?.party?.members.length ?? 0) > 1 ? h('span', { class: `ready-chip${m.ready ? ' on' : ''}` }, m.leader ? t('party.leader') : t(m.ready ? 'party.ready' : 'party.notReady')) : null, h('span', { class: `friend-status ${m.status}` }, h('i'), t(m.status === 'match' ? 'friends.inMatch' : m.status === 'online' ? 'friends.online' : 'friends.offline'))),
       this.mode !== 'casual' ? h('span', { class: 'friend-rank', html: rankEmblem(rk.id, rk.roman, this.mode as RankMode) }) : h('span'),
       h('div', { class: 'friend-actions' }, ...actions),
     ), m.self ? null : m.publicId);
@@ -403,13 +520,7 @@ export class OnlineScreen extends Screen {
       ),
       this.eventBanner(),
       h('div', { class: `online-layout${ranked ? ' ranked' : ''}` }, h('div', { class: 'online-col' }, ranked ? this.rankCard() : null, this.loadoutCard()), ranked ? this.ladder() : h('section', { class: 'card' }, h('p', { class: 'muted' }, t('online.subtitle')))),
-      h(
-        'div',
-        { class: 'online-action' },
-        this.searching
-          ? h('div', { class: 'searching' }, h('span', { class: 'spinner' }), ranked ? t('online.searchingMode', { m: t(`mode.${this.mode}` as TKey) }) : t('online.searching'), button(t('online.cancel'), () => this.cancelSearch(), 'btn danger'))
-          : button(ranked ? t('online.searchMode', { m: t(`mode.${this.mode}` as TKey) }) : t('online.search'), () => this.onSearch(), `launch-btn main online-go${ranked ? ' ranked' : ''}${this.partyView?.party && this.partyView.party.members.length > 1 && !this.partyView.party.isLeader ? ' locked' : ''}`, { 'data-autofocus': true }),
-      ),
+      this.actionArea(),
       ranked ? this.partyBlock() : null,
     );
   }

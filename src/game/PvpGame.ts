@@ -499,7 +499,7 @@ export class PvpGame {
       return;
     }
     if (s.kind === 'laser') {
-      const ray = this.raycast(s.x, s.y, s.angle, 760, s.ownerId);
+      const ray = this.raycast(s.x, s.y, s.angle, getWeaponDef('laser')?.range ?? 380, s.ownerId);
       this.beams.push({ x1: s.x, y1: s.y, x2: s.x + Math.cos(s.angle) * ray.dist, y2: s.y + Math.sin(s.angle) * ray.dist, t: 0, hostile: true });
       if (Vec2.dist(pos, this.player.pos) < 900 && this.clock - this.lastShotSfx > 0.08) {
         this.lastShotSfx = this.clock;
@@ -995,7 +995,7 @@ export class PvpGame {
   }
 
   private fireLaser(from: Vec2, angle: number): void {
-    const ray = this.raycast(from.x, from.y, angle, this.weapon.range ?? 760, this.selfId);
+    const ray = this.raycast(from.x, from.y, angle, this.weapon.range ?? 380, this.selfId);
     const x2 = from.x + Math.cos(angle) * ray.dist;
     const y2 = from.y + Math.sin(angle) * ray.dist;
     this.beams.push({ x1: from.x, y1: from.y, x2, y2, t: 0, hostile: false });

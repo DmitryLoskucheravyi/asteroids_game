@@ -76,7 +76,83 @@ async function startRoom(mode: QueueMode): Promise<void> {
   queues[mode] = queue.filter((e) => !taken.has(e));
   if (queues[mode].length && !waitTimers[mode]) waitTimers[mode] = setTimeout(() => void startRoom(mode), QUEUE_WAIT_MS);
   if (!picked.length) return;
+  // рейтинговий матч гравці мають прийняти; звичайний — одразу
+  if (mode === 'casual') await launchRoom(mode, picked);
+  else askAccept(mode, picked);
+}
 
+// ---------- прийняття рейтингового матчу ----------
+
+/** Скільки є на прийняття матчу */
+export const ACCEPT_MS = 20_000;
+
+interface Pending {
+  id: string;
+  mode: QueueMode;
+  entries: QueueEntry[];
+  accepted: Set<string>;
+  timer: ReturnType<typeof setTimeout>;
+}
+const pendings = new Map<string, Pending>();
+const pendingOf = new Map<string, string>();
+
+function askAccept(mode: QueueMode, entries: QueueEntry[]): void {
+  const id = randomBytes(6).toString('hex');
+  const deadline = Date.now() + ACCEPT_MS;
+  const p: Pending = { id, mode, entries, accepted: new Set(), timer: setTimeout(() => resolvePending(id, null), ACCEPT_MS) };
+  pendings.set(id, p);
+  for (const e of entries) {
+    pendingOf.set(e.socket.id, id);
+    e.socket.emit('match:found', { id, mode, deadline, total: entries.length, accepted: 0 });
+  }
+}
+
+export function acceptMatch(socketId: string, id: string): void {
+  const p = pendings.get(id);
+  if (!p || !p.entries.some((e) => e.socket.id === socketId)) return;
+  p.accepted.add(socketId);
+  for (const e of p.entries) e.socket.emit('match:found-progress', { id, accepted: p.accepted.size, total: p.entries.length });
+  if (p.accepted.size < p.entries.length) return;
+  // усі прийняли — у бій
+  clearTimeout(p.timer);
+  pendings.delete(id);
+  for (const e of p.entries) pendingOf.delete(e.socket.id);
+  void launchRoom(p.mode, p.entries);
+}
+
+/** Гравець відхилив (або відʼєднався / скасував пошук) під час прийняття. */
+export function declineMatch(socketId: string): boolean {
+  const id = pendingOf.get(socketId);
+  if (!id) return false;
+  resolvePending(id, socketId);
+  return true;
+}
+
+/**
+ * Матч не відбувся: відхилив decliner (або сплив час — тоді всі, хто не прийняв).
+ * Ці гравці випадають із черги разом зі своїми групами; решта повертається на початок черги.
+ */
+function resolvePending(id: string, decliner: string | null): void {
+  const p = pendings.get(id);
+  if (!p) return;
+  clearTimeout(p.timer);
+  pendings.delete(id);
+  for (const e of p.entries) pendingOf.delete(e.socket.id);
+  const failed = p.entries.filter((e) => (decliner ? e.socket.id === decliner : !p.accepted.has(e.socket.id)));
+  const failedGroups = new Set(failed.map((e) => e.groupId).filter((g): g is string => !!g));
+  const out = new Set(p.entries.filter((e) => failed.includes(e) || (e.groupId && failedGroups.has(e.groupId))));
+  for (const g of failedGroups) notifyService('social', `/internal/party/${g}/idle`, {});
+  const back = p.entries.filter((e) => !out.has(e) && e.socket.connected);
+  for (const e of out) e.socket.emit('match:found-cancel', { id, requeued: false, reason: decliner ? 'declined' : 'timeout' });
+  for (const e of back) e.socket.emit('match:found-cancel', { id, requeued: true, reason: 'other' });
+  // хто прийняв — на початок черги, без втрати місця
+  queues[p.mode] = [...back, ...queues[p.mode]];
+  if (queues[p.mode].length >= MODE_SPEC[p.mode].roomSize) void startRoom(p.mode);
+  else if (queues[p.mode].length && !waitTimers[p.mode]) waitTimers[p.mode] = setTimeout(() => void startRoom(p.mode), QUEUE_WAIT_MS);
+}
+
+/** Створити кімнату на найменш завантаженому ігровому сервері й роздати гравцям квитки. */
+async function launchRoom(mode: QueueMode, picked: QueueEntry[]): Promise<void> {
   const gs = pickGameServer();
   if (!gs) {
     for (const e of picked) e.socket.emit('queue:error', { error: 'no_game_server' });
@@ -118,6 +194,7 @@ export function enqueueGroup(entry: QueueEntry, mode: QueueMode, groupSize: numb
 }
 
 export function enqueue(entry: QueueEntry, mode: QueueMode): void {
+  if (pendingOf.has(entry.socket.id)) return;
   if (Object.values(queues).some((q) => q.some((e) => e.socket.id === entry.socket.id || e.userId === entry.userId))) return;
   const queue = queues[mode];
   queue.push(entry);
@@ -131,6 +208,7 @@ export function enqueue(entry: QueueEntry, mode: QueueMode): void {
 
 /** Вийти з черги; якщо гравець у групі — з черги виходить уся група (її учасники побачать це в стані групи). */
 export function dequeue(socketId: string): void {
+  if (declineMatch(socketId)) return;
   let groupId: string | null | undefined = null;
   for (const q of Object.values(queues)) {
     const e = q.find((x) => x.socket.id === socketId);

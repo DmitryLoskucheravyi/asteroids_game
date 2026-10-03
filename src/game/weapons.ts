@@ -54,7 +54,7 @@ export const WEAPON_DEFS: readonly WeaponDef[] = [
     fireRate: 12,
     projectileSpeed: 0,
     damage: 4,
-    range: 760,
+    range: 380,
     ammo: 'infinite',
     burst: { shots: 48, cooldown: 2.4 },
     price: 1200,

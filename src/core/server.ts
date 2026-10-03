@@ -108,6 +108,8 @@ export interface PartyMember {
   status: 'match' | 'online' | 'offline';
   leader?: boolean;
   self?: boolean;
+  /** Учасник групи натиснув «Готовий» (лідер — завжди готовий) */
+  ready?: boolean;
   inParty?: boolean;
 }
 
@@ -118,6 +120,8 @@ export interface PartyView {
     state: 'idle' | 'searching';
     version: number;
     isLeader: boolean;
+    /** Усі, крім лідера, готові — можна шукати матч */
+    allReady: boolean;
     maxSize: number;
     members: PartyMember[];
     invited: PartyMember[];
@@ -236,7 +240,7 @@ export const Server = {
   friendsPing: () => api.get<{ ok: boolean; partyInvites?: number }>('/friends/ping'),
   party: () => api.get<PartyView>('/party'),
   player: (key: string) => api.get<PlayerProfileView>(`/players/${encodeURIComponent(key.replace(/^#/, ''))}`),
-  partyAction: (action: 'invite' | 'accept' | 'decline' | 'leave' | 'kick' | 'mode' | 'search', body: Record<string, unknown> = {}) => api.post<PartyView>(`/party/${action}`, body),
+  partyAction: (action: 'invite' | 'accept' | 'decline' | 'leave' | 'kick' | 'mode' | 'search' | 'ready', body: Record<string, unknown> = {}) => api.post<PartyView>(`/party/${action}`, body),
   findPlayer: (publicId: string) => api.get<{ player: FriendCard; relation: 'self' | 'friend' | 'outgoing' | 'incoming' | 'none' }>(`/friends/search/${encodeURIComponent(publicId.replace(/^#/, ''))}`),
   friendAction: (action: 'request' | 'accept' | 'decline' | 'cancel' | 'remove', publicId: string) => api.post<FriendsView>(`/friends/${action}`, { publicId }),
   leaderboard: (by: string) => api.get<LeaderboardView>(`/leaderboard/${by}`),
