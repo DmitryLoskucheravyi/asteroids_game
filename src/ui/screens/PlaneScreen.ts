@@ -1,5 +1,6 @@
 import type { App } from '../../app/App';
 import { Sfx } from '../../core/audio';
+import { num } from '../../core/math';
 import { t, type TKey } from '../../core/i18n';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
@@ -14,6 +15,8 @@ import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
 import { HangarScreen } from './HangarScreen';
+import { StoreScreen } from './StoreScreen';
+import { CRATE_ONLY_PLANES } from '../../../server/src/shared/store';
 import { ItemsScreen, itemPic, statList, weaponPic, weaponStatLines } from './ItemsScreen';
 import { screenHeader, starsRow } from './LevelSelectScreen';
 
@@ -56,7 +59,10 @@ export class PlaneScreen extends Screen {
     const selected = this.owned && Save.data.plane === p.id;
 
     let action: HTMLElement;
-    if (!this.owned) {
+    if (!this.owned && CRATE_ONLY_PLANES.includes(p.id)) {
+      // ексклюзив — не продається, лише випадає з ящиків
+      action = h('div', { class: 'buy-row' }, h('span', { class: 'crate-only-tag' }, icon(Icons.gift, 'ico'), t('planes.crateOnly')), button(t('store.title'), () => this.app.show(new StoreScreen(this.app)), 'btn small'));
+    } else if (!this.owned) {
       const affordable = Save.data.coins >= p.price;
       action = h(
         'div',
@@ -141,8 +147,8 @@ export class PlaneScreen extends Screen {
       bar(t('stat.hitbox'), String(spec.radius), 1 - (spec.radius - 8) / 12, '#ff9a3a'),
       h('h4', { class: 'sub-title' }, t('planePage.firepower'), ' · ', t(weapon.nameKey)),
       statList([
-        { key: 'stat.damage', value: dmg.toFixed(1) },
-        { key: 'stat.dps', value: Math.round(dmg * weapon.fireRate * fireMul).toString() },
+        { key: 'stat.damage', value: weapon.pellets ? `${weapon.pellets} × ${num(dmg)}` : num(dmg) },
+        { key: 'stat.dps', value: Math.round(dmg * weapon.fireRate * fireMul * (weapon.salvo ?? 1) * (weapon.pellets ?? 1)).toString() },
         ...weaponStatLines(weapon, damageMul).slice(3),
       ]),
       h('h4', { class: 'sub-title' }, t('planePage.skills')),

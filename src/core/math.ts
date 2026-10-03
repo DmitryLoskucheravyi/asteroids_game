@@ -99,3 +99,6 @@ export interface Rect {
   w: number;
   h: number;
 }
+
+/** Число для інтерфейсу: щонайбільше 1 знак після коми, без зайвих нулів (23.4000001 → 23.4, 24.0 → 24). */
+export const num = (v: number): string => String(Math.round(v * 10) / 10);

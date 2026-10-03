@@ -1,6 +1,7 @@
 import { PLANE_IDS, PLANE_PRICES, type PlaneId } from './planes.js';
 import { ITEM_DEFS, type ItemRarity } from './items.js';
 import { WEAPON_DEFS } from './weapons.js';
+import { CRATE_ONLY_MIN, CRATE_ONLY_PLANES } from '../shared/store.js';
 
 export type CrateType = 'common' | 'rare' | 'epic' | 'mythic' | 'legendary';
 export const CRATE_TYPES: readonly CrateType[] = ['common', 'rare', 'epic', 'mythic', 'legendary'];
@@ -73,7 +74,7 @@ function pickKind(weights: Record<Kind, number>, only?: Kind[]): Kind {
 }
 
 /** Одна нагорода; якщо все цінне вже є — замінюється на щедру порцію монет/кристалів. */
-function rollOne(def: CrateDef, kind: Kind, owned: Owned): CrateReward {
+function rollOne(def: CrateDef, kind: Kind, owned: Owned, type: CrateType): CrateReward {
   switch (kind) {
     case 'coins':
       return { kind: 'coins', amount: between(def.coins) };
@@ -96,7 +97,8 @@ function rollOne(def: CrateDef, kind: Kind, owned: Owned): CrateReward {
       return { kind: 'weapon', weaponId: w.id };
     }
     case 'plane': {
-      const pool = PLANE_IDS.filter((id) => !owned.planes.includes(id));
+      // ексклюзивні літаки (нема в продажу) випадають лише з епічних ящиків і вище
+      const pool = PLANE_IDS.filter((id) => !owned.planes.includes(id) && (!CRATE_ONLY_PLANES.includes(id) || CRATE_ONLY_MIN.includes(type)));
       if (!pool.length) return { kind: 'coins', amount: between(def.coins) * 3 };
       // дорогі літаки випадають рідше за дешеві
       const id = weightedPick(pool, (p) => 1 / Math.max(150, PLANE_PRICES[p]));
@@ -112,7 +114,7 @@ export function openCrate(type: CrateType, owned: Owned): CrateReward[] {
   for (let i = 0; i < def.rolls; i++) {
     const jackpot = i === 0 && Math.random() < def.jackpotChance;
     const kind = jackpot ? pickKind(def.weights, ['item', 'weapon', 'plane']) : pickKind(def.weights);
-    out.push(rollOne(def, kind, owned));
+    out.push(rollOne(def, kind, owned, type));
   }
   return out;
 }

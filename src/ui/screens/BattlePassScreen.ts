@@ -115,6 +115,7 @@ export class BattlePassScreen extends Screen {
       this.render();
     } catch {
       Sfx.warning();
+      toast(t('pass.needGems'));
       btn.removeAttribute('aria-disabled');
     }
   }
@@ -195,7 +196,7 @@ export class BattlePassScreen extends Screen {
     let premiumCard: HTMLElement;
     if (premium) premiumCard = h('div', { class: 'bp-premium owned' }, icon(Icons.star, 'ico'), h('div', {}, h('b', {}, t('pass.premiumOwned')), h('small', {}, t('pass.premiumOwnedSub'))));
     else {
-      const buyBtn: HTMLButtonElement = button(h('span', { class: 'buy-label' }, coinBadge(this.premiumPrice, 'coin-badge small')), () => void this.buyPremium(buyBtn), 'btn primary');
+      const buyBtn: HTMLButtonElement = button(h('span', { class: 'buy-label' }, crystalBadge(this.premiumPrice, 'coin-badge small crystal-badge')), () => void this.buyPremium(buyBtn), 'btn primary');
       premiumCard = h('div', { class: 'bp-premium' }, icon(Icons.star, 'ico'), h('div', {}, h('b', {}, t('pass.buyPremium')), h('small', {}, t('pass.premiumPitch', { n: this.tiers.length, s: specials }))), buyBtn);
     }
 

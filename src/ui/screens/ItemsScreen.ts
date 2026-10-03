@@ -1,4 +1,5 @@
 import { Sfx } from '../../core/audio';
+import { num } from '../../core/math';
 import { t, type TKey } from '../../core/i18n';
 import { Server } from '../../core/server';
 import { Save } from '../../core/storage';
@@ -28,12 +29,12 @@ export function statList(lines: { key: TKey; value: string }[]): HTMLElement {
 export function weaponStatLines(def: WeaponDef, damageMul = 1): { key: TKey; value: string }[] {
   const dmg = def.damage * damageMul;
   const out: { key: TKey; value: string }[] = [
-    { key: 'stat.damage', value: dmg.toFixed(dmg < 10 ? 1 : 0) },
-    { key: 'stat.fireRate', value: `${def.fireRate}/s` },
-    { key: 'stat.dps', value: Math.round(dmg * def.fireRate * (def.salvo ?? 1)).toString() },
+    { key: 'stat.damage', value: def.pellets ? `${def.pellets} × ${num(dmg)}` : num(dmg) },
+    { key: 'stat.fireRate', value: `${num(def.fireRate)}/s` },
+    { key: 'stat.dps', value: Math.round(dmg * def.fireRate * (def.salvo ?? 1) * (def.pellets ?? 1)).toString() },
   ];
-  if (def.burst) out.push({ key: 'stat.burst', value: `${def.burst.shots} / ${def.burst.cooldown}s` });
-  if (typeof def.ammo === 'number') out.push({ key: 'stat.ammo', value: `${def.ammo} / ${def.reloadTime}s` });
+  if (def.burst) out.push({ key: 'stat.burst', value: `${def.burst.shots} / ${num(def.burst.cooldown)}s` });
+  if (typeof def.ammo === 'number') out.push({ key: 'stat.ammo', value: `${def.ammo} / ${num(def.reloadTime ?? 0)}s` });
   if (def.splashRadius) out.push({ key: 'stat.radius', value: String(def.splashRadius) });
   if (def.range) out.push({ key: 'stat.range', value: String(def.range) });
   if (def.salvo) out.push({ key: 'stat.salvo', value: `×${def.salvo}` });

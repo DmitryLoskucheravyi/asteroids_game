@@ -29,6 +29,7 @@ import { OnlineScreen } from './OnlineScreen';
 import { PlaneScreen } from './PlaneScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { StoreScreen } from './StoreScreen';
 import { QuestsScreen } from './QuestsScreen';
 
 /** Щоденну нагороду пропонуємо автоматично лише раз за сесію. */
@@ -227,6 +228,7 @@ export class MainMenuScreen extends Screen {
         { class: 'lobby-rail rail-left', 'aria-label': t('menu.planes') },
         this.railBtn(Icons.dash, t('menu.planes'), `${Save.data.owned.length} / ${PLANES.length}`, go(() => new HangarScreen(this.app))),
         this.railBtn(Icons.shield, t('menu.items'), `${new Set(Save.data.items.map((i) => i.defId)).size}`, go(() => new ItemsScreen(this.app))),
+        this.railBtn(Icons.crystal, t('store.title'), t('store.railSub'), go(() => new StoreScreen(this.app)), 0, 'store'),
         this.railBtn(Icons.gift, t('menu.crates'), unopened ? t('menu.cratesWaiting', { n: unopened }) : null, go(() => new CratesScreen(this.app)), unopened),
         this.railBtn(Icons.trophy, t('lb.title'), t('lb.railSub'), go(() => new LeaderboardScreen(this.app))),
         this.railBtn(Icons.homing, t('menu.howto'), null, go(() => new HowToScreen(this.app))),

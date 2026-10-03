@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { User } from '../models/User.js';
 import { requireAuth, type AuthedRequest } from '../middleware/auth.js';
 import { serializeProfile } from '../serialize.js';
-import { PASS_TIERS, currentSeason, PREMIUM_PASS_PRICE, type PassReward } from '../content/pass.js';
+import { PASS_TIERS, currentSeason, type PassReward } from '../content/pass.js';
+import { PREMIUM_PASS_GEMS } from '../shared/store.js';
 import { getItemDef } from '../content/items.js';
 import { duplicateCrystals } from '../content/compensation.js';
 import { getWeaponDef } from '../content/weapons.js';
@@ -22,7 +23,7 @@ passRouter.get('/', async (req: AuthedRequest, res) => {
   }
   const season = currentSeason();
   res.json({
-    season: { id: season.id, startsAt: season.startsAt, endsAt: season.endsAt, tiers: PASS_TIERS, premiumPrice: PREMIUM_PASS_PRICE },
+    season: { id: season.id, startsAt: season.startsAt, endsAt: season.endsAt, tiers: PASS_TIERS, premiumPrice: PREMIUM_PASS_GEMS, premiumCurrency: 'gems' },
     bpPoints: user.passSeasonId === season.id ? user.passBpPoints : 0,
     premium: user.passSeasonId === season.id ? user.passPremium : false,
     claimedFree: user.passSeasonId === season.id ? user.passClaimedFree : [],

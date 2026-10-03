@@ -1,5 +1,6 @@
 import type { PlaneFeature, PlaneSpec } from './planes';
 import type { TKey } from '../core/i18n';
+import { num } from '../core/math';
 
 export type ItemRarity = 'common' | 'rare' | 'epic' | 'mythic' | 'legendary';
 export type ItemSlot = 'active' | 'passive';
@@ -100,13 +101,13 @@ export function loadoutDamageBonus(...defs: (ItemDef | undefined)[]): number {
 /** Список рядків "характеристика → значення" для картки предмета. */
 export function itemStatLines(def: ItemDef): { key: TKey; value: string }[] {
   const out: { key: TKey; value: string }[] = [];
-  const pct = (v: number) => `+${Math.round(v * 100)}%`;
+  const pct = (v: number) => `+${num(v * 100)}%`;
   const c = def.combat ?? {};
-  if (c.hp) out.push({ key: 'stat.hp', value: `+${c.hp}` });
+  if (c.hp) out.push({ key: 'stat.hp', value: `+${num(c.hp)}` });
   if (c.damage) out.push({ key: 'stat.damage', value: pct(c.damage) });
   if (c.fireRate) out.push({ key: 'stat.fireRate', value: pct(c.fireRate) });
   if (c.speed) out.push({ key: 'stat.speed', value: pct(c.speed) });
-  if (c.cooldown) out.push({ key: 'stat.cooldown', value: `−${Math.round(c.cooldown * 100)}%` });
+  if (c.cooldown) out.push({ key: 'stat.cooldown', value: `−${num(c.cooldown * 100)}%` });
   const f = def.feature ?? {};
   if (f.magnetRadius) out.push({ key: 'stat.magnet', value: `+${f.magnetRadius}` });
   if (f.extraLives) out.push({ key: 'stat.lives', value: `+${f.extraLives}` });
@@ -114,12 +115,12 @@ export function itemStatLines(def: ItemDef): { key: TKey; value: string }[] {
   if (f.startShield) out.push({ key: 'stat.startShield', value: '✓' });
   const a = def.active;
   if (a) {
-    out.push({ key: 'stat.itemCooldown', value: `${a.cooldown} s` });
-    if (a.duration) out.push({ key: 'stat.duration', value: `${a.duration} s` });
+    out.push({ key: 'stat.itemCooldown', value: `${num(a.cooldown)} s` });
+    if (a.duration) out.push({ key: 'stat.duration', value: `${num(a.duration)} s` });
     if (a.radius) out.push({ key: 'stat.radius', value: String(a.radius) });
-    if (a.kind === 'nanoRepair' && a.power) out.push({ key: 'stat.heal', value: `+${a.power} HP` });
-    if (a.kind === 'emp' && a.power) out.push({ key: 'stat.pulseDamage', value: String(a.power) });
-    if (a.kind === 'swarm' && a.power) out.push({ key: 'stat.pulseDamage', value: `6 × ${a.power}` });
+    if (a.kind === 'nanoRepair' && a.power) out.push({ key: 'stat.heal', value: `+${num(a.power)} HP` });
+    if (a.kind === 'emp' && a.power) out.push({ key: 'stat.pulseDamage', value: num(a.power) });
+    if (a.kind === 'swarm' && a.power) out.push({ key: 'stat.pulseDamage', value: `6 × ${num(a.power)}` });
   }
   return out;
 }

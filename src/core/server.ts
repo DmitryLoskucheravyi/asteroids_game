@@ -205,6 +205,8 @@ export const Server = {
 
   profile: () => api.get<{ profile: ServerProfile }>('/profile'),
   selectPlane: (planeId: PlaneId) => api.post<{ profile: ServerProfile }>('/profile/select-plane', { planeId }),
+  buyCrate: (type: 'common' | 'rare' | 'epic' | 'mythic' | 'legendary') => api.post<{ profile: ServerProfile }>('/shop/buy-crate', { type }),
+  buyGems: (pack: string) => api.post<{ profile: ServerProfile }>('/shop/buy-gems', { pack }),
   buyPlane: (planeId: PlaneId) => api.post<{ profile: ServerProfile }>('/profile/buy-plane', { planeId }),
   importLocal: (data: { coins: number; owned: string[]; stars: number[]; unlocked: number; survivalTop: { time: number; date: string }[] }) =>
     api.post<{ profile: ServerProfile }>('/profile/import-local', data),

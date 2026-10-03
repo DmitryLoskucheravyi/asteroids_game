@@ -2,14 +2,16 @@
 import { writeFileSync } from 'node:fs';
 import { levelReward, survivalReward, DAILY_REWARDS, xpToNext, MAX_PILOT_LEVEL, pilotLevelReward } from '../src/content/economy.js';
 import { MAX_LEVEL, CRYSTAL_COINS } from '../src/content/levels.js';
-import { PASS_TIERS, PREMIUM_PASS_PRICE, SEASON_DAYS, bpForLevelComplete, bpForSurvival, bpForQuestClaim, type PassReward } from '../src/content/pass.js';
+import { PREMIUM_PASS_GEMS } from '../src/shared/store.js';
+import { PASS_TIERS, SEASON_DAYS, bpForLevelComplete, bpForSurvival, bpForQuestClaim, type PassReward } from '../src/content/pass.js';
 import { PLANE_IDS, PLANE_PRICES, levelUpCost, tierUpCost, planeCombat, upgradeRate, MAX_TIER, MAX_LEVEL_IN_TIER } from '../src/content/planes.js';
 import { QUEST_POOL, WEEKLY_QUEST_POOL } from '../src/content/quests.js';
 import { RANK_IDS, DIVISIONS, RP_PER_DIVISION, RP_BY_PLACE, rankDelta, botStrength, seasonReward } from '../src/content/ranks.js';
 import { CRATES, CRATE_TYPES, ITEM_RARITY_WEIGHT, openCrate } from '../src/content/crates.js';
 import { duplicateCrystals } from '../src/content/compensation.js';
 import { WEAPON_DEFS } from '../src/content/weapons.js';
-import { matchReward, PLACE_CRATE_WEIGHTS, ROOM_SIZE, FLARE_COOLDOWN_MS, FLARE_DURATION_MS } from '../src/pvp/constants.js';
+import { matchReward, PLACE_CRATE_WEIGHTS, ROOM_SIZE, FLARE_COOLDOWN_MS } from '../src/pvp/constants.js';
+import { FLARE_ACTIVE_MS as FLARE_DURATION_MS } from '../src/shared/flares.js';
 import { PLANES, PVP_PROGRESS_SCALE, effectivePlaneSpec } from '../../src/game/planes.js';
 import { ITEM_DEFS } from '../../src/game/items.js';
 import { BOOST_DURATION, BOOST_MULTIPLIER, FLARE_RADIUS, FREEZE_DURATION, JUMP_COOLDOWN } from '../../src/game/systems/SkillSystem.js';
@@ -314,7 +316,7 @@ table(['Завдання', 'Ціль', 'Монети', 'XP', 'Ящик'], WEEKLY
 // ---------- пропуск ----------
 p('## 12. Сезонний пропуск');
 p();
-p(`${PASS_TIERS.length} тьєрів, сезон ${SEASON_DAYS} днів. Преміум коштує ${n(PREMIUM_PASS_PRICE)} монет на сезон. BP: рівні кампанії, виживання, завдання, PvP. У пропуску лише половина каталогу; предмет/зброя/літак, які вже є, компенсуються кристалами (таблиця в розділі 8).`);
+p(`${PASS_TIERS.length} тьєрів, сезон ${SEASON_DAYS} днів. Преміум коштує ${n(PREMIUM_PASS_GEMS)} гемів на сезон. BP: рівні кампанії, виживання, завдання, PvP. У пропуску лише половина каталогу; предмет/зброя/літак, які вже є, компенсуються кристалами (таблиця в розділі 8).`);
 p();
 const rw = (r: PassReward) =>
   [`${n(r.coins)} 🪙`, `${r.xp} XP`, r.crystals ? `${r.crystals} 💎` : '', r.crate ? `ящик: ${RARITY[r.crate]}` : '', r.item ? `**${ITEM_NAME[r.item]}**` : '', r.weapon ? `**${WEAPON_NAME[r.weapon]}**` : '', r.plane ? `**літак ${PLANE_NAME[r.plane]}**` : '']

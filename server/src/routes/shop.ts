@@ -6,7 +6,9 @@ import { ensureQuestSlots, incrementQuestProgress, ensureSeason } from '../progr
 import { getItemDef } from '../content/items.js';
 import { getWeaponDef } from '../content/weapons.js';
 import { isPlaneId, PLANE_PRICES } from '../content/planes.js';
-import { PREMIUM_PASS_PRICE } from '../content/pass.js';
+import { CRATE_ONLY_PLANES, CRATE_PRICES, GEM_PACKS, PREMIUM_PASS_GEMS } from '../shared/store.js';
+import { isCrateType } from '../content/crates.js';
+import { grantReward } from '../progress.js';
 import { MAX_GEAR_LEVEL, itemUpgradeCost, weaponUpgradeCost } from '../shared/gear.js';
 
 /**
@@ -85,6 +87,10 @@ shopRouter.post('/profile/buy-plane', async (req: AuthedRequest, res) => {
     res.status(400).json({ error: 'bad_plane' });
     return;
   }
+  if (CRATE_ONLY_PLANES.includes(planeId)) {
+    res.status(403).json({ error: 'crate_only' });
+    return;
+  }
   if (user.ownedPlanes.includes(planeId)) {
     res.status(409).json({ error: 'already_owned' });
     return;
@@ -112,11 +118,11 @@ shopRouter.post('/pass/buy-premium', async (req: AuthedRequest, res) => {
     res.status(409).json({ error: 'already_premium' });
     return;
   }
-  if (user.coins < PREMIUM_PASS_PRICE) {
-    res.status(402).json({ error: 'not_enough_coins' });
+  if (user.crystals < PREMIUM_PASS_GEMS) {
+    res.status(402).json({ error: 'not_enough_gems' });
     return;
   }
-  user.coins -= PREMIUM_PASS_PRICE;
+  user.crystals -= PREMIUM_PASS_GEMS;
   user.passPremium = true;
   await user.save();
   res.json({ profile: serializeProfile(user) });
@@ -179,6 +185,52 @@ shopRouter.post('/items/upgrade', async (req: AuthedRequest, res) => {
     res.status(400).json({ error: 'bad_kind' });
     return;
   }
+  await user.save();
+  res.json({ profile: serializeProfile(user) });
+});
+
+/** Магазин: ящик за монети (звичайний) або за геми (решта). Ящик потрапляє в колекцію — відкривається на екрані ящиків. */
+shopRouter.post('/shop/buy-crate', async (req: AuthedRequest, res) => {
+  const type = String(req.body?.type ?? '');
+  if (!isCrateType(type)) {
+    res.status(400).json({ error: 'bad_crate' });
+    return;
+  }
+  const user = await User.findById(req.userId);
+  if (!user) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const price = CRATE_PRICES[type];
+  if ((price.coins ?? 0) > user.coins || (price.gems ?? 0) > user.crystals) {
+    res.status(402).json({ error: 'not_enough' });
+    return;
+  }
+  user.coins -= price.coins ?? 0;
+  user.crystals -= price.gems ?? 0;
+  grantReward(user, { crate: type }, 'shop');
+  await user.save();
+  res.json({ profile: serializeProfile(user) });
+});
+
+/** Набір гемів за монети. */
+shopRouter.post('/shop/buy-gems', async (req: AuthedRequest, res) => {
+  const pack = GEM_PACKS.find((p) => p.id === req.body?.pack);
+  if (!pack) {
+    res.status(400).json({ error: 'bad_pack' });
+    return;
+  }
+  const user = await User.findById(req.userId);
+  if (!user) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  if (user.coins < pack.coins) {
+    res.status(402).json({ error: 'not_enough_coins' });
+    return;
+  }
+  user.coins -= pack.coins;
+  user.crystals += pack.gems;
   await user.save();
   res.json({ profile: serializeProfile(user) });
 });
