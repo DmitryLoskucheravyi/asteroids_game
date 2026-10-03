@@ -9905,3 +9905,85 @@ input[type='range'] {
     animation: none;
   }
 }
+
+/* ---------- dev-вітрина анімацій ---------- */
+.showcase {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.showcase .screen-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.showcase .dev-tag {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #0c1020;
+  background: #ffd24a;
+  border-radius: 999px;
+}
+
+.showcase-tabs,
+.showcase-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.showcase-tabs .tab,
+.showcase-controls .seg-btn {
+  padding: 6px 12px;
+  font-weight: 700;
+  color: #d8dce8;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+}
+
+.showcase-tabs .tab.on,
+.showcase-controls .seg-btn.on {
+  color: #0c1020;
+  background: #58d2ff;
+  border-color: #58d2ff;
+}
+
+.showcase-seg {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.showcase-seg small {
+  margin-right: 4px;
+  color: var(--muted, #9fb0d0);
+}
+
+.showcase-canvas {
+  display: block;
+  width: 100%;
+  min-height: 400px;
+  border-radius: 12px;
+  background: #05040d;
+}
+
+.showcase-hud-wrap {
+  position: relative;
+  min-height: 220px;
+  padding: 20px;
+  border-radius: 12px;
+  background: #05040d;
+}
+
+.showcase-hud-wrap .hud-skills.showcase-hud {
+  position: static;
+  transform: none;
+  justify-content: center;
+  margin-top: 30px;
+}

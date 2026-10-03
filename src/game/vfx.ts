@@ -696,3 +696,57 @@ export function cometTail(ctx: Ctx, ux: number, uy: number, r: number, time: num
   }
   ctx.restore();
 }
+
+/** Зона фірмової гармати: вогонь, кислота або мікро-"чорна діра". k — частка прожитого часу 0..1. */
+export function zoneFx(ctx: Ctx, x: number, y: number, r: number, kind: 'fire' | 'acid' | 'void', k: number, time: number, color = '#a06aff'): void {
+  const fade = k < 0.15 ? k / 0.15 : k > 0.8 ? (1 - k) / 0.2 : 1;
+  if (kind === 'void') {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(4,2,12,${0.9 * fade})`);
+    g.addColorStop(0.45, `rgba(40,20,70,${0.5 * fade})`);
+    g.addColorStop(1, 'rgba(40,20,70,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const c = rgbOf(color);
+    for (let i = 0; i < 3; i++) {
+      const p = (time * 0.8 + i / 3) % 1;
+      ctx.strokeStyle = `rgba(${c},${0.6 * fade * p})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r * (1 - p * 0.8), time * 3 + i, time * 3 + i + Math.PI * 1.2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+  const rgb = kind === 'acid' ? '120,230,60' : '255,120,40';
+  const pulse = 0.85 + Math.sin(time * 8 + x) * 0.15;
+  drawGlow(ctx, x, y, `rgba(${rgb},1)`, r * 1.1 * pulse, 0.45 * fade);
+  ctx.strokeStyle = `rgba(${rgb},${0.5 * fade})`;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 6]);
+  ctx.lineDashOffset = -time * 20;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // язики полум'я / бульбашки кислоти
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 9; i++) {
+    const p = (time * 1.4 + hash(i + x) ) % 1;
+    const a = hash(i * 3.7 + x) * Math.PI * 2;
+    const d = hash(i * 5.1 + y) * r * 0.85;
+    const px = x + Math.cos(a) * d;
+    const py = y + Math.sin(a) * d - p * 16;
+    ctx.fillStyle = kind === 'acid' ? `rgba(200,255,150,${(1 - p) * fade})` : `rgba(255,${Math.round(220 - p * 140)},80,${(1 - p) * fade})`;
+    ctx.beginPath();
+    ctx.arc(px, py, 2 + (1 - p) * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}

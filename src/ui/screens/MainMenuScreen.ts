@@ -1,4 +1,5 @@
 import { Sfx } from '../../core/audio';
+import { ShowcaseScreen } from './ShowcaseScreen';
 import { t, type TKey } from '../../core/i18n';
 import { formatTime } from '../../core/math';
 import { Save, type PlayMode } from '../../core/storage';
@@ -232,6 +233,8 @@ export class MainMenuScreen extends Screen {
         this.railBtn(Icons.gift, t('menu.crates'), unopened ? t('menu.cratesWaiting', { n: unopened }) : null, go(() => new CratesScreen(this.app)), unopened),
         this.railBtn(Icons.trophy, t('lb.title'), t('lb.railSub'), go(() => new LeaderboardScreen(this.app))),
         this.railBtn(Icons.homing, t('menu.howto'), null, go(() => new HowToScreen(this.app))),
+        // лише в dev: вітрина всіх анімацій, пострілів, літаків і ефектів
+        import.meta.env.DEV ? this.railBtn(Icons.play, 'Вітрина (dev)', 'анімації й ефекти', go(() => new ShowcaseScreen(this.app)), 0, 'dev') : null,
       ),
       this.stage(),
       h(
