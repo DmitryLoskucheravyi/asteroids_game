@@ -1,4 +1,6 @@
 import type { PlaneId } from './planes';
+import { EVOLUTION } from './art/evolution';
+import { canopy, dot, ellipse, feather, flicker, hole, mirror, missile, navLights, nozzle, parseColor, poly, rect, rotatePts, shade, sym, type Part, type ShapePart } from './art/shapes';
 
 /**
  * Піксель-арт графіка літаків — усе малюється кодом, без картинок.
@@ -12,124 +14,6 @@ import type { PlaneId } from './planes';
  */
 
 type Ctx = CanvasRenderingContext2D;
-
-// ---------- кольори ----------
-
-function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-function parseColor(c: string): [number, number, number] {
-  if (c[0] === '#') return hexToRgb(c);
-  const m = c.match(/\(([^)]+)\)/);
-  if (m) {
-    const [r, g, b] = m[1].split(',').map((s) => parseFloat(s));
-    return [r, g, b];
-  }
-  return [255, 0, 255];
-}
-
-/** k > 0 — світліше (до білого), k < 0 — темніше (до чорного). Приймає і '#hex', і 'rgb(...)' (для подвійного тонування). */
-function shade(color: string, k: number): string {
-  const [r, g, b] = parseColor(color);
-  const f = (c: number) => Math.round(k >= 0 ? c + (255 - c) * k : c * (1 + k));
-  return `rgb(${f(r)},${f(g)},${f(b)})`;
-}
-
-// ---------- геометрія ----------
-
-/** Дзеркальна копія лівої деталі праворуч. */
-function mirror(pts: number[]): number[] {
-  return pts.map((v, i) => (i % 2 === 0 ? -v : v));
-}
-
-/** Симетричний контур із точок лівої половини (від носа до хвоста). */
-function sym(half: number[]): number[] {
-  const pts = [...half];
-  for (let i = half.length - 2; i >= 0; i -= 2) pts.push(-half[i], half[i + 1]);
-  return pts;
-}
-
-function rotatePts(pts: number[], cx: number, cy: number, angle: number): number[] {
-  const c = Math.cos(angle);
-  const s = Math.sin(angle);
-  const out: number[] = [];
-  for (let i = 0; i < pts.length; i += 2) {
-    const x = pts[i];
-    const y = pts[i + 1];
-    out.push(cx + x * c - y * s, cy + x * s + y * c);
-  }
-  return out;
-}
-
-/** Перо-подібний (лінзовидний) контур довжиною len і півшириною w; вістря в (0,0), напрям +x. */
-function feather(len: number, w: number): number[] {
-  const n = 5;
-  const pts: number[] = [];
-  for (let i = 0; i <= n; i++) pts.push((i / n) * len, -w * Math.sin((i / n) * Math.PI));
-  for (let i = n; i >= 0; i--) pts.push((i / n) * len, w * Math.sin((i / n) * Math.PI));
-  return pts;
-}
-
-// ---------- фігури ----------
-
-/** Частина літака: багатокутник, еліпс, прямокутник, "дірка" (виріз) або один піксель. */
-type Part =
-  | { kind: 'poly'; pts: number[]; base: string; flat?: boolean }
-  | { kind: 'ellipse'; x: number; y: number; rx: number; ry: number; base: string; flat?: boolean }
-  | { kind: 'rect'; x: number; y: number; w: number; h: number; base: string; flat?: boolean }
-  | { kind: 'hole'; x: number; y: number; rx: number; ry: number }
-  | { kind: 'dot'; x: number; y: number; color: string };
-
-type ShapePart = Exclude<Part, { kind: 'dot' }>;
-
-function poly(pts: number[], base: string, flat?: boolean): Part {
-  return { kind: 'poly', pts, base, flat };
-}
-function ellipse(x: number, y: number, rx: number, ry: number, base: string, flat?: boolean): Part {
-  return { kind: 'ellipse', x, y, rx, ry, base, flat };
-}
-function rect(x: number, y: number, w: number, h: number, base: string, flat?: boolean): Part {
-  return { kind: 'rect', x, y, w, h, base, flat };
-}
-function hole(x: number, y: number, rx: number, ry: number): Part {
-  return { kind: 'hole', x, y, rx, ry };
-}
-function dot(x: number, y: number, color: string): Part {
-  return { kind: 'dot', x, y, color };
-}
-
-/** Скляний ліхтар кабіни + відблиск у вигляді світлого пікселя. */
-function canopy(x: number, y: number, rx: number, ry: number, glass: string): Part[] {
-  return [ellipse(x, y, rx, ry, glass), dot(x - rx * 0.35, y - ry * 0.45, '#ffffff')];
-}
-
-/** Сопло двигуна (темний корпус; полум'я домальовується в анімації). */
-function nozzle(x: number, y: number, w: number, h: number): Part {
-  return rect(x - w / 2, y - h / 2, w, h, '#2a2d38', true);
-}
-
-/** Пляма полум'я/жару заданого кольору. */
-function flame(x: number, y: number, w: number, h: number, hot: string): Part {
-  return rect(x - w / 2, y - h / 2, w, h, hot, true);
-}
-
-/** Мерехтливе полум'я — перемикається між двома кольорами (піксельна анімація, без плавних переходів). */
-function flicker(x: number, y: number, w: number, h: number, t: number, a: string, b: string): Part {
-  return flame(x, y, w, h, Math.floor(t * 14) % 2 === 0 ? a : b);
-}
-
-/** Ракета під крилом: корпус + бойова частина. */
-function missile(x: number, y: number, len: number, tip = '#ff4a3a'): Part[] {
-  return [rect(x - 1.1, y, 2.2, len, '#e6e9f0'), ellipse(x, y + 1.1, 1.3, 1.5, tip, true)];
-}
-
-/** Навігаційні вогні на кінцях крил: червоний ліворуч, зелений праворуч, жорстко блимають. */
-function navLights(x: number, y: number, t: number): Part[] {
-  const on = Math.floor(t * 6) % 2 === 0;
-  return [dot(-x, y, on ? '#ff3030' : '#902020'), dot(x, y, on ? '#30ff70' : '#1a7a40')];
-}
 
 // ---------- літаки ----------
 
@@ -559,143 +443,26 @@ const SHIPS: Record<PlaneId, ShipDef> = {
 /** Колір тіру за номером тіру (1 — без тінту, виглядає як базовий корпус). Експортується для UI (бейджі/зірки в ангарі). */
 export const TIER_COLORS: Record<number, string> = { 1: '', 2: '#8fd8ff', 3: '#c08aff', 4: '#ffd24a' };
 
-/** Змішує колір у бік target на amount (0..1), зберігаючи загальну яскравість деталі. */
-function tintToward(base: string, target: string, amount: number): string {
-  const [r1, g1, b1] = parseColor(base);
-  const [r2, g2, b2] = parseColor(target);
-  const mix = (a: number, b: number) => Math.round(a + (b - a) * amount);
-  return `rgb(${mix(r1, r2)},${mix(g1, g2)},${mix(b1, b2)})`;
+/** Шари статичного корпусу: морфи тіру під корпусом → корпус → морфи поверх → обвіси рівня → піпси тіру. */
+function layeredParts(id: PlaneId, tier: number, level: number): Part[] {
+  const evo = EVOLUTION[id];
+  const t = Math.max(1, Math.min(4, tier));
+  const l = Math.max(1, Math.min(4, level));
+  const morphs = evo.morphs.slice(0, t - 1);
+  const under = morphs.flatMap((m) => m.under ?? []);
+  const over = morphs.flatMap((m) => m.over ?? []);
+  const addons = evo.addons.slice(0, l - 1).flat();
+  // піпси тіру — єдине місце на корпусі в кольорі тіру: T2 — 2 пікселі, T3 — 3, T4 — 4
+  const pips: Part[] = [];
+  if (t >= 2) for (let i = 0; i < t; i++) pips.push(dot(evo.pips.x + evo.pips.dx * i, evo.pips.y + evo.pips.dy * i, TIER_COLORS[t]));
+  return [...under, ...SHIPS[id].parts, ...over, ...addons, ...pips];
 }
 
-/** Ключові точки силуету: кінчик крила (найдальша від осі точка), ніс і хвіст. */
-function silhouette(parts: Part[]): { tipX: number; tipY: number; noseY: number; tailY: number; bodyW: number } {
-  let tipX = 0;
-  let tipY = 0;
-  let noseY = Infinity;
-  let tailY = -Infinity;
-  let bodyW = 3;
-  const visit = (x: number, y: number) => {
-    if (Math.abs(x) > tipX) {
-      tipX = Math.abs(x);
-      tipY = y;
-    }
-    if (y < noseY) noseY = y;
-    if (y > tailY) tailY = y;
-    // ширина фюзеляжу в районі центру — для бронеплит
-    if (Math.abs(y) < 6 && Math.abs(x) < 8) bodyW = Math.max(bodyW, Math.abs(x));
-  };
-  for (const p of parts) {
-    if (p.kind === 'poly') for (let i = 0; i < p.pts.length; i += 2) visit(p.pts[i], p.pts[i + 1]);
-    else if (p.kind === 'rect') {
-      visit(p.x, p.y);
-      visit(p.x + p.w, p.y + p.h);
-    } else if (p.kind === 'ellipse') {
-      visit(p.x - p.rx, p.y);
-      visit(p.x + p.rx, p.y);
-      visit(p.x, p.y - p.ry);
-      visit(p.x, p.y + p.ry);
-    }
-  }
-  return { tipX, tipY, noseY, tailY, bodyW };
-}
-
-const LIMIT = 34.5;
-const clampX = (x: number) => Math.max(-LIMIT, Math.min(LIMIT, x));
-
-/** Пара симетричних деталей (ліва + дзеркальна права). */
-function pair(make: (side: 1 | -1) => Part[]): Part[] {
-  return [...make(-1), ...make(1)];
-}
-
-/**
- * Тір — помітно новий корпус поверх базового силуету:
- * 2 — бронеплити вздовж фюзеляжу й бокові повітрозабірники, корпус у тіровому кольорі;
- * 3 — додаються передні кермà (canards), подвійні кілі й темні броньовані смуги;
- * 4 — розширені крила-лезо з золотою окантовкою, додаткові сопла й світне ядро.
- */
-function applyTierSkin(parts: Part[], tier: number): Part[] {
-  if (tier <= 1) return parts;
-  const tint = TIER_COLORS[Math.min(tier, 4)];
-  // легкий тінт — корпус лишається насиченим, а новий вигляд дають деталі
-  const amount = 0.08 + tier * 0.06;
-  const recolored = parts.map((p) => {
-    if (p.kind === 'hole' || p.kind === 'dot' || p.flat) return p;
-    return { ...p, base: tintToward(p.base, tint, amount) };
-  });
-  const { tipX, tipY, noseY, tailY, bodyW } = silhouette(parts);
-  const len = tailY - noseY;
-  const gun = '#3a4258';
-  const under: Part[] = [];
-  const over: Part[] = [];
-
-  // T2: темні бронеплити вздовж фюзеляжу з яскравою окантовкою + повітрозабірники
-  over.push(
-    ...pair((sd) => [
-      poly([sd * (bodyW - 0.5), noseY + len * 0.26, sd * (bodyW + 4.2), noseY + len * 0.36, sd * (bodyW + 4.2), noseY + len * 0.74, sd * (bodyW - 0.5), noseY + len * 0.84], gun),
-      rect(sd > 0 ? bodyW + 3 : -bodyW - 4.2, noseY + len * 0.38, 1.2, len * 0.34, tint, true),
-      rect(sd > 0 ? bodyW + 0.6 : -bodyW - 2.6, noseY + len * 0.4, 2, 4, '#0c0f1c', true),
-    ]),
-  );
-
-  if (tier >= 3) {
-    // великі передні кермà
-    under.push(...pair((sd) => [poly([sd * bodyW, noseY + len * 0.16, sd * clampX(bodyW + 12), noseY + len * 0.3, sd * clampX(bodyW + 11), noseY + len * 0.36, sd * bodyW, noseY + len * 0.32], shade(tint, -0.25))]));
-    // подвійні кілі
-    over.push(...pair((sd) => [poly([sd * (bodyW + 0.5), tailY - len * 0.3, sd * (bodyW + 5.5), tailY - len * 0.02, sd * (bodyW + 1), tailY - len * 0.06], shade(tint, -0.1)), dot(sd * (bodyW + 4.5), tailY - len * 0.05, tint)]));
-    // яскраві смуги на крилах
-    over.push(...pair((sd) => [poly([sd * tipX * 0.5, tipY - 3, sd * tipX * 0.62, tipY - 3, sd * tipX * 0.62, tipY + 4, sd * tipX * 0.5, tipY + 4], tint, true)]));
-  }
-
-  if (tier >= 4) {
-    const gold = '#ffd24a';
-    // крила-лезо з золотою кромкою
-    under.push(
-      ...pair((sd) => [
-        poly([sd * tipX * 0.55, tipY - 3, sd * clampX(tipX + 6.5), tipY + 2, sd * clampX(tipX + 5), tipY + 11, sd * tipX * 0.65, tipY + 5], shade(tint, -0.3)),
-        poly([sd * clampX(tipX + 3), tipY + 1, sd * clampX(tipX + 6.5), tipY + 2, sd * clampX(tipX + 5), tipY + 11, sd * clampX(tipX + 3.5), tipY + 8], gold),
-      ]),
-    );
-    // додаткові сопла з вогнем
-    over.push(...pair((sd) => [rect(sd > 0 ? bodyW + 0.4 : -bodyW - 4.4, tailY - 3.6, 4, 4, '#2a2d38', true), rect(sd > 0 ? bodyW + 1.2 : -bodyW - 3.6, tailY, 2.4, 2, '#ffcf6a', true)]));
-    // світне ядро і золотий ніс
-    over.push(ellipse(0, noseY + len * 0.56, 2, 3.6, '#fff3b0', true), poly([0, noseY - 0.5, -1.8, noseY + 4, 1.8, noseY + 4], gold, true));
-  }
-  return [...under, ...recolored, ...over];
-}
-
-/**
- * Рівень у межах тіру — обвіси, які видно з першого погляду:
- * 2 — підвісні паливні баки під крилами; 3 — пара великих ракет на пілонах;
- * 4 — сенсорна штанга на носі, напрямні на кінцях крил і спинний гребінь.
- */
-function levelPips(parts: Part[], tier: number, level: number): Part[] {
-  if (level <= 1) return [];
-  const accent = TIER_COLORS[Math.max(2, Math.min(tier, 4))] || '#8fd8ff';
-  const { tipX, tipY, noseY, tailY, bodyW } = silhouette(parts);
-  const len = tailY - noseY;
-  const out: Part[] = [];
-  // паливні баки
-  out.push(...pair((sd) => [ellipse(sd * tipX * 0.4, tipY + 3, 2.6, 6.2, '#d8dce8'), rect(sd * tipX * 0.4 - 1.3, tipY + 7, 2.6, 1.6, accent, true)]));
-  if (level >= 3) {
-    // великі ракети з червоними боєголовками
-    out.push(
-      ...pair((sd) => {
-        const x = sd * tipX * 0.74;
-        return [rect(x - 1.5, tipY - 6, 3, 13, '#e6e9f0'), ellipse(x, tipY - 6, 1.6, 2.4, '#ff3a3a', true), rect(x - 2.6, tipY + 5, 5.2, 2, shade(accent, -0.2))];
-      }),
-    );
-  }
-  if (level >= 4) {
-    out.push(
-      rect(-0.8, noseY - 5, 1.6, 6, '#d8dce8', true),
-      dot(0, noseY - 5.2, '#ff3a3a'),
-      // спинний гребінь
-      poly([0, noseY + len * 0.45, -1.6, noseY + len * 0.6, 0, noseY + len * 0.75, 1.6, noseY + len * 0.6], accent, true),
-      ...pair((sd) => [rect(sd > 0 ? clampX(tipX) - 2 : -clampX(tipX), tipY - 6, 2, 10, '#9aa6c0'), dot(sd * (clampX(tipX) - 1), tipY - 6.4, accent)]),
-    );
-  }
-  void bodyW;
-  return out;
+/** Анімовані деталі: вогні корпусу (або заміна базової анімації) + анімації морфів і обвісів. */
+function animParts(id: PlaneId, t: number, tier: number, level: number): Part[] {
+  const evo = EVOLUTION[id];
+  const base = evo.baseAnim ? evo.baseAnim(t, tier) : SHIPS[id].anim?.(t) ?? [];
+  return [...base, ...(evo.morphAnim?.(t, tier) ?? []), ...(evo.addonAnim?.(t, level) ?? [])];
 }
 
 // ---------- растеризатор (тверда піксельна сітка, без згладжування) ----------
@@ -873,17 +640,11 @@ const bodyCache = new Map<string, HTMLCanvasElement>();
 const iconCache = new Map<string, string>();
 let animScratch: HTMLCanvasElement | null = null;
 
-function skinnedParts(id: PlaneId, tier: number, level: number): Part[] {
-  const base = SHIPS[id].parts;
-  const skinned = applyTierSkin(base, tier);
-  return [...skinned, ...levelPips(base, tier, level)];
-}
-
 function bodyCanvas(id: PlaneId, tier: number, level: number): HTMLCanvasElement {
   const key = `${id}:${tier}:${level}`;
   let c = bodyCache.get(key);
   if (c) return c;
-  c = canvasFrom(rasterize(skinnedParts(id, tier, level), true));
+  c = canvasFrom(rasterize(layeredParts(id, tier, level), true));
   bodyCache.set(key, c);
   return c;
 }
@@ -898,31 +659,45 @@ export function drawPlane(ctx: Ctx, id: PlaneId, size: number, t: number, tier =
   const k = size / 64;
   const s = UNITS * k;
   if (tier >= 3) {
-    const tint = TIER_COLORS[Math.min(tier, 4)];
-    const [r, g, b] = parseColor(tint);
+    // сяйво — у світному кольорі самого літака; колір тіру лише тонким контуром по краю
+    const [r, g, b] = parseColor(EVOLUTION[id].palette.accent);
     const pulse = 0.75 + Math.sin(t * 3) * 0.25;
     const grad = ctx.createRadialGradient(0, 0, s * 0.1, 0, 0, s * 0.62);
     grad.addColorStop(0, `rgba(${r},${g},${b},${(tier >= 4 ? 0.38 : 0.22) * pulse})`);
     grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
     ctx.fillStyle = grad;
     ctx.fillRect(-s * 0.62, -s * 0.62, s * 1.24, s * 1.24);
+    const [tr, tg, tb] = parseColor(TIER_COLORS[Math.min(tier, 4)]);
+    ctx.strokeStyle = `rgba(${tr},${tg},${tb},${0.28 * pulse})`;
+    ctx.lineWidth = Math.max(1, s * 0.012);
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.56, 0, Math.PI * 2);
+    ctx.stroke();
   }
   const prevSmooth = ctx.imageSmoothingEnabled;
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(bodyCanvas(id, tier, level), -s / 2, -s / 2, s, s);
-  const anim = SHIPS[id].anim?.(t);
-  if (anim && anim.length) {
-    if (!animScratch) {
-      animScratch = document.createElement('canvas');
-      animScratch.width = GRID;
-      animScratch.height = GRID;
-    }
-    const actx = animScratch.getContext('2d')!;
-    actx.clearRect(0, 0, GRID, GRID);
-    actx.putImageData(rasterize(anim, false), 0, 0);
-    ctx.drawImage(animScratch, -s / 2, -s / 2, s, s);
-  }
+  const ghost = EVOLUTION[id].ghost?.(t, tier);
+  if (ghost && ghost.length) drawLayer(ctx, ghost, s, 0.45);
+  const anim = animParts(id, t, tier, level);
+  if (anim.length) drawLayer(ctx, anim, s, 1);
   ctx.imageSmoothingEnabled = prevSmooth;
+}
+
+/** Растеризує шар без контуру (анімація, ехо) у спільний скретч-канвас і малює його поверх корпусу. */
+function drawLayer(ctx: Ctx, parts: Part[], s: number, alpha: number): void {
+  if (!animScratch) {
+    animScratch = document.createElement('canvas');
+    animScratch.width = GRID;
+    animScratch.height = GRID;
+  }
+  const actx = animScratch.getContext('2d')!;
+  actx.clearRect(0, 0, GRID, GRID);
+  actx.putImageData(rasterize(parts, false), 0, 0);
+  const prev = ctx.globalAlpha;
+  ctx.globalAlpha = prev * alpha;
+  ctx.drawImage(animScratch, -s / 2, -s / 2, s, s);
+  ctx.globalAlpha = prev;
 }
 
 /** Картинка літака для HTML (ангар, меню) — data URL, генерується один раз. CSS має додати image-rendering: pixelated. */
@@ -930,9 +705,18 @@ export function planeIconUrl(id: PlaneId, tier = 1, level = 1): string {
   const key = `${id}:${tier}:${level}`;
   let url = iconCache.get(key);
   if (url) return url;
-  const def = SHIPS[id];
-  const parts = def.anim ? [...skinnedParts(id, tier, level), ...def.anim(0.4)] : skinnedParts(id, tier, level);
-  const c = canvasFrom(rasterize(parts, true));
+  // статичний кадр: напівпрозоре ехо позаду, корпус + анімовані деталі в момент 0.4 с
+  const c = document.createElement('canvas');
+  c.width = GRID;
+  c.height = GRID;
+  const cx = c.getContext('2d')!;
+  const ghost = EVOLUTION[id].ghost?.(0.4, tier);
+  if (ghost?.length) {
+    cx.globalAlpha = 0.45;
+    cx.drawImage(canvasFrom(rasterize(ghost, false)), 0, 0);
+    cx.globalAlpha = 1;
+  }
+  cx.drawImage(canvasFrom(rasterize([...layeredParts(id, tier, level), ...animParts(id, 0.4, tier, level)], true)), 0, 0);
   url = c.toDataURL('image/png');
   iconCache.set(key, url);
   return url;

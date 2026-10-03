@@ -1,4 +1,5 @@
 import type { ItemMeta } from '../content/items.js';
+import type { SigEffects } from '../shared/signature.js';
 
 export interface Vec {
   x: number;
@@ -69,6 +70,8 @@ export interface Participant {
   /** Бюджет пострілів фірмової гармати (окремо від основної зброї) */
   sigTokens?: number;
   sigTokensAt?: number;
+  /** Коли востаннє спрацювала пульсація фірмової гармати */
+  sigPulseAt?: number;
   moveBudget: number;
   lastMoveAt: number;
   lastJumpAt: number;
@@ -146,6 +149,15 @@ export interface ServerProjectile {
   range: number;
   damage: number;
   splash: number;
+  /** Фірмова гармата: ефекти тіру, колір, скільки цілей ще пробити, відскоки, повернення */
+  sig?: SigEffects;
+  color?: string;
+  pierceLeft?: number;
+  /** Кого цей снаряд уже зачепив (пробиття, осколки не б'ють першу ціль) */
+  hitIds?: string[];
+  bounces?: number;
+  returned?: boolean;
+  turnMul?: number;
 }
 
 export interface MatchResultEntry {

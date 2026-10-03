@@ -253,6 +253,9 @@ export interface NetShot {
   angle: number;
   kind: ShotKind;
   speed: number;
+  /** Постріл фірмової гармати і тір літака (від нього залежать пробиття, рикошет, повернення) */
+  sig?: boolean;
+  tier?: number;
 }
 
 export function encodeShot(s: NetShot): Uint8Array {
@@ -265,12 +268,14 @@ export function encodeShot(s: NetShot): Uint8Array {
   v.setUint16(6, qAng(s.angle));
   v.setUint8(8, Math.max(0, SHOT_KINDS.indexOf(s.kind)));
   v.setUint16(9, clampU16(s.speed));
+  // байт 11: старший біт — фірмова гармата, молодші — тір
+  v.setUint8(11, (s.sig ? 0x80 : 0) | Math.max(0, Math.min(7, s.tier ?? 0)));
   return b;
 }
 
 export function decodeShot(data: ArrayBuffer | ArrayBufferView): NetShot {
   const v = view(data);
-  return { owner: v.getUint8(1), x: v.getUint16(2) / POS_Q, y: v.getUint16(4) / POS_Q, angle: dAng(v.getUint16(6)), kind: SHOT_KINDS[v.getUint8(8)] ?? 'bullet', speed: v.getUint16(9) };
+  return { owner: v.getUint8(1), x: v.getUint16(2) / POS_Q, y: v.getUint16(4) / POS_Q, angle: dAng(v.getUint16(6)), kind: SHOT_KINDS[v.getUint8(8)] ?? 'bullet', speed: v.getUint16(9), sig: (v.getUint8(11) & 0x80) !== 0, tier: v.getUint8(11) & 0x07 };
 }
 
 // ---------- рух (клієнт → сервер) ----------

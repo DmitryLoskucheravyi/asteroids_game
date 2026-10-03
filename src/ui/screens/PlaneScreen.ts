@@ -16,7 +16,7 @@ import { Modal, toast } from '../Modal';
 import { Screen } from '../Screen';
 import { HangarScreen } from './HangarScreen';
 import { StoreScreen } from './StoreScreen';
-import { signatureFor } from '../../../server/src/shared/signature';
+import { signatureAt } from '../../../server/src/shared/signature';
 import { CRATE_ONLY_PLANES, SEASON_PLANE } from '../../../server/src/shared/store';
 import { BattlePassScreen } from './BattlePassScreen';
 import { ItemsScreen, itemPic, statList, weaponPic, weaponStatLines } from './ItemsScreen';
@@ -27,6 +27,8 @@ type Slot = 'weapon' | 'active' | 'passive';
 /** Сторінка окремого літака: опис, характеристики, урон, прокачка й екіпіровка в одному місці. */
 export class PlaneScreen extends Screen {
   private slot: Slot = 'weapon';
+  /** Перегляд іншого тіру (лише візуалізація, нічого не купується); null — поточний */
+  private previewTier: number | null = null;
 
   constructor(
     app: App,
@@ -88,10 +90,11 @@ export class PlaneScreen extends Screen {
         'div',
         { class: 'plane-hero-pic' },
         button(icon(Icons.back), () => this.switchPlane(-1), 'hero-arrow prev', { 'aria-label': 'prev' }),
-        h('img', { src: planeIconUrl(p.id, progress.tier, progress.level), alt: '' }),
+        h('img', { src: this.previewTier ? planeIconUrl(p.id, this.previewTier, this.previewTier === progress.tier ? progress.level : 1) : planeIconUrl(p.id, progress.tier, progress.level), alt: '' }),
         button(icon(Icons.back), () => this.switchPlane(1), 'hero-arrow next', { 'aria-label': 'next' }),
         h('span', { class: 'hero-index' }, `${PLANES.indexOf(p) + 1} / ${PLANES.length}`),
       ),
+      this.tierSwitch(),
       h(
         'div',
         { class: 'plane-hero-info' },
@@ -104,6 +107,55 @@ export class PlaneScreen extends Screen {
         action,
       ),
     );
+  }
+
+  /** Перемикач "Перегляд тіру 1–4": картинка, гармата й скіли на обраному тірі (без купівлі). */
+  private tierSwitch(): HTMLElement {
+    const progress = Save.progressFor(this.plane.id);
+    const current = this.owned ? progress.tier : 1;
+    const view = this.previewTier ?? current;
+    return h(
+      'div',
+      { class: 'tier-switch', role: 'group', 'aria-label': t('planePage.preview') },
+      h('small', { class: 'muted' }, t('planePage.preview')),
+      ...[1, 2, 3, 4].map((tr) =>
+        button(
+          `T${tr}`,
+          () => {
+            this.previewTier = tr === current ? null : tr;
+            this.render();
+            this.el.querySelector<HTMLElement>(`.tier-switch [data-tier="${tr}"]`)?.focus();
+          },
+          `tier-btn${tr === view ? ' on' : ''}${tr === current ? ' current' : ''}`,
+          { 'data-tier': tr, style: TIER_COLORS[tr] ? `--tc:${TIER_COLORS[tr]}` : '', 'aria-pressed': tr === view },
+        ),
+      ),
+      this.previewTier && this.previewTier !== current ? h('small', { class: 'preview-hint' }, t('planePage.previewHint')) : null,
+    );
+  }
+
+  /** Еволюція по тірах: що відкриває кожен тір у бортовому скілі й фірмовій гарматі. */
+  private evolutionBlock(): HTMLElement {
+    const p = this.plane;
+    const current = this.owned ? Save.progressFor(p.id).tier : 0;
+    const view = this.previewTier ?? (current || 1);
+    const g = signatureAt(p.id, 1);
+    const rows = [1, 2, 3, 4].map((tr) => {
+      const state = tr === current ? 'current' : tr < current ? 'open' : 'locked';
+      const color = TIER_COLORS[tr] || '#d8dce8';
+      return h(
+        'li',
+        { class: `evo-row ${state}${tr === view ? ' viewing' : ''}`, style: `--tc:${color}` },
+        h('span', { class: 'evo-tier' }, `T${tr}`, h('small', {}, tr === 1 ? t('planePage.tierBase') : t(state === 'current' ? 'planePage.tierCurrent' : state === 'open' ? 'planePage.tierOpen' : 'planePage.tierLocked'))),
+        h(
+          'span',
+          { class: 'evo-lines' },
+          h('span', { class: 'evo-line skill' }, icon(Icons.bolt, 'ico tiny'), tr === 1 ? t(`feat.${p.id}` as TKey) : t(`skillTier.${p.id}.${tr}` as TKey)),
+          h('span', { class: 'evo-line gun', style: `--sig:${g.color}` }, icon(Icons.star, 'ico tiny'), tr === 1 ? t(`sig.${g.id}` as TKey) : t(`sigTier.${p.id}.${tr}` as TKey)),
+        ),
+      );
+    });
+    return h('section', { class: 'card plane-evo' }, h('h3', {}, icon(Icons.star, 'ico gold'), t('planePage.tiersTitle')), h('ol', { class: 'evo-list' }, ...rows));
   }
 
   /** Стрілки на героїчному блоці — гортання літаків без повернення в ангар. */
@@ -157,14 +209,15 @@ export class PlaneScreen extends Screen {
         ...weaponStatLines(weapon, damageMul).slice(3),
       ]),
       (() => {
-        // фірмова гармата літака (X)
-        const g = signatureFor(p.id);
+        // фірмова гармата літака (X) — на поточному або переглянутому тірі
+        const g = signatureAt(p.id, this.previewTier ?? progress.tier);
         const per = (g.pellets ?? 1) * (g.salvo ?? 1);
         return h(
           'div',
           { class: 'sig-block', style: `--sig:${g.color}` },
-          h('h4', { class: 'sub-title' }, t('planePage.signature'), ' · ', t(`sig.${g.id}` as TKey)),
+          h('h4', { class: 'sub-title' }, t('planePage.signature'), ' · ', t(`sig.${g.id}` as TKey), g.tier > 1 ? h('span', { class: 'sig-tier', style: `--tc:${TIER_COLORS[g.tier]}` }, `T${g.tier}`) : null),
           h('p', { class: 'muted small' }, t(`sigDesc.${g.id}` as TKey)),
+          ...[2, 3, 4].filter((tr) => tr <= g.tier).map((tr) => h('p', { class: 'sig-evo small', style: `--tc:${TIER_COLORS[tr]}` }, `T${tr} · `, t(`sigTier.${p.id}.${tr}` as TKey))),
           statList([
             { key: 'stat.damage', value: `${g.shots * per > 1 ? `${g.shots * per} × ` : ''}${num(g.damage * damageMul)}` },
             { key: 'stat.itemCooldown', value: `${num(g.cooldown)} s` },
@@ -195,9 +248,28 @@ export class PlaneScreen extends Screen {
     const row = (label: string, b: number, a: number, fmt: (n: number) => string = (n) => Math.round(n).toString()) =>
       h('div', { class: 'stat-compare-row' }, h('span', {}, label), h('span', { class: 'muted' }, fmt(b)), icon(Icons.dash, 'ico tiny'), h('span', { class: 'stat-after' }, fmt(a)));
 
+    // прев'ю: зараз → після (новий силует тіру або новий обвіс рівня)
+    const preview = h(
+      'div',
+      { class: 'upgrade-preview' },
+      h('figure', {}, h('img', { src: planeIconUrl(p.id, progress.tier, progress.level), alt: '' }), h('figcaption', {}, t('planes.now'))),
+      icon(Icons.dash, 'ico'),
+      h('figure', { class: 'after' }, h('img', { src: planeIconUrl(p.id, nextProgress.tier, nextProgress.level), alt: '' }), h('figcaption', {}, t('planes.after'))),
+    );
+    const news =
+      kind === 'tier'
+        ? h(
+            'div',
+            { class: 'upgrade-news', style: `--tc:${TIER_COLORS[nextProgress.tier]}` },
+            h('p', {}, h('b', {}, t('planes.newSkill'), ': '), t(`skillTier.${p.id}.${nextProgress.tier}` as TKey)),
+            h('p', {}, h('b', {}, t('planes.newGun'), ': '), t(`sigTier.${p.id}.${nextProgress.tier}` as TKey)),
+          )
+        : h('div', { class: 'upgrade-news' }, h('p', {}, h('b', {}, t('planes.newLook'))));
     const m = new Modal({
       title: t('planes.upgradeTitle'),
       body: [
+        preview,
+        news,
         row(t('stat.hp'), cb.hp, ca.hp),
         row(t('stat.damage'), cb.damageMul, ca.damageMul, (n) => `×${n.toFixed(2)}`),
         row(t('planes.accelStat'), before.accel, after.accel),
@@ -415,7 +487,7 @@ export class PlaneScreen extends Screen {
         'div',
         { class: 'plane-layout' },
         h('div', { class: 'plane-col col-stats' }, this.statsBlock()),
-        h('div', { class: 'plane-col col-hero' }, this.heroBlock(), this.upgradeBlock()),
+        h('div', { class: 'plane-col col-hero' }, this.heroBlock(), this.upgradeBlock(), this.evolutionBlock()),
         h('div', { class: 'plane-col col-gear' }, this.loadoutBlock() ?? h('section', { class: 'card plane-loadout locked-gear' }, h('h3', {}, icon(Icons.lock, 'ico'), t('items.loadout')), h('p', { class: 'muted small' }, t('planePage.buyFirst')))),
       ),
     );

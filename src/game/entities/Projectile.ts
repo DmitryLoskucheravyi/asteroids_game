@@ -8,8 +8,17 @@ export const RANGE: Record<ProjectileKind, number> = { bullet: 900, rocket: 1000
 
 /** Снаряд гравця: летить по прямій від точки спавну, гине на межі дальності або світу. */
 export class Projectile extends Entity {
-  private traveled = 0;
-  readonly angle: number;
+  traveled = 0;
+  angle: number;
+  /** Фірмова гармата: скільки цілей ще пробити, відскоків лишилось, чи повертається (лише візуал у PvP) */
+  pierce = 0;
+  bounces = 0;
+  boomerang = false;
+  returned = false;
+  /** Кого вже зачепив (щоб пробиття не "застрягало" в одній цілі) */
+  readonly hitIds = new Set<string>();
+  /** Колір трасера фірмової гармати */
+  tint?: string;
 
   constructor(
     readonly kind: ProjectileKind,
@@ -30,11 +39,42 @@ export class Projectile extends Entity {
     this.angle = angle;
   }
 
+  get maxRange(): number {
+    return this.range ?? RANGE[this.kind];
+  }
+
   update(dt: number, world: WorldView): void {
     const step = this.vel.length() * dt;
     this.traveled += step;
     this.pos.add(this.vel, dt);
-    if (this.traveled > (this.range ?? RANGE[this.kind]) || this.isOutside(world.width, world.height, 40)) this.kill();
+    // рикошет від меж світу
+    if (this.bounces > 0 && (this.pos.x < 0 || this.pos.x > world.width || this.pos.y < 0 || this.pos.y > world.height)) {
+      this.bounces--;
+      if (this.pos.x < 0 || this.pos.x > world.width) this.vel.x = -this.vel.x;
+      if (this.pos.y < 0 || this.pos.y > world.height) this.vel.y = -this.vel.y;
+      this.angle = Math.atan2(this.vel.y, this.vel.x);
+    }
+    // куля-фенікс: на межі дальності летить назад
+    if (this.boomerang && !this.returned && this.traveled > this.maxRange) {
+      this.returned = true;
+      this.traveled = 0;
+      this.vel.scale(-1);
+      this.angle = Math.atan2(this.vel.y, this.vel.x);
+      this.hitIds.clear();
+    }
+    if (this.traveled > this.maxRange || this.isOutside(world.width, world.height, 40)) this.kill();
+  }
+
+  /** Відскок від кола (скелі): дзеркалимо швидкість відносно нормалі. */
+  bounceOff(cx: number, cy: number): void {
+    const d = Math.hypot(this.pos.x - cx, this.pos.y - cy) || 1;
+    const nx = (this.pos.x - cx) / d;
+    const ny = (this.pos.y - cy) / d;
+    const dot = this.vel.x * nx + this.vel.y * ny;
+    this.vel.x -= 2 * dot * nx;
+    this.vel.y -= 2 * dot * ny;
+    this.angle = Math.atan2(this.vel.y, this.vel.x);
+    this.bounces--;
   }
 
   render(ctx: CanvasRenderingContext2D, time: number): void {
@@ -56,7 +96,8 @@ export class Projectile extends Entity {
     const hostile = this.hostile;
     const len = hostile ? 30 : 24;
     const w = hostile ? 2.4 : 2;
-    const [core, mid, tail] = hostile ? ['255,236,220', '255,110,80', '255,40,60'] : ['240,252,255', '130,220,255', '60,140,255'];
+    const tinted = this.tint ? tintRgb(this.tint) : null;
+    const [core, mid, tail] = tinted ? ['255,250,240', tinted, tinted] : hostile ? ['255,236,220', '255,110,80', '255,40,60'] : ['240,252,255', '130,220,255', '60,140,255'];
     const flick = 0.85 + Math.sin(time * 60 + this.pos.x * 0.05) * 0.15;
 
     // шлейф: трикутник, що звужується назад
@@ -192,4 +233,10 @@ export class Projectile extends Entity {
     ctx.closePath();
     ctx.fill();
   }
+}
+
+/** '#rrggbb' → 'r,g,b' для rgba() */
+function tintRgb(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
 }

@@ -15,7 +15,7 @@ import { applyItemPassive, getItemDef, type ActiveEffect, type ItemDef } from '.
 import { decodeShot, decodeState, encodeFire, encodeMove, type ShotKind, type StatePatch } from '../../server/src/shared/netcodec';
 import { INTERP_DELAY_MS, ServerClock, SnapshotBuffer } from '../net/interp';
 import { scaledItem, scaledWeapon } from './gearScale';
-import { signatureFor, type SignatureGun } from '../../server/src/shared/signature';
+import { signatureAt, type SignatureAt } from '../../server/src/shared/signature';
 import { getWeaponDef, DEFAULT_WEAPON_ID, WeaponState, type WeaponDef } from './weapons';
 import { Player } from './entities/Player';
 import { Projectile } from './entities/Projectile';
@@ -32,6 +32,8 @@ const SEND_EVERY = 1 / 30;
 const HIT_RADIUS = 20;
 const JUMP_DISTANCE = 210;
 const SLOW_MUL = 0.6;
+/** Оглушення від гармати: сильне, але коротке сповільнення */
+const STUN_MUL = 0.3;
 const MISSILE_SPEED = 520;
 /** Поворот ракети, рад/с — помірний, щоб від неї можна було ухилитись маневром */
 const MISSILE_TURN = 2.2;
@@ -60,6 +62,9 @@ interface Missile {
   angle: number;
   life: number;
   remote: boolean;
+  /** Поворот ×k (сузір'я нови) і колір фірмової гармати */
+  turn?: number;
+  tint?: string;
   ownerId: string | null;
   /** 'weapon' — залп зі зброї, 'swarm' — предмет "Рій ракет" (сервер рахує урон по-різному) */
   source: 'weapon' | 'swarm';
@@ -77,6 +82,34 @@ interface Beam {
   rail?: boolean;
   /** Колір променя фірмової гармати */
   color?: string;
+  /** Ширина ×k (промінь-тягач T3) */
+  wide?: number;
+}
+
+/** Зона фірмової гармати на полі (вогонь, кислота, мікро-"чорна діра") — урон рахує сервер. */
+interface FxZone {
+  x: number;
+  y: number;
+  r: number;
+  t: number;
+  dur: number;
+  kind: 'fire' | 'acid' | 'void';
+  pull: number;
+  ownerId: string;
+  color: string;
+}
+
+/** Ланцюгова блискавка / вогонь між цілями — живе мить. */
+interface FxChain {
+  pts: number[];
+  t: number;
+  color: string;
+}
+
+/** Подія ефекту фірмової гармати від сервера */
+interface FxEvent {
+  k: 'chain' | 'ray' | 'zone' | 'split' | 'boom' | 'strike' | 'pull' | 'status';
+  [key: string]: unknown;
 }
 
 /** Плавне відображення чужих літаків між серверними тіками (20 Гц). */
@@ -122,6 +155,13 @@ export class PvpGame {
   private remote: Projectile[] = [];
   private missiles: Missile[] = [];
   private beams: Beam[] = [];
+  private zones: FxZone[] = [];
+  private chains: FxChain[] = [];
+  /** Статуси гравців від фірмових гармат: підпал, отрута, оглушення (лише візуал) */
+  private statuses = new Map<string, { burn: number; poison: number; stun: number }>();
+  /** Своє оглушення (сильніше сповільнення) і поштовх від притягання */
+  private stun = 0;
+  private readonly pushVel = new Vec2();
   /** Пастки на полі (свої й чужі) — іскри рахуються спільною формулою, як на сервері */
   private flares: FlareBurst[] = [];
   /** Перешкоди арени (метеорити + івент режиму) */
@@ -168,7 +208,7 @@ export class PvpGame {
     this.baseFireMul = 1 + (this.passiveDef?.combat?.fireRate ?? 0);
     this.active = this.activeDef?.active ?? null;
     this.maxHp = planeCombat(base, progress).hp + (this.passiveDef?.combat?.hp ?? 0);
-    this.signature = signatureFor(planeId);
+    this.signature = signatureAt(planeId, progress.tier);
     const baseWeapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
     this.weapon = scaledWeapon(baseWeapon, Save.weaponLevel(baseWeapon.id));
     this.gun = new WeaponState(this.weapon);
@@ -206,11 +246,12 @@ export class PvpGame {
     // чужі постріли й навички показуємо з тією ж затримкою, що й самі літаки, — інакше куля вилітає попереду носа
     this.on('match:shot', (data: ArrayBuffer) => {
       const n = decodeShot(data);
-      const s: ShotEvent = { ownerId: this.order[n.owner] ?? '', x: n.x, y: n.y, angle: n.angle, kind: n.kind, speed: n.speed };
+      const s: ShotEvent = { ownerId: this.order[n.owner] ?? '', x: n.x, y: n.y, angle: n.angle, kind: n.kind, speed: n.speed, sig: n.sig, tier: n.tier };
       this.later(() => this.onRemoteShot(s), s.ownerId);
     });
     this.on('match:skill', (s: SkillEvent) => this.later(() => this.onRemoteSkill(s), s.id));
     this.on('match:hit', (h: HitEvent) => this.onHit(h));
+    this.on('match:fx', (e: FxEvent) => this.onFx(e));
     this.on('match:pickup-spawn', (pk: PickupView) => {
       this.pickups.set(pk.id, pk);
       if (pk.kind === 'pile') this.ring(pk.x, pk.y, 70, '255,210,74', 0.5);
@@ -450,17 +491,21 @@ export class PvpGame {
 
   // ---------- фірмова гармата (X) ----------
 
-  /** Своя гармата цього літака: залп, потім перезарядка */
-  readonly signature: SignatureGun;
+  /** Своя гармата цього літака на його тірі: залп, потім перезарядка */
+  readonly signature: SignatureAt;
   sigCooldown = 0;
   /** Скільки пострілів залпу ще лишилось і до наступного — секунд */
   sigLeft = 0;
   private sigTimer = 0;
+  /** Номер пострілу в залпі (кожен N-й — самонавідна ракета) */
+  private sigIndex = 0;
 
   useSignature(): void {
     if (!this.canAct || this.sigCooldown > 0 || this.sigLeft > 0) return;
     this.sigLeft = this.signature.shots;
     this.sigTimer = 0;
+    this.sigIndex = 0;
+    if (this.signature.fx.pulse) this.ring(this.player.pos.x, this.player.pos.y, this.signature.fx.pulse.r, hexToRgb(this.signature.color), 0.4);
   }
 
   private updateSignature(dt: number): void {
@@ -472,19 +517,71 @@ export class PvpGame {
       this.sigLeft--;
       this.sigTimer += this.signature.interval / 1000;
     }
-    // перезарядка — після останнього пострілу залпу
-    if (this.sigLeft === 0) this.sigCooldown = this.signature.cooldown;
+    // перезарядка — після останнього пострілу залпу (і зворотного залпу, якщо є)
+    if (this.sigLeft === 0) {
+      this.sigCooldown = this.signature.cooldown;
+      if (this.signature.fx.back) this.fireBackVolley(this.signature.fx.back);
+    }
+  }
+
+  /** Голковий дощ (стриж T4): віяло назад наприкінці залпу. */
+  private fireBackVolley(n: number): void {
+    const g = this.signature;
+    const pos = this.player.pos.clone().add(Vec2.fromAngle(this.aim + Math.PI), 20);
+    for (let i = 0; i < n; i++) {
+      const a = this.aim + Math.PI + (i - (n - 1) / 2) * 0.12;
+      this.projectiles.push(this.sigProjectile(g.kind as 'bullet' | 'rocket', pos.clone(), a));
+      this.fire(pos.x, pos.y, a, g.kind, true);
+    }
+  }
+
+  /** Снаряд фірмової гармати з візуалом тіру (пробиття, рикошет, повернення, колір). */
+  private sigProjectile(kind: 'bullet' | 'rocket', pos: Vec2, a: number, hostile = false, ownerId = this.selfId, g: SignatureAt = this.signature, speed = g.speed): Projectile {
+    const style = g.visual === 'pellet' || g.visual === 'plasma' ? g.visual : undefined;
+    const pr = new Projectile(kind, pos, a, speed, hostile ? 0 : g.damage, g.splash ?? 0, hostile, ownerId, g.range, style);
+    pr.pierce = g.fx.pierce ?? 0;
+    pr.bounces = g.fx.ricochet ?? 0;
+    pr.boomerang = !!g.fx.boomerang;
+    pr.tint = g.color;
+    return pr;
+  }
+
+  /** Доводка променя (жало T3): кут на найближчого ворога у вузькому конусі. */
+  private assistedAim(from: Vec2, angle: number, cone: number, range: number): number {
+    let best = cone;
+    let out = angle;
+    for (const [id, p] of this.participants) {
+      if (id === this.selfId || !p.alive || this.isAlly(id)) continue;
+      const rp = this.renderPos(id);
+      if (!rp || Math.hypot(rp.x - from.x, rp.y - from.y) > range) continue;
+      const want = Math.atan2(rp.y - from.y, rp.x - from.x);
+      const d = Math.abs(angleDiff(angle, want));
+      if (d < best) {
+        best = d;
+        out = want;
+      }
+    }
+    return out;
   }
 
   private fireSignatureShot(): void {
     const g = this.signature;
     const pos = this.nose();
-    const angle = this.aim + (Math.random() - 0.5) * 2 * (g.spread ?? 0);
+    let angle = this.aim + (Math.random() - 0.5) * 2 * (g.spread ?? 0);
+    const index = this.sigIndex++;
+    // кожен N-й постріл залпу — самонавідна ракета (сокіл T4)
+    if (g.fx.homingEvery && index % g.fx.homingEvery === g.fx.homingEvery - 1) {
+      this.missiles.push({ pos: pos.clone(), angle, life: 2.2, remote: false, ownerId: this.selfId, source: 'weapon', tint: g.color });
+      this.fire(pos.x, pos.y, angle, 'missile', true);
+      Sfx.boost();
+      return;
+    }
     if (g.kind === 'laser') {
+      if (g.fx.aimAssist) angle = this.assistedAim(pos, angle, g.fx.aimAssist, g.range ?? 600);
       const ray = this.raycast(pos.x, pos.y, angle, g.range ?? 600, this.selfId);
       const x2 = pos.x + Math.cos(angle) * ray.dist;
       const y2 = pos.y + Math.sin(angle) * ray.dist;
-      this.beams.push({ x1: pos.x, y1: pos.y, x2, y2, t: 0, hostile: false, rail: g.visual === 'rail', color: g.color });
+      this.beams.push({ x1: pos.x, y1: pos.y, x2, y2, t: 0, hostile: false, rail: g.visual === 'rail', color: g.color, wide: g.fx.wide });
       this.fire(pos.x, pos.y, angle, 'laser', true);
       if (this.clock - this.lastShotSfx > 0.08) {
         this.lastShotSfx = this.clock;
@@ -496,18 +593,17 @@ export class PvpGame {
       const n = g.salvo ?? 2;
       for (let i = 0; i < n; i++) {
         const a = angle + (i - (n - 1) / 2) * 0.32;
-        this.missiles.push({ pos: pos.clone(), angle: a, life: 2.2, remote: false, ownerId: this.selfId, source: 'weapon' });
+        this.missiles.push({ pos: pos.clone(), angle: a, life: 2.2, remote: false, ownerId: this.selfId, source: 'weapon', turn: g.fx.turnMul, tint: g.color });
         this.fire(pos.x, pos.y, a, 'missile', true);
       }
       Sfx.boost();
       return;
     }
-    const style = g.visual === 'pellet' || g.visual === 'plasma' ? g.visual : undefined;
     const n = g.pellets ?? 1;
     for (let i = 0; i < n; i++) {
-      // кільце — рівномірно на всі боки; дріб — віялом
-      const a = g.ring ? this.aim + (i / n) * Math.PI * 2 : n > 1 ? this.aim + (Math.random() - 0.5) * 2 * (g.spread ?? 0.2) : angle;
-      this.projectiles.push(new Projectile(g.kind, pos.clone(), a, g.speed, g.damage, g.splash ?? 0, false, this.selfId, g.range, style));
+      // кільце — рівномірно на всі боки (друге кільце залпу — зі зсувом на пів кроку); дріб — віялом
+      const a = g.ring ? this.aim + ((i + (index % 2) * 0.5) / n) * Math.PI * 2 : n > 1 ? this.aim + (Math.random() - 0.5) * 2 * (g.spread ?? 0.2) : angle;
+      this.projectiles.push(this.sigProjectile(g.kind as 'bullet' | 'rocket', pos.clone(), a));
       this.fire(pos.x, pos.y, a, g.kind, true);
     }
     this.muzzle(pos.x, pos.y, angle, g.kind === 'rocket');
@@ -574,14 +670,17 @@ export class PvpGame {
   private onRemoteShot(s: ShotEvent): void {
     if (s.ownerId === this.selfId) return;
     const pos = new Vec2(s.x, s.y);
+    // фірмова гармата: вигляд і поведінка снаряда — за літаком і тіром стрільця
+    const owner = this.participants.get(s.ownerId);
+    const g = s.sig && owner ? signatureAt(owner.planeId, s.tier || owner.tier || 1) : null;
     if (s.kind === 'missile') {
-      this.missiles.push({ pos, angle: s.angle, life: 2.2, remote: true, ownerId: s.ownerId, source: 'weapon' });
+      this.missiles.push({ pos, angle: s.angle, life: 2.2, remote: true, ownerId: s.ownerId, source: 'weapon', turn: g?.fx.turnMul, tint: g?.color });
       return;
     }
     if (s.kind === 'laser' || s.kind === 'rail') {
       const rail = s.kind === 'rail';
-      const ray = this.raycast(s.x, s.y, s.angle, getWeaponDef(rail ? 'railgun' : 'laser')?.range ?? 380, s.ownerId);
-      this.beams.push({ x1: s.x, y1: s.y, x2: s.x + Math.cos(s.angle) * ray.dist, y2: s.y + Math.sin(s.angle) * ray.dist, t: 0, hostile: true, rail });
+      const ray = this.raycast(s.x, s.y, s.angle, g?.range ?? getWeaponDef(rail ? 'railgun' : 'laser')?.range ?? 380, s.ownerId);
+      this.beams.push({ x1: s.x, y1: s.y, x2: s.x + Math.cos(s.angle) * ray.dist, y2: s.y + Math.sin(s.angle) * ray.dist, t: 0, hostile: true, rail, color: g?.color, wide: g?.fx.wide });
       if (Vec2.dist(pos, this.player.pos) < 900 && this.clock - this.lastShotSfx > 0.08) {
         this.lastShotSfx = this.clock;
         Sfx.laserZap();
@@ -590,7 +689,8 @@ export class PvpGame {
     }
     const physical = s.kind === 'plasma' ? 'rocket' : s.kind === 'pellet' ? 'bullet' : s.kind;
     const style = s.kind === 'plasma' || s.kind === 'pellet' ? s.kind : undefined;
-    this.remote.push(new Projectile(physical, pos, s.angle, s.speed, 0, 0, true, s.ownerId, s.kind === 'pellet' ? getWeaponDef('scatter_gun')?.range : undefined, style));
+    if (g) this.remote.push(this.sigProjectile(physical as 'bullet' | 'rocket', pos, s.angle, true, s.ownerId, g, s.speed));
+    else this.remote.push(new Projectile(physical, pos, s.angle, s.speed, 0, 0, true, s.ownerId, s.kind === 'pellet' ? getWeaponDef('scatter_gun')?.range : undefined, style));
     this.muzzle(s.x, s.y, s.angle, physical === 'rocket');
     const d = Vec2.dist(pos, this.player.pos);
     if (d < 900 && this.clock - this.lastShotSfx > 0.07) {
@@ -675,6 +775,7 @@ export class PvpGame {
     this.skills.update(dt);
     this.overdrive = Math.max(0, this.overdrive - dt);
     this.slow = Math.max(0, this.slow - dt);
+    this.stun = Math.max(0, this.stun - dt);
     this.phase = Math.max(0, this.phase - dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2.5);
     this.scanCooldown = Math.max(0, this.scanCooldown - dt);
@@ -721,7 +822,8 @@ export class PvpGame {
     const axis = this.input.axis();
     const mag = Math.hypot(axis.x, axis.y);
     const boost = this.skills.isBoosted ? BOOST_MULTIPLIER : 1;
-    const slow = this.slow > 0 ? SLOW_MUL : 1;
+    // сповільнення від EMP/гармат; оглушення — сильніше
+    const slow = this.stun > 0 ? STUN_MUL : this.slow > 0 || this.self?.slowed ? SLOW_MUL : 1;
 
     // схема «миша»: курс — на курсор, літак весь час летить уперед
     const cursor = mouseSteering() ? this.cursorWorld() : null;
@@ -762,6 +864,7 @@ export class PvpGame {
       p.pos.add(p.vel, dt);
       this.aim = p.angle;
     }
+    this.applyPulls(dt);
     if (this.hazards.event === 'wind' && this.state === 'active') {
       const w = windAt(this.hazardTime);
       p.pos.x = clamp(p.pos.x + w.x * dt, 0, this.worldW);
@@ -919,6 +1022,11 @@ export class PvpGame {
     for (const pr of this.projectiles) {
       pr.update(dt, world);
       if (!pr.alive) continue;
+      const rock = pr.bounces > 0 ? this.obstacleAt(pr.pos, pr.radius) : null;
+      if (rock) {
+        pr.bounceOff(rock.x, rock.y);
+        continue;
+      }
       if (this.hitsObstacle(pr.pos, pr.radius)) {
         this.impact(pr);
         this.particles.emit(pr.pos.x, pr.pos.y, { count: 4, speed: [40, 150], life: [0.15, 0.35], size: [2, 3], colors: ['#ffe0b0', '#c9a080', '#ffffff'] });
@@ -930,10 +1038,17 @@ export class PvpGame {
         continue;
       }
       for (const [id, p] of this.participants) {
-        if (id === this.selfId || !p.alive || this.isAlly(id)) continue;
+        if (id === this.selfId || !p.alive || this.isAlly(id) || pr.hitIds.has(id)) continue;
         if (p.phase) continue;
         const rp = this.renderPos(id)!;
         if (Math.hypot(pr.pos.x - rp.x, pr.pos.y - rp.y) < HIT_RADIUS + pr.radius) {
+          // пробиття: снаряд летить далі (урон рахує сервер)
+          if (pr.pierce > 0) {
+            pr.pierce--;
+            pr.hitIds.add(id);
+            this.particles.emit(pr.pos.x, pr.pos.y, { count: 5, speed: [60, 180], life: [0.1, 0.3], size: [2, 3], colors: ['#ffffff', pr.tint ?? '#9fe3ff'] });
+            continue;
+          }
           pr.kill();
           this.impact(pr);
           break;
@@ -946,6 +1061,11 @@ export class PvpGame {
     for (const pr of this.remote) {
       pr.update(dt, world);
       if (!pr.alive) continue;
+      const rock = pr.bounces > 0 ? this.obstacleAt(pr.pos, pr.radius) : null;
+      if (rock) {
+        pr.bounceOff(rock.x, rock.y);
+        continue;
+      }
       if (this.hitsObstacle(pr.pos, pr.radius)) {
         pr.kill();
         continue;
@@ -964,7 +1084,12 @@ export class PvpGame {
         const phase = id === this.selfId ? this.phase > 0 : !!p?.phase;
         if (phase) continue;
         const rp = this.renderPos(id);
-        if (rp && Math.hypot(pr.pos.x - rp.x, pr.pos.y - rp.y) < HIT_RADIUS + pr.radius) {
+        if (rp && !pr.hitIds.has(id) && Math.hypot(pr.pos.x - rp.x, pr.pos.y - rp.y) < HIT_RADIUS + pr.radius) {
+          if (pr.pierce > 0) {
+            pr.pierce--;
+            pr.hitIds.add(id);
+            continue;
+          }
           pr.kill();
           if (pr.kind === 'rocket') this.explosion(pr.pos.x, pr.pos.y, 0.6);
           break;
@@ -972,6 +1097,12 @@ export class PvpGame {
       }
     }
     this.remote = this.remote.filter((pr) => pr.alive);
+  }
+
+  /** Скеля, у яку влетів снаряд (для рикошету). */
+  private obstacleAt(pos: Vec2, r: number): Obstacle | null {
+    for (const o of this.obstacles) if (Math.hypot(pos.x - o.x, pos.y - o.y) < o.r + r) return o;
+    return null;
   }
 
   /** Вибух ракети — лише ефект (сплеш-урон рахує сервер). */
@@ -1006,7 +1137,8 @@ export class PvpGame {
       }
       if (best && m.life < 2.2) {
         const want = Math.atan2(best.y - m.pos.y, best.x - m.pos.x);
-        m.angle += clamp(angleDiff(m.angle, want), -MISSILE_TURN * dt, MISSILE_TURN * dt);
+        const turn = MISSILE_TURN * (m.turn ?? 1) * dt;
+        m.angle += clamp(angleDiff(m.angle, want), -turn, turn);
       }
       const mx = m.pos.x;
       const my = m.pos.y;
@@ -1105,6 +1237,11 @@ export class PvpGame {
   private updateFx(dt: number): void {
     this.particles.update(dt);
     for (const b of this.beams) b.t += dt;
+    for (const z of this.zones) z.t += dt;
+    this.zones = this.zones.filter((z) => z.t < z.dur);
+    for (const c of this.chains) c.t += dt;
+    this.chains = this.chains.filter((c) => c.t < 0.25);
+    this.updateStatuses(dt);
     this.beams = this.beams.filter((b) => b.t < (b.rail ? 0.35 : 0.09));
     for (const r of this.rings) r.t += dt;
     this.rings = this.rings.filter((r) => r.t < r.dur);
@@ -1219,6 +1356,7 @@ export class PvpGame {
     this.renderObstacles(ctx);
     this.hazards.renderBodies(ctx, this.hazardTime, this.clock, { l: this.cameraX - this.width / 2 - 200, r: this.cameraX + this.width / 2 + 200, t: this.cameraY - this.height / 2 - 200, b: this.cameraY + this.height / 2 + 200 });
     this.renderPickups(ctx);
+    this.renderZones(ctx);
 
     for (const f of this.flares) {
       const age = this.flareNow - f.t0;
@@ -1257,7 +1395,8 @@ export class PvpGame {
         ctx.restore();
       }
       ctx.globalAlpha = 1;
-      if (this.slow > 0) this.renderSlow(ctx, this.player.pos.x, this.player.pos.y);
+      if (this.slow > 0 || this.stun > 0) this.renderSlow(ctx, this.player.pos.x, this.player.pos.y);
+      if (this.selfId) this.renderStatus(ctx, this.selfId, this.player.pos.x, this.player.pos.y);
       const me = this.self;
       if (me) this.renderNick(ctx, me.nickname, this.player.pos.x, this.player.pos.y - 40, '220,235,255');
       // приціл — туди, куди полетять кулі
@@ -1273,7 +1412,7 @@ export class PvpGame {
       const k = 1 - b.t / (b.rail ? 0.35 : 0.09);
       // рейкотрон — товстий блакитний промінь, що повільно гасне
       ctx.strokeStyle = b.color ? hexToRgba(b.color, 0.6 * k) : b.rail ? `rgba(110,220,255,${0.6 * k})` : b.hostile ? `rgba(255,70,90,${0.45 * k})` : `rgba(200,90,255,${0.45 * k})`;
-      ctx.lineWidth = b.rail ? 13 * k + 3 : 7;
+      ctx.lineWidth = (b.rail ? 13 * k + 3 : 7) * (b.wide ?? 1);
       ctx.beginPath();
       ctx.moveTo(b.x1, b.y1);
       ctx.lineTo(b.x2, b.y2);
@@ -1282,6 +1421,7 @@ export class PvpGame {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
+    this.renderChains(ctx);
     ctx.globalCompositeOperation = 'source-over';
 
     for (const r of this.rings) {
@@ -1490,6 +1630,7 @@ export class PvpGame {
     ctx.restore();
     ctx.globalAlpha = 1;
     if (p.slowed) this.renderSlow(ctx, x, y);
+    this.renderStatus(ctx, p.id, x, y);
 
     // ім'я і смужка HP над ворогом
     const pct = Math.max(0, p.hp / p.maxHp);
@@ -1528,17 +1669,194 @@ export class PvpGame {
     drawGlow(ctx, x, y, 'rgba(120,200,255,1)', 46, 0.35);
   }
 
+  // ---------- ефекти фірмових гармат (від сервера) ----------
+
+  private onFx(e: FxEvent): void {
+    const color = typeof e.c === 'string' ? e.c : '#ffffff';
+    const num = (k: string) => Number(e[k]) || 0;
+    switch (e.k) {
+      case 'chain':
+        this.chains.push({ pts: (e.pts as number[]) ?? [], t: 0, color });
+        Sfx.laserZap();
+        break;
+      case 'ray':
+        this.beams.push({ x1: num('x1'), y1: num('y1'), x2: num('x2'), y2: num('y2'), t: 0, hostile: false, color });
+        break;
+      case 'zone':
+        this.zones.push({ x: num('x'), y: num('y'), r: num('r'), t: 0, dur: num('dur'), kind: (e.z as FxZone['kind']) ?? 'fire', pull: num('pull'), ownerId: String(e.o ?? ''), color });
+        break;
+      case 'split': {
+        // осколки — лише візуал (влучання рахує сервер)
+        const kind = e.kind === 'rocket' ? 'rocket' : 'bullet';
+        for (const a of (e.a as number[]) ?? []) {
+          const pr = new Projectile(kind, new Vec2(num('x'), num('y')), a, num('sp'), 0, 0, false, null, num('rg'));
+          pr.tint = color;
+          this.remote.push(pr);
+        }
+        this.explosion(num('x'), num('y'), 0.4);
+        break;
+      }
+      case 'boom':
+        this.ring(num('x'), num('y'), num('r'), hexToRgb(color), 0.45);
+        this.particles.emit(num('x'), num('y'), { count: 24, speed: [80, 260], life: [0.2, 0.5], size: [2, 5], colors: ['#ffffff', color] });
+        break;
+      case 'strike': {
+        // удар блискавки "з неба": вертикальний промінь і кільце
+        const x = num('x');
+        const y = num('y');
+        this.beams.push({ x1: x + (Math.random() - 0.5) * 60, y1: y - 420, x2: x, y2: y, t: 0, hostile: false, rail: true, color });
+        this.ring(x, y, num('r'), hexToRgb(color), 0.35);
+        this.addShake(2);
+        break;
+      }
+      case 'pull': {
+        if (!this.selfAlive || e.o === this.selfId || this.isAlly(String(e.o ?? ''))) break;
+        // буксир — лише влученого; притягання вибуху — усіх у радіусі
+        const target = typeof e.id === 'string' ? e.id : null;
+        const dx = num('x') - this.player.pos.x;
+        const dy = num('y') - this.player.pos.y;
+        const d = Math.hypot(dx, dy);
+        if ((target ? target === this.selfId : d < num('r')) && d > 4) this.pushVel.add(new Vec2(dx / d, dy / d).scale(num('f')));
+        break;
+      }
+      case 'status': {
+        const id = String(e.id ?? '');
+        const st = this.statuses.get(id) ?? { burn: 0, poison: 0, stun: 0 };
+        const dur = num('dur');
+        if (e.s === 'burn') st.burn = Math.max(st.burn, dur);
+        else if (e.s === 'poison') st.poison = Math.max(st.poison, dur);
+        else if (e.s === 'stun') st.stun = Math.max(st.stun, dur);
+        this.statuses.set(id, st);
+        if (id === this.selfId) {
+          if (e.s === 'stun') this.stun = Math.max(this.stun, dur);
+          if (e.s === 'slow') this.slow = Math.max(this.slow, dur);
+        }
+        break;
+      }
+    }
+  }
+
+  /** Притягання: поштовх від вибуху/буксира + постійне тяжіння ворожих зон-"чорних дір". */
+  private applyPulls(dt: number): void {
+    const p = this.player;
+    for (const z of this.zones) {
+      if (!z.pull || z.ownerId === this.selfId || this.isAlly(z.ownerId)) continue;
+      const dx = z.x - p.pos.x;
+      const dy = z.y - p.pos.y;
+      const d = Math.hypot(dx, dy);
+      if (d < z.r && d > 4) p.pos.add(new Vec2(dx / d, dy / d), Math.min(d, z.pull * dt));
+    }
+    if (this.pushVel.length() > 1) {
+      p.pos.add(this.pushVel, dt);
+      this.pushVel.scale(Math.max(0, 1 - dt * 6));
+    }
+  }
+
+  private updateStatuses(dt: number): void {
+    for (const [id, st] of this.statuses) {
+      st.burn = Math.max(0, st.burn - dt);
+      st.poison = Math.max(0, st.poison - dt);
+      st.stun = Math.max(0, st.stun - dt);
+      if (!st.burn && !st.poison && !st.stun) {
+        this.statuses.delete(id);
+        continue;
+      }
+      const pos = this.renderPos(id);
+      if (!pos || Math.random() > 0.5) continue;
+      if (st.burn) this.particles.emit(pos.x, pos.y, { count: 1, speed: [20, 70], angle: -Math.PI / 2, spread: 0.8, life: [0.2, 0.5], size: [2, 4], colors: ['#fff1a8', '#ff8a1f', '#ff3a1a'], drag: 2 });
+      if (st.poison) this.particles.emit(pos.x, pos.y, { count: 1, speed: [10, 40], life: [0.3, 0.6], size: [2, 3], colors: ['#b8ff7a', '#5ac828'], drag: 2 });
+    }
+  }
+
+  private renderStatus(ctx: CanvasRenderingContext2D, id: string, x: number, y: number): void {
+    const st = this.statuses.get(id);
+    if (!st) return;
+    if (st.stun) {
+      // оглушення: іскри, що кружляють над літаком
+      for (let i = 0; i < 3; i++) {
+        const a = this.clock * 8 + (i / 3) * Math.PI * 2;
+        drawGlow(ctx, x + Math.cos(a) * 18, y - 24 + Math.sin(a) * 5, 'rgba(200,230,255,1)', 8, 0.9);
+      }
+    }
+    if (st.poison) drawGlow(ctx, x, y, 'rgba(120,230,60,1)', 34, 0.25);
+    if (st.burn) drawGlow(ctx, x, y, 'rgba(255,120,40,1)', 34, 0.3);
+  }
+
+  private renderZones(ctx: CanvasRenderingContext2D): void {
+    for (const z of this.zones) {
+      const k = z.t / z.dur;
+      const fade = k < 0.15 ? k / 0.15 : k > 0.8 ? (1 - k) / 0.2 : 1;
+      const pulse = 0.85 + Math.sin(this.clock * 8 + z.x) * 0.15;
+      if (z.kind === 'void') {
+        // мікро-"чорна діра": темне ядро і кільце, що закручується
+        const g = ctx.createRadialGradient(z.x, z.y, 0, z.x, z.y, z.r);
+        g.addColorStop(0, `rgba(4,2,12,${0.9 * fade})`);
+        g.addColorStop(0.45, `rgba(40,20,70,${0.5 * fade})`);
+        g.addColorStop(1, 'rgba(40,20,70,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = hexToRgba(z.color, 0.6 * fade);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(z.x, z.y, z.r * (0.35 + ((this.clock * 0.8) % 1) * 0.5), 0, Math.PI * 2);
+        ctx.stroke();
+        continue;
+      }
+      const rgb = z.kind === 'acid' ? '120,230,60' : '255,120,40';
+      drawGlow(ctx, z.x, z.y, `rgba(${rgb},1)`, z.r * 1.1 * pulse, 0.45 * fade);
+      ctx.strokeStyle = `rgba(${rgb},${0.5 * fade})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (Math.random() < 0.4) this.particles.emit(z.x + (Math.random() - 0.5) * z.r, z.y + (Math.random() - 0.5) * z.r, { count: 1, speed: [10, 40], angle: -Math.PI / 2, spread: 0.6, life: [0.3, 0.6], size: [2, 4], colors: z.kind === 'acid' ? ['#d8ffa8', '#7adc3a'] : ['#fff1a8', '#ff8a1f', '#ff3a1a'], drag: 1 });
+    }
+  }
+
+  /** Ланцюгова блискавка: ламана між точками, що щокадру трохи інша. */
+  private renderChains(ctx: CanvasRenderingContext2D): void {
+    for (const c of this.chains) {
+      const k = 1 - c.t / 0.25;
+      ctx.strokeStyle = hexToRgba(c.color, 0.9 * k);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let i = 0; i + 3 < c.pts.length; i += 2) {
+        const [x1, y1, x2, y2] = [c.pts[i], c.pts[i + 1], c.pts[i + 2], c.pts[i + 3]];
+        ctx.moveTo(x1, y1);
+        for (let s = 1; s <= 5; s++) {
+          const f = s / 5;
+          const j = s < 5 ? (Math.random() - 0.5) * 18 : 0;
+          ctx.lineTo(x1 + (x2 - x1) * f + j, y1 + (y2 - y1) * f + j);
+        }
+      }
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,255,${0.8 * k})`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+
   private renderMissile(ctx: CanvasRenderingContext2D, m: Missile): void {
     ctx.save();
     ctx.translate(m.pos.x, m.pos.y);
     ctx.rotate(m.angle + Math.PI / 2);
     ctx.fillStyle = '#e6e9f0';
     ctx.fillRect(-1.6, -5, 3.2, 10);
-    ctx.fillStyle = m.remote ? '#ff2a6a' : '#ffd24a';
+    ctx.fillStyle = m.tint ?? (m.remote ? '#ff2a6a' : '#ffd24a');
     ctx.fillRect(-1.6, -7, 3.2, 3);
     ctx.restore();
     drawGlow(ctx, m.pos.x - Math.cos(m.angle) * 6, m.pos.y - Math.sin(m.angle) * 6, 'rgba(255,170,60,1)', 10, 0.8);
   }
+}
+
+/** '#rrggbb' → 'r,g,b' (для кілець) */
+function hexToRgb(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
 }
 
 function hexToRgba(hex: string, alpha = 1): string {

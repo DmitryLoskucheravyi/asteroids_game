@@ -1,5 +1,6 @@
 import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
-import { signatureFor, signatureVolley } from '../shared/signature.js';
+import { signatureAt, signatureVolley } from '../shared/signature.js';
+import { SigFx } from './sigfx.js';
 import { clampLevel, itemBonusMul, itemCooldownMul, itemHpMul, itemPowerMul, weaponDamageMul } from '../shared/gear.js';
 import { HazardSystem } from './hazards.js';
 import { driftPos, obstacleHp, windAt, type HazardKind } from '../shared/hazards.js';
@@ -196,6 +197,17 @@ export class Room {
   private graceTimer: ReturnType<typeof setTimeout> | null = null;
   private obstacles: Obstacle[];
   private projectiles: ServerProjectile[] = [];
+  /** Ефекти фірмових гармат (DoT, зони, ланцюги, осколки) */
+  private readonly sigfx = new SigFx({
+    list: () => this.participants.values(),
+    get: (id) => this.participants.get(id),
+    posAt: (p, t) => this.posAt(p, t),
+    sameTeam: (a, b) => this.sameTeam(a, b),
+    damage: (a, t, d, now) => this.applyDamage(a, t, d, now),
+    fx: (data) => this.net.broadcast('match:fx', data),
+    spawn: (owner, kind, from, angle, damage, splash, lagMs, over) => this.spawnProjectile(owner, kind, from, angle, damage, splash, lagMs, over),
+    ray: (owner, from, angle, range, lagMs, opts) => this.sigRay(owner, from, angle, range, lagMs, opts),
+  });
   private pickups = new Map<number, Pickup>();
   private pickupSeq = 0;
   private lastPickupSpawn = 0;
@@ -628,8 +640,10 @@ export class Room {
    * (із запасом на нерівну доставку). Урон — від гармати й бонусів літака/предметів.
    */
   private onSignatureShot(p: Participant, data: { x: number; y: number; angle: number; kind: string; viewT?: number }): void {
-    const g = signatureFor(p.planeId);
-    if (data.kind !== g.kind) return;
+    const g = signatureAt(p.planeId, p.tier);
+    // кожен N-й постріл (тір) може бути самонавідною ракетою
+    const homing = !!g.fx.homingEvery && data.kind === 'missile' && g.kind !== 'missile';
+    if (data.kind !== g.kind && !homing) return;
     const now = Date.now();
     const volley = signatureVolley(g);
     const perSec = (volley / g.cooldown) * 1.3;
@@ -641,13 +655,112 @@ export class Room {
     const lagMs = this.lagFor(data.viewT, now);
     p.lastFiredAt = now;
     p.shots++;
-    this.relay(p.id, 'match:shot', encodeShot({ owner: this.indexOf(p.id), x: origin.x, y: origin.y, angle: data.angle, kind: g.visual ?? g.kind, speed: g.kind === 'missile' ? MISSILE_SPEED : g.speed }));
-    const damage = g.damage * p.damageMul;
-    if (g.kind === 'laser') {
-      this.fireLaser(p, origin, data.angle, g.range ?? PROJECTILE_RANGE.laser, damage, lagMs, false);
+    const kind = homing ? 'missile' : g.kind;
+    this.relay(p.id, 'match:shot', encodeShot({ owner: this.indexOf(p.id), x: origin.x, y: origin.y, angle: data.angle, kind: homing ? 'missile' : g.visual ?? g.kind, speed: kind === 'missile' ? MISSILE_SPEED : g.speed, sig: true, tier: g.tier }));
+    // пульсація навколо літака — раз на залп
+    if (g.fx.pulse && now - (p.sigPulseAt ?? -Infinity) > g.cooldown * 800) {
+      p.sigPulseAt = now;
+      this.sigfx.pulse(p, g, now);
+    }
+    const damage = (homing ? g.fx.homingDamage ?? g.damage : g.damage) * p.damageMul;
+    if (kind === 'laser') {
+      this.fireSigLaser(p, origin, data.angle, damage, lagMs, now);
       return;
     }
-    this.spawnProjectile(p, g.kind, origin, data.angle, damage, g.splash ?? 0, lagMs, { speed: g.speed, range: g.range });
+    this.spawnProjectile(p, kind, origin, data.angle, damage, g.splash ?? 0, lagMs, {
+      speed: g.speed,
+      range: g.range,
+      sig: g.fx,
+      color: g.color,
+      pierceLeft: g.fx.pierce ?? 0,
+      bounces: g.fx.ricochet ?? 0,
+      turnMul: g.fx.turnMul,
+    });
+  }
+
+  /** Промінь фірмової гармати: доводка, ширина, пробиття, паралельні промені, відгалуження, відлуння. */
+  private fireSigLaser(p: Participant, origin: { x: number; y: number }, angle0: number, damage: number, lagMs: number, now: number): void {
+    const g = signatureAt(p.planeId, p.tier);
+    const fx = g.fx;
+    const range = g.range ?? PROJECTILE_RANGE.laser;
+    let angle = angle0;
+    if (fx.aimAssist) {
+      // доводка: найближчий ворог у вузькому конусі — промінь іде точно в нього
+      let best = fx.aimAssist;
+      for (const o of this.participants.values()) {
+        if (o === p || !o.alive || this.sameTeam(o, p)) continue;
+        const at = this.posAt(o, now - lagMs);
+        const d = Math.hypot(at.x - origin.x, at.y - origin.y);
+        if (d > range) continue;
+        const diff = Math.abs(angDiff(angle0, Math.atan2(at.y - origin.y, at.x - origin.x)));
+        if (diff < best) {
+          best = diff;
+          angle = Math.atan2(at.y - origin.y, at.x - origin.x);
+        }
+      }
+    }
+    const n = fx.parallel?.n ?? 1;
+    const mul = fx.parallel ? fx.parallel.mul : 1;
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * (fx.parallel?.gap ?? 0);
+      const from = { x: origin.x - Math.sin(angle) * off, y: origin.y + Math.cos(angle) * off };
+      const r = this.sigRay(p, from, angle, range, lagMs, { wide: fx.wide });
+      if (i > 0) this.net.broadcast('match:fx', { k: 'ray', x1: Math.round(from.x), y1: Math.round(from.y), x2: Math.round(from.x + Math.cos(angle) * r.dist), y2: Math.round(from.y + Math.sin(angle) * r.dist), c: g.color });
+      for (const h of r.hits.slice(0, 1 + (fx.pierce ?? 0))) {
+        this.applyDamage(p, h, damage * mul, now);
+        const at = this.posAt(h, now - lagMs);
+        this.sigfx.onHit(p, h, at.x, at.y, damage * mul, fx, now, g.color, angle);
+      }
+    }
+    this.sigfx.echo(p, origin, angle, g, damage, lagMs, now);
+  }
+
+  /** Усі вороги вздовж променя до першої скелі / іскри пастки / перешкоди арени (у порядку відстані). */
+  private sigRay(owner: Participant, from: { x: number; y: number }, angle: number, range: number, lagMs: number, opts: { wide?: number; skip?: string[] }): { hits: Participant[]; dist: number } {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const rayHit = (cx: number, cy: number, r: number): number | null => {
+      const fx = cx - from.x;
+      const fy = cy - from.y;
+      const along = fx * dx + fy * dy;
+      if (along < 0) return null;
+      const perp2 = fx * fx + fy * fy - along * along;
+      if (perp2 > r * r) return null;
+      return along - Math.sqrt(r * r - perp2);
+    };
+    const now = Date.now();
+    let block = range;
+    let rock: Obstacle | null = null;
+    for (const o of this.obstacles) {
+      const d = rayHit(o.x, o.y, o.r);
+      if (d !== null && d < block) {
+        block = d;
+        rock = o;
+      }
+    }
+    for (const f of this.enemyFlares(owner)) {
+      const d = rayDecoy(f, now - lagMs, from.x, from.y, dx, dy);
+      if (d !== null && d < block) {
+        block = d;
+        rock = null;
+      }
+    }
+    const damage = signatureAt(owner.planeId, owner.tier).damage * owner.damageMul;
+    const hz = this.hz.rayHit(from.x, from.y, dx, dy, block, now - this.startedAt, damage);
+    if (hz) {
+      block = hz.dist;
+      rock = null;
+    }
+    if (rock) this.damageObstacle(rock, damage, now - this.startedAt);
+    const hits: { p: Participant; d: number }[] = [];
+    for (const o of this.participants.values()) {
+      if (o === owner || !o.alive || now < o.phaseUntil || this.sameTeam(o, owner) || opts.skip?.includes(o.id)) continue;
+      const at = this.posAt(o, now - lagMs);
+      const d = rayHit(at.x, at.y, HIT_RADIUS * (opts.wide ?? 1));
+      if (d !== null && d < block) hits.push({ p: o, d });
+    }
+    hits.sort((a, b) => a.d - b.d);
+    return { hits: hits.map((h) => h.p), dist: Math.max(0, block) };
   }
 
   /** На скільки мс відмотати цілі для пострілу, який гравець зробив, бачачи світ на момент viewT. */
@@ -656,7 +769,7 @@ export class Room {
     return Math.max(0, Math.min(MAX_REWIND_MS, now - (this.startedAt + viewT)));
   }
 
-  private spawnProjectile(owner: Participant, kind: 'bullet' | 'rocket' | 'missile', from: { x: number; y: number }, angle: number, damage: number, splash: number, lagMs: number, over?: { speed?: number; range?: number }): void {
+  private spawnProjectile(owner: Participant, kind: 'bullet' | 'rocket' | 'missile', from: { x: number; y: number }, angle: number, damage: number, splash: number, lagMs: number, over?: Partial<ServerProjectile> & { speed?: number }): void {
     const speed = kind === 'missile' ? MISSILE_SPEED : over?.speed ?? getWeaponDef(owner.weaponId)?.projectileSpeed ?? 900;
     this.projectiles.push({
       ownerId: owner.id,
@@ -674,6 +787,12 @@ export class Room {
       simT: Date.now(),
       angle,
       life: kind === 'missile' ? MISSILE_LIFE : undefined,
+      sig: over?.sig,
+      color: over?.color,
+      pierceLeft: over?.pierceLeft,
+      hitIds: over?.hitIds,
+      bounces: over?.bounces,
+      turnMul: over?.turnMul,
     });
   }
 
@@ -804,6 +923,7 @@ export class Room {
       target.firing = false;
       attacker.kills++;
       this.dropLoot(target);
+      this.sigfx.onDeath(target, now);
     }
     this.net.broadcast('match:hit', { attackerId: attacker.id, targetId: target.id, hp: target.hp, died, damage: Math.round(damage * 10) / 10 });
     if (died) this.checkEnd();
@@ -953,7 +1073,7 @@ export class Room {
         }
         if (best) {
           const want = Math.atan2(best.y - pr.y, best.x - pr.x);
-          const turn = MISSILE_TURN * dt;
+          const turn = MISSILE_TURN * (pr.turnMul ?? 1) * dt;
           pr.angle = (pr.angle ?? 0) + Math.max(-turn, Math.min(turn, angDiff(pr.angle ?? 0, want)));
         }
         pr.vx = Math.cos(pr.angle ?? 0) * MISSILE_SPEED;
@@ -962,6 +1082,7 @@ export class Room {
       const nx = pr.x + pr.vx * dt;
       const ny = pr.y + pr.vy * dt;
       let dead = false;
+      let bounced = false;
       let hit: Participant | null = null;
       // снаряд, що влучив в іскру пастки, згорає (без сплешу)
       let intercepted = false;
@@ -973,18 +1094,29 @@ export class Room {
       }
       if (intercepted || this.hz.hitByProjectile(pr.x, pr.y, nx, ny, pr.damage, now - this.startedAt)) {
         pr.range = -1;
+        if (!intercepted && pr.sig && owner0) this.sigfx.onImpact(owner0, nx, ny, pr.damage, pr.sig, now, pr.color ?? '#ffffff');
         continue;
       }
       for (const o of this.obstacles) {
         if (segDist(pr.x, pr.y, nx, ny, o.x, o.y) < o.r) {
-          dead = true;
           this.damageObstacle(o, pr.damage, now - this.startedAt);
+          if (pr.bounces) {
+            // рикошет від скелі: дзеркалимо швидкість відносно нормалі
+            pr.bounces--;
+            const nxn = (pr.x - o.x) / (Math.hypot(pr.x - o.x, pr.y - o.y) || 1);
+            const nyn = (pr.y - o.y) / (Math.hypot(pr.x - o.x, pr.y - o.y) || 1);
+            const dot = pr.vx * nxn + pr.vy * nyn;
+            pr.vx -= 2 * dot * nxn;
+            pr.vy -= 2 * dot * nyn;
+            pr.angle = Math.atan2(pr.vy, pr.vx);
+            bounced = true;
+          } else dead = true;
           break;
         }
       }
-      if (!dead) {
+      if (!dead && !bounced) {
         for (const p of list) {
-          if (!p.alive || p.id === pr.ownerId || (owner0 && this.sameTeam(owner0, p))) continue;
+          if (!p.alive || p.id === pr.ownerId || (owner0 && this.sameTeam(owner0, p)) || pr.hitIds?.includes(p.id)) continue;
           const at = this.posAt(p, now - pr.lagMs);
           const d = segDist(pr.x, pr.y, nx, ny, at.x, at.y);
           if (now < p.phaseUntil) continue;
@@ -995,9 +1127,29 @@ export class Room {
           }
         }
       }
-      pr.x = nx;
-      pr.y = ny;
+      if (!bounced) {
+        pr.x = nx;
+        pr.y = ny;
+      }
       pr.traveled += Math.hypot(pr.vx, pr.vy) * dt;
+      // рикошет від меж арени
+      if (pr.bounces && (pr.x < 0 || pr.x > WORLD_W || pr.y < 0 || pr.y > WORLD_H)) {
+        pr.bounces--;
+        if (pr.x < 0 || pr.x > WORLD_W) pr.vx = -pr.vx;
+        if (pr.y < 0 || pr.y > WORLD_H) pr.vy = -pr.vy;
+        pr.x = Math.max(0, Math.min(WORLD_W, pr.x));
+        pr.y = Math.max(0, Math.min(WORLD_H, pr.y));
+        pr.angle = Math.atan2(pr.vy, pr.vx);
+      }
+      // куля-фенікс: на межі дальності розвертається й летить назад
+      if (pr.sig?.boomerang && !pr.returned && pr.traveled > pr.range && !dead) {
+        pr.returned = true;
+        pr.traveled = 0;
+        pr.vx = -pr.vx;
+        pr.vy = -pr.vy;
+        pr.angle = Math.atan2(pr.vy, pr.vx);
+        pr.hitIds = [];
+      }
       // ракета, що вибухнула в перешкоді, теж зачіпає сплешем — як на клієнті
       if (dead && !hit && pr.splash > 0 && owner0) {
         for (const p of list) {
@@ -1011,6 +1163,15 @@ export class Room {
         const owner = this.participants.get(pr.ownerId);
         if (owner) {
           this.applyDamage(owner, hit, pr.damage, now);
+          if (pr.sig) {
+            this.sigfx.onHit(owner, hit, pr.x, pr.y, pr.damage, pr.sig, now, pr.color ?? '#ffffff', pr.angle ?? Math.atan2(pr.vy, pr.vx));
+            // пробиття: снаряд летить далі, цю ціль більше не чіпає
+            if ((pr.pierceLeft ?? 0) > 0) {
+              pr.pierceLeft = (pr.pierceLeft ?? 0) - 1;
+              pr.hitIds = [...(pr.hitIds ?? []), hit.id];
+              dead = false;
+            } else this.sigfx.onImpact(owner, pr.x, pr.y, pr.damage, pr.sig, now, pr.color ?? '#ffffff', hit.id);
+          }
           if (pr.splash > 0) {
             for (const p of list) {
               if (p === hit || p === owner || !p.alive) continue;
@@ -1020,6 +1181,7 @@ export class Room {
           }
         }
       }
+      if (dead && !hit && pr.sig && owner0 && pr.traveled <= pr.range) this.sigfx.onImpact(owner0, pr.x, pr.y, pr.damage, pr.sig, now, pr.color ?? '#ffffff');
       if (dead) pr.range = -1;
     }
     this.projectiles = this.projectiles.filter((p) => p.range >= 0);
@@ -1058,6 +1220,8 @@ export class Room {
     // два підкроки з власним часом — швидкі кулі не "проскакують" крізь літаки, а ціль не "застигає"
     this.updateProjectiles(now - TICK_MS / 2);
     this.updateProjectiles(now);
+    if (this.ended) return;
+    this.sigfx.update(now);
     if (this.ended) return;
     this.hz.update(now - this.startedAt, dt);
     if (this.ended) return;

@@ -18,6 +18,7 @@ import { canDestroy } from './weapons';
 import { ParticleSystem } from './systems/Particles';
 import { BOOST_MULTIPLIER, FLARE_RADIUS, SkillSystem } from './systems/SkillSystem';
 import { Starfield } from './systems/Starfield';
+import { TierSkills, type SkillHost } from './skillTiers';
 
 export type GameMode = 'campaign' | 'survival';
 export type GameState = 'countdown' | 'running' | 'paused' | 'dying' | 'won' | 'lost';
@@ -171,7 +172,11 @@ export class Game {
   private empTimer = 0;
   private readonly empPos = new Vec2();
 
-  /** Екіпірована зброя (завжди є — за замовчуванням стартовий кулемет). */
+  /** Тірові механіки бортового скіла (свої для кожного літака) */
+  private tierSkills!: TierSkills;
+  private readonly planeId: PlaneId;
+  private readonly planeTier: number;
+
 
   constructor(
     readonly mode: GameMode,
@@ -181,6 +186,8 @@ export class Game {
   ) {
     const progress = Save.progressFor(planeId);
     const loadout = Save.loadoutFor(planeId);
+    this.planeId = planeId;
+    this.planeTier = progress.tier;
     let spec = effectivePlaneSpec(getPlane(planeId), progress);
 
     const passiveItem = Save.itemById(loadout.passive);
@@ -240,6 +247,7 @@ export class Game {
     this.particles.clear();
     this.player.reset(this.width / 2, this.height * 0.62);
     this.player.invulnerable = 0;
+    this.tierSkills = new TierSkills(this.skillHost(), this.planeId, this.planeTier);
     const feat = this.feature;
     this.skills.reset(feat, this.itemCooldownMax, this.cooldownMul);
     this.player.shield = !!feat.startShield;
@@ -274,6 +282,34 @@ export class Game {
     this.setState('countdown', COUNTDOWN);
   }
 
+  /** Доступ тірових механік до світу гри. */
+  private skillHost(): SkillHost {
+    return {
+      player: this.player,
+      skills: this.skills,
+      particles: this.particles,
+      asteroids: () => this.asteroids,
+      pickups: () => this.pickups,
+      smash: (a, loud = true) => {
+        a.kill();
+        this.burst(a.pos.x, a.pos.y, a.visual, !loud);
+      },
+      destructible: (a) => this.destructible(a),
+      shockwave: (at, r, color) => {
+        this.shockwave(at, r, color);
+      },
+      ring: (x, y, r1, color, dur) => this.rings.push({ x, y, t: 0, dur, r0: 10, r1, color }),
+      addProjectile: (pr) => this.projectiles.push(pr),
+      collect: (pk) => {
+        pk.kill();
+        this.collect(pk.kind, pk.pos);
+      },
+      float: (x, y, text, color) => this.floatText(x, y, text, color),
+      shake: (v) => this.addShake(v),
+      size: () => ({ w: this.width, h: this.height }),
+    };
+  }
+
   private setState(s: GameState, timer = 0): void {
     this.state = s;
     this.stateTimer = timer;
@@ -300,6 +336,7 @@ export class Game {
   useFreeze(): void {
     if (this.state !== 'running' || !this.skills.tryFreeze()) return;
     Sfx.freeze();
+    this.tierSkills.onFreeze();
     this.rings.push({ x: this.player.pos.x, y: this.player.pos.y, t: 0, dur: 0.6, r0: 20, r1: Math.max(this.width, this.height), color: '160,220,255' });
   }
 
@@ -314,7 +351,11 @@ export class Game {
     const from = this.player.jump(this.width, this.height);
     Sfx.jump();
     const to = this.player.pos;
-    if (this.feature.dashShockwave) this.shockwave(to, this.feature.dashShockwave, '120,190,255');
+    this.tierSkills.onJump(from, to.clone());
+    if (this.feature.dashShockwave) {
+      const destroyed = this.shockwave(to, this.feature.dashShockwave, '120,190,255');
+      this.tierSkills.onShockwave(to.clone(), this.feature.dashShockwave, destroyed);
+    }
     const [inner, outer] = this.player.spec.flame;
     for (let i = 0; i <= 10; i++) {
       const k = i / 10;
@@ -484,6 +525,7 @@ export class Game {
     if (this.mode === 'survival') this.updateSurvivalProgress(dt);
 
     this.updatePlayer(dt);
+    this.tierSkills.update(dt, true);
     if (!this.frozen) {
       this.applyGravity(dt);
       this.applyWind(dt);
@@ -546,12 +588,13 @@ export class Game {
   }
 
   private updateShieldRegen(dt: number): void {
-    const regen = this.feature.shieldRegen;
+    const regen = this.feature.shieldRegen ? this.feature.shieldRegen * this.tierSkills.shieldRegenMul(this.lives) : 0;
     if (!regen || this.player.shield) return;
     this.shieldRegenTimer += dt;
     if (this.shieldRegenTimer >= regen) {
       this.shieldRegenTimer = 0;
       this.player.shield = true;
+      this.tierSkills.onShieldRegen();
       Sfx.powerup();
       this.floatText(this.player.pos.x, this.player.pos.y - 40, t('hud.shield'), '#9fe3ff');
     }
@@ -599,8 +642,9 @@ export class Game {
     const world = this.worldView();
     for (const a of this.asteroids) {
       const empHit = empActive && circlesOverlap(a.pos, a.radius, this.empPos, this.activeItem!.radius ?? 200);
-      a.frozen = frozen || empHit;
-      if (!frozen && !empHit) a.update(dt, world);
+      const mod = this.tierSkills.asteroidMod(a);
+      a.frozen = frozen || empHit || mod.frozen;
+      if (!a.frozen) a.update(dt * mod.mul, world);
       if (a instanceof Comet && !a.warning && !frozen) {
         this.particles.emit(a.pos.x, a.pos.y, { count: 2, speed: [20, 80], life: [0.2, 0.45], size: [3, 6], colors: ['#ffd27a', '#ff7a2a', '#ff4a1a'], drag: 4 });
       }
@@ -690,15 +734,26 @@ export class Game {
   private onPlayerHit(a: Asteroid | null): void {
     const p = this.player;
     if (p.invulnerable > 0) return;
-    // таран під форсажем
-    if (a && this.feature.ramOnBoost && this.skills.isBoosted && a.size !== 'large' && this.destructible(a)) {
+    // таран під форсажем (блискавка T4 — і великі) або вогняний таран фенікса після воскресіння
+    const ram = this.feature.ramOnBoost && this.skills.isBoosted && (a?.size !== 'large' || this.tierSkills.ramBreaksLarge());
+    if (a && (ram || this.tierSkills.fireRam) && this.destructible(a)) {
       a.kill();
       this.burst(a.pos.x, a.pos.y, a.visual, false);
       this.addShake(6);
       Sfx.shieldHit();
+      if (ram) this.tierSkills.onRam(a);
+      return;
+    }
+    // титан T2: малий астероїд розбивається об щит, щит лишається
+    if (p.shield && this.tierSkills.shieldAbsorbs(a)) {
+      a!.kill();
+      this.burst(a!.pos.x, a!.pos.y, a!.visual, true);
+      this.rings.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.3, r0: 20, r1: 60, color: '120,210,255' });
+      Sfx.shieldHit();
       return;
     }
     if (p.shield) {
+      this.tierSkills.onShieldBreak();
       p.shield = false;
       p.invulnerable = 1.2;
       this.shieldRegenTimer = 0;
@@ -714,6 +769,7 @@ export class Game {
     if (this.lives > 0) {
       // друге життя: вибух розчищає простір навколо
       this.lives--;
+      this.tierSkills.onLifeLost(this.lives);
       p.invulnerable = 2.5;
       this.explosions.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.7, size: 120 });
       this.shockwave(p.pos, 230, '255,170,80');
@@ -722,6 +778,8 @@ export class Game {
       Sfx.explode();
       return;
     }
+    // хронос T3: раз за забіг відмотує час назад
+    if (this.tierSkills.saveFromDeath()) return;
     // смерть
     this.setState('dying', 1.6);
     this.explosions.push({ x: p.pos.x, y: p.pos.y, t: 0, dur: 0.9, size: 150 });
@@ -738,7 +796,8 @@ export class Game {
     const magnet = this.feature.magnetRadius ?? 0;
     for (const pk of this.pickups) {
       pk.update(dt, world);
-      if (magnet && Vec2.dist(pk.pos, p.pos) < magnet) {
+      const pull = this.tierSkills.magnetFor(pk, magnet);
+      if (pull && Vec2.dist(pk.pos, p.pos) < pull) {
         const dir = new Vec2(p.pos.x - pk.pos.x, p.pos.y - pk.pos.y).normalize();
         pk.pos.add(dir, 520 * dt);
       }
@@ -761,12 +820,15 @@ export class Game {
     this.particles.emit(at.x, at.y, { count: kind === 'prism' ? 34 : 22, speed: [60, 220], life: [0.3, 0.7], size: [2, 4], colors: colors[kind] });
     this.rings.push({ x: at.x, y: at.y, t: 0, dur: 0.35, r0: 10, r1: 60, color: kind === 'crystal' ? '255,120,230' : kind === 'prism' ? '255,226,122' : '150,220,255' });
     switch (kind) {
-      case 'crystal':
-        this.crystals++;
-        this.coins += CRYSTAL_COINS;
+      case 'crystal': {
+        // колектор T4: кристал з шансом рахується подвійним
+        const n = 1 + this.tierSkills.crystalBonus();
+        this.crystals += n;
+        this.coins += CRYSTAL_COINS * n;
         Sfx.pickup();
-        this.floatText(at.x, at.y - 24, `+${CRYSTAL_COINS}`, '#ffd24a');
+        this.floatText(at.x, at.y - 24, `+${CRYSTAL_COINS * n}`, n > 1 ? '#7affd0' : '#ffd24a');
         return;
+      }
       case 'prism': {
         const amount = chance(0.15) ? randInt(2, 3) : 1;
         this.prisms += amount;
@@ -1074,15 +1136,18 @@ export class Game {
   }
 
   /** Ударна хвиля: знищує руйнівні астероїди в радіусі. */
-  private shockwave(at: Vec2, radius: number, color: string): void {
+  private shockwave(at: Vec2, radius: number, color: string): number {
     this.rings.push({ x: at.x, y: at.y, t: 0, dur: 0.45, r0: 20, r1: radius, color });
+    let destroyed = 0;
     for (const a of this.asteroids) {
       if (a.alive && this.destructible(a) && Vec2.dist(a.pos, at) < radius + a.radius) {
         a.kill();
         this.burst(a.pos.x, a.pos.y, a.visual, true);
+        destroyed++;
       }
     }
     this.addShake(8);
+    return destroyed;
   }
 
   /** Стан унікальної фічі літака для HUD (null — нічого не показувати). */
@@ -1190,6 +1255,7 @@ export class Game {
     for (const a of this.asteroids) if (a instanceof BlackHole) a.render(ctx, this.clock);
     for (const m of this.mines) m.render(ctx, this.clock);
     for (const pk of this.pickups) pk.render(ctx, this.clock);
+    this.tierSkills?.render(ctx, this.clock);
     this.particles.render(ctx);
     if (this.state !== 'dying' && this.state !== 'lost') this.player.render(ctx, boosted);
     for (const a of this.asteroids) if (!(a instanceof BlackHole)) a.render(ctx, this.clock);

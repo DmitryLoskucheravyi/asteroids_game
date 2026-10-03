@@ -87,6 +87,9 @@ export interface ShotEvent {
   /** Фізика (bullet/rocket/missile/laser) або особливий вигляд (дріб, плазма, рейка) */
   kind: 'bullet' | 'rocket' | 'missile' | 'laser' | 'pellet' | 'plasma' | 'rail';
   speed: number;
+  /** Постріл фірмової гармати та тір стрільця */
+  sig?: boolean;
+  tier?: number;
 }
 
 export interface SkillEvent {

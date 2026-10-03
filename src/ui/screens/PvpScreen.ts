@@ -12,7 +12,7 @@ import { rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
 /** Кольори команд (смужка на картці, імена тіммейтів у бою — завжди зелені). */
 const TEAM_COLORS = ['#58d2ff', '#ff6a6a', '#ffd24a', '#b77bff', '#4fe08a'];
 import { PvpGame } from '../../game/PvpGame';
-import { signatureFor } from '../../../server/src/shared/signature';
+import { signatureAt } from '../../../server/src/shared/signature';
 
 /** Іконка фірмової гармати — за видом пострілу */
 const SIG_ART: Record<string, string> = { bullet: 'machine_gun', rocket: 'rocket_launcher', laser: 'laser', missile: 'homing_salvo', pellet: 'scatter_gun', plasma: 'plasma_cannon', rail: 'railgun' };
@@ -94,13 +94,14 @@ export class PvpScreen extends Screen {
     this.dead = h('div', { class: 'pvp-dead', hidden: true }, h('b', {}, t('pvp.downed')), h('span', {}, t('pvp.spectating')));
 
     const weaponId = loadout.weapon ?? 'machine_gun';
+    const sigGun = signatureAt(plane, Save.progressFor(plane).tier);
     const activeItem = Save.itemById(loadout.active);
     const passiveItem = Save.itemById(loadout.passive);
     this.weaponBar = h('i');
     this.slots = {
       // основна зброя — ЛКМ; фірмова гармата літака — X
       weapon: this.slot('weapon', weaponSvg(weaponId), 'fire', 'hud.weapon', 'sk-art sk-wide', t('hud.lmb')),
-      sig: this.slot('sig', weaponSvg(SIG_ART[signatureFor(plane).visual ?? signatureFor(plane).kind]), 'signature', 'hud.signature', 'sk-art sk-sig'),
+      sig: this.slot('sig', weaponSvg(SIG_ART[sigGun.visual ?? sigGun.kind]), 'signature', 'hud.signature', 'sk-art sk-sig'),
       boost: this.slot('boost', Icons.bolt, 'boost', 'hud.boost'),
       jump: this.slot('jump', Icons.dash, 'jump', 'hud.jump'),
       flare: this.slot('flare', Icons.flare, 'flare', 'hud.flare'),
