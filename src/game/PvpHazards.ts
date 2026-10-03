@@ -6,6 +6,8 @@ import { FOG_RADIUS, MINE_BLAST, hazardPos, type ArenaEvent, type Hazard } from 
 interface ClientHazard extends Hazard {
   /** Міна спрацювала — вибухне в цей момент (мс матчу) */
   fuseAt?: number;
+  /** Момент останнього влучання (секунди клієнта) — для спалаху */
+  hitAt?: number;
 }
 
 /** Кольори попереджень: комети червоні, злива й стіни помаранчеві, бос — золотий. */
@@ -51,6 +53,12 @@ export class PvpHazards {
     }
   }
 
+  /** Влучання в перешкоду — короткий спалах. */
+  flash(id: number, clock: number): void {
+    const h = this.list.get(id);
+    if (h) h.hitAt = clock;
+  }
+
   fuse(e: { id: number; at: number }): void {
     const h = this.list.get(e.id);
     if (h) h.fuseAt = e.at;
@@ -80,6 +88,8 @@ export class PvpHazards {
       if (p.x + h.r < view.l || p.x - h.r > view.r || p.y + h.r < view.t || p.y - h.r > view.b) continue;
       ctx.save();
       ctx.translate(p.x, p.y);
+      // влучання — короткий спалах (HP гравцям не показуємо)
+      if (h.hitAt !== undefined && clock - h.hitAt < 0.12) drawGlow(ctx, 0, 0, 'rgba(255,230,190,1)', h.r * 1.3, 0.55);
       switch (h.kind) {
         case 'comet': {
           // хвіст проти руху + розпечена голова

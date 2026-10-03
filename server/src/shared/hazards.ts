@@ -68,6 +68,15 @@ export function hazardPos(h: Hazard, t: number): { x: number; y: number } {
   return { x: reflect(x, h.r, ARENA_W - h.r), y: reflect(y, h.r, ARENA_H - h.r) };
 }
 
+/** Скелі арени повільно дрейфують і відбиваються від країв (t — мс від старту матчу). */
+export function driftPos(o: { x0: number; y0: number; vx: number; vy: number; r: number }, t: number): { x: number; y: number } {
+  const s = Math.max(0, t) / 1000;
+  return { x: reflect(o.x0 + o.vx * s, o.r, ARENA_W - o.r), y: reflect(o.y0 + o.vy * s, o.r, ARENA_H - o.r) };
+}
+
+/** HP скелі: що більша, то міцніша. */
+export const obstacleHp = (r: number): number => Math.round(r * 4.5);
+
 /** Шкода від удару перешкоди об літак. */
 export function hazardDamage(kind: HazardKind, r: number): number {
   switch (kind) {

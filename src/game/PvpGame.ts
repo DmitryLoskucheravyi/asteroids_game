@@ -7,7 +7,7 @@ import { Save } from '../core/storage';
 import { drawGlow } from './fx';
 import { drawCrosshair } from './crosshair';
 import { PvpHazards } from './PvpHazards';
-import { windAt } from '../../server/src/shared/hazards';
+import { driftPos, windAt } from '../../server/src/shared/hazards';
 import { t as tr, type TKey } from '../core/i18n';
 import { drawPlane } from './PlaneArt';
 import { PVP_PROGRESS_SCALE, effectivePlaneSpec, getPlane, planeCombat, type PlaneId } from './planes';
@@ -174,6 +174,17 @@ export class PvpGame {
     this.on('match:hz-gone', (d: { id: number; x: number; y: number; boom: boolean }) => this.hazards.gone(d));
     this.on('match:hz-sync', (d: { s: [number, number, number, number, number, number][] }) => this.hazards.sync(d.s));
     this.on('match:hz-fuse', (d: { id: number; at: number }) => this.hazards.fuse(d));
+    this.on('match:hz-hp', (d: { id: number }) => this.hazards.flash(d.id, this.clock));
+    this.on('match:obs-hp', (d: { id: number }) => {
+      const o = this.obstacles.find((x) => x.id === d.id);
+      if (o) o.hitAt = this.clock;
+    });
+    this.on('match:obs-gone', (d: { id: number; x: number; y: number; r: number }) => {
+      this.obstacles = this.obstacles.filter((o) => o.id !== d.id);
+      this.explosion(d.x, d.y, Math.min(2, d.r / 45));
+      this.particles.emit(d.x, d.y, { count: Math.round(20 + d.r * 0.5), speed: [60, 300], life: [0.4, 1], size: [3, 7], colors: ['#8a7060', '#5a4a40', '#c9a080', '#ff9a3a', '#ffd27a'] });
+      this.addShake(Math.min(10, d.r / 10));
+    });
 
     this.on('match:start', () => {
       this.state = 'active';
@@ -277,7 +288,8 @@ export class PvpGame {
     this.teamSize = data.teamSize ?? 1;
     this.worldW = data.world.w;
     this.worldH = data.world.h;
-    this.obstacles = data.obstacles;
+    // стартові позиції скель — від них рахується дрейф
+    this.obstacles = data.obstacles.map((o) => ({ ...o, x0: o.x, y0: o.y }));
     this.countdownLeft = data.countdownMs / 1000;
     this.timeLimit = data.timeLimitMs / 1000;
     for (const p of data.participants) this.participants.set(p.id, p);
@@ -598,6 +610,12 @@ export class PvpGame {
     }
 
     this.flushDelayed();
+    const tm = this.hazardTime;
+    for (const o of this.obstacles) {
+      const pos = driftPos({ x0: o.x0 ?? o.x, y0: o.y0 ?? o.y, vx: o.vx, vy: o.vy, r: o.r }, tm);
+      o.x = pos.x;
+      o.y = pos.y;
+    }
     this.updateSmooth(dt);
     this.updateProjectiles(dt);
     this.updateMissiles(dt);
@@ -810,6 +828,7 @@ export class PvpGame {
       if (!pr.alive) continue;
       if (this.hitsObstacle(pr.pos, pr.radius)) {
         this.impact(pr);
+        this.particles.emit(pr.pos.x, pr.pos.y, { count: 4, speed: [40, 150], life: [0.15, 0.35], size: [2, 3], colors: ['#ffe0b0', '#c9a080', '#ffffff'] });
         pr.kill();
         continue;
       }
@@ -1348,14 +1367,20 @@ export class PvpGame {
     const viewR = this.cameraX + this.width / 2 + 120;
     const viewT = this.cameraY - this.height / 2 - 120;
     const viewB = this.cameraY + this.height / 2 + 120;
-    this.obstacles.forEach((o, i) => {
-      if (o.x + o.r < viewL || o.x - o.r > viewR || o.y + o.r < viewT || o.y - o.r > viewB) return;
+    for (const o of this.obstacles) {
+      if (o.x + o.r < viewL || o.x - o.r > viewR || o.y + o.r < viewT || o.y - o.r > viewB) continue;
+      const i = o.id;
       ctx.save();
       ctx.translate(o.x, o.y);
+      ctx.save();
       ctx.rotate(i * 1.7 + this.clock * 0.05 * (i % 2 ? 1 : -1));
       drawAsteroid(ctx, o.r > 70 ? 'boss' : 'large', i, o.r * 2.25);
       ctx.restore();
-    });
+      // спалах від влучання (HP гравцям не показуємо — лише реакцію на попадання)
+      const since = o.hitAt === undefined ? Infinity : this.clock - o.hitAt;
+      if (since < 0.12) drawGlow(ctx, 0, 0, 'rgba(255,230,190,1)', o.r * 1.2, 0.5 * (1 - since / 0.12));
+      ctx.restore();
+    }
   }
 
   private renderShip(ctx: CanvasRenderingContext2D, x: number, y: number, a: number, p: PublicParticipant, _self: boolean): void {

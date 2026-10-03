@@ -341,6 +341,22 @@ export class HazardSystem {
     }
   }
 
+  /** Зруйнована скеля розлітається на 2–3 уламки (звичайні метеорити, їх теж можна добити). */
+  fragments(x: number, y: number, r: number, t: number): void {
+    const n = r >= 75 ? 3 : 2;
+    const base = Math.random() * Math.PI * 2;
+    const list: Omit<Live, 'id' | 'hp' | 'v'>[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = base + (i / n) * Math.PI * 2;
+      const fr = r * 0.45;
+      const sp = rnd(110, 190);
+      list.push({ kind: 'rock', x: x + Math.cos(a) * r * 0.4, y: y + Math.sin(a) * r * 0.4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: fr, t0: t, warn: 0, until: t + 9000 });
+    }
+    this.add(list);
+  }
+
+  private hpSent = new Map<number, number>();
+
   /** Снаряд (відрізок руху) влучив у перешкоду? Перешкода отримує шкоду; снаряд згорає. */
   hitByProjectile(ax: number, ay: number, bx: number, by: number, damage: number, t: number): boolean {
     for (const h of this.live.values()) {
@@ -380,7 +396,14 @@ export class HazardSystem {
       return;
     }
     h.hp -= damage;
-    if (h.hp > 0) return;
+    if (h.hp > 0) {
+      // клієнтам — лише факт влучання для спалаху (не частіше ніж раз на 120 мс на перешкоду)
+      if (t - (this.hpSent.get(h.id) ?? -1e9) > 120) {
+        this.hpSent.set(h.id, t);
+        this.host.broadcast('match:hz-hp', { id: h.id });
+      }
+      return;
+    }
     const pos = hazardPos(h, t);
     this.remove(h, t, true);
     // збитий бос лишає купу луту; новий з'явиться згодом

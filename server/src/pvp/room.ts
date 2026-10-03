@@ -1,6 +1,6 @@
 import { StateEncoder, encodeShot, type NetState } from '../shared/netcodec.js';
 import { HazardSystem } from './hazards.js';
-import { windAt, type HazardKind } from '../shared/hazards.js';
+import { driftPos, obstacleHp, windAt, type HazardKind } from '../shared/hazards.js';
 import { FLARE_ACTIVE_MS, FLARE_COOLDOWN_MS, hitsDecoy, nearestDecoy, rayDecoy, type FlareBurst } from '../shared/flares.js';
 import { getWeaponDef, DEFAULT_WEAPON_ID, PROJECTILE_RANGE } from '../content/weapons.js';
 import { getItemDef, type ItemMeta } from '../content/items.js';
@@ -87,7 +87,15 @@ function randPos(): { x: number; y: number } {
 
 function makeObstacles(): Obstacle[] {
   const list: Obstacle[] = [];
-  for (let i = 0; i < 70; i++) list.push({ ...randPos(), r: 30 + Math.random() * 70 });
+  for (let i = 0; i < 70; i++) {
+    const pos = randPos();
+    const r = 30 + Math.random() * 70;
+    // великі дрейфують повільніше
+    const sp = 10 + Math.random() * 25 * (60 / r);
+    const a = Math.random() * Math.PI * 2;
+    const hp = obstacleHp(r);
+    list.push({ id: i, x: pos.x, y: pos.y, x0: pos.x, y0: pos.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r, hp, maxHp: hp });
+  }
   return list;
 }
 
@@ -310,7 +318,7 @@ export class Room {
       roomId: this.id,
       selfId: pid,
       world: { w: WORLD_W, h: WORLD_H },
-      obstacles: this.obstacles,
+      obstacles: this.obstacles.map((o) => ({ id: o.id, x: o.x0, y: o.y0, r: o.r, vx: o.vx, vy: o.vy, hp: o.hp, maxHp: o.maxHp })),
       participants: this.publicList(now),
       countdownMs: countdownLeft,
       mode: this.mode,
@@ -738,6 +746,25 @@ export class Room {
     if (died) this.checkEnd();
   }
 
+  /** Коли востаннє слали HP скелі (щоб кулемет не засипав мережу подіями) */
+  private obsHpSent = new Map<number, number>();
+
+  /** Влучання в скелю: HP падає; зруйнована велика скеля розколюється на уламки. */
+  private damageObstacle(o: Obstacle, damage: number, t: number): void {
+    o.hp -= damage;
+    if (o.hp > 0) {
+      if (t - (this.obsHpSent.get(o.id) ?? -1e9) > 120) {
+        this.obsHpSent.set(o.id, t);
+        // лише факт влучання (для спалаху) — HP гравцям не показуємо
+        this.net.broadcast('match:obs-hp', { id: o.id });
+      }
+      return;
+    }
+    this.obstacles = this.obstacles.filter((x) => x !== o);
+    this.net.broadcast('match:obs-gone', { id: o.id, x: Math.round(o.x), y: Math.round(o.y), r: Math.round(o.r) });
+    if (o.r >= 42) this.hz.fragments(o.x, o.y, o.r, t);
+  }
+
   /** Шкода від перешкод арени: без автора, фраг нікому не зараховується. */
   private applyEnvDamage(target: Participant, damage: number, kind: HazardKind, now: number): void {
     if (!target.alive || now < target.phaseUntil) return;
@@ -782,10 +809,15 @@ export class Room {
       if (perp2 > r * r) return null;
       return along - Math.sqrt(r * r - perp2);
     };
+    let rock: Obstacle | null = null;
     for (const o of this.obstacles) {
       const d = rayHit(o.x, o.y, o.r);
-      if (d !== null && d < best) best = d;
+      if (d !== null && d < best) {
+        best = d;
+        rock = o;
+      }
     }
+    const rockDist = best;
     const now = Date.now();
     for (const p of this.participants.values()) {
       if (p === bot || !p.alive || now < p.phaseUntil || this.sameTeam(p, bot)) continue;
@@ -810,6 +842,7 @@ export class Room {
       best = hzHit.dist;
       hit = null;
     }
+    if (rock && best === rockDist) this.damageObstacle(rock, damage, now - this.startedAt);
     if (announce) this.broadcast('match:shot', encodeShot({ owner: this.indexOf(bot.id), x: from.x, y: from.y, angle, kind: 'laser', speed: 0 }));
     if (hit) this.applyDamage(bot, hit, damage, now);
   }
@@ -879,6 +912,7 @@ export class Room {
       for (const o of this.obstacles) {
         if (segDist(pr.x, pr.y, nx, ny, o.x, o.y) < o.r) {
           dead = true;
+          this.damageObstacle(o, pr.damage, now - this.startedAt);
           break;
         }
       }
@@ -930,6 +964,12 @@ export class Room {
     const now = Date.now();
     const dt = TICK_MS / 1000;
     const list = [...this.participants.values()];
+    const tm = now - this.startedAt;
+    for (const o of this.obstacles) {
+      const pos = driftPos(o, tm);
+      o.x = pos.x;
+      o.y = pos.y;
+    }
     for (const p of list) {
       if (!p.isBot || !p.alive) continue;
       const foes = this.teamSize > 1 ? list.filter((o) => o.team !== p.team) : list;

@@ -5,10 +5,20 @@ export interface Vec {
   y: number;
 }
 
+/** Скеля арени: дрейфує (позиція — спільна формула від часу), руйнується від влучань. */
 export interface Obstacle {
+  id: number;
+  /** Поточна позиція (оновлюється щотіку) */
   x: number;
   y: number;
+  /** Позиція на старті матчу й швидкість дрейфу */
+  x0: number;
+  y0: number;
+  vx: number;
+  vy: number;
   r: number;
+  hp: number;
+  maxHp: number;
 }
 
 export type { QueueMode as MatchMode } from './constants.js';

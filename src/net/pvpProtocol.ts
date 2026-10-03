@@ -5,10 +5,20 @@ export interface Vec {
   y: number;
 }
 
+/** Скеля арени: x/y — поточна позиція (клієнт рахує дрейф від стартових x0/y0) */
 export interface Obstacle {
+  id: number;
   x: number;
   y: number;
   r: number;
+  vx: number;
+  vy: number;
+  hp: number;
+  maxHp: number;
+  x0?: number;
+  y0?: number;
+  /** Коли востаннє влучили (секунди клієнта) — короткий спалах */
+  hitAt?: number;
 }
 
 export type SkillKind = 'flare' | 'jump' | 'emp' | 'phase' | 'nanoRepair' | 'overdrive' | 'swarm' | 'scan';
