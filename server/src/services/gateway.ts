@@ -14,6 +14,7 @@ const ROUTES: [prefix: string, service: ServiceName][] = [
   ['/api/items', 'shop'],
   ['/api/profile/buy-plane', 'shop'],
   ['/api/pass/buy-premium', 'shop'],
+  ['/api/pass/buy-tier', 'shop'],
   ['/api/shop', 'shop'],
   ['/api/auth', 'auth'],
   ['/api/profile', 'profile'],

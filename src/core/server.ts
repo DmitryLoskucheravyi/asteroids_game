@@ -238,6 +238,8 @@ export const Server = {
   claimTier: (tier: number, track: 'free' | 'premium') => api.post<{ profile: ServerProfile; reward: RewardResult }>(`/pass/claim/${tier}`, { track }),
   claimAllPass: () => api.post<{ profile: ServerProfile; total: { coins: number; xp: number; crystals: number; crates: number; tiers: number } }>('/pass/claim-all'),
   buyPremiumPass: () => api.post<{ profile: ServerProfile }>('/pass/buy-premium'),
+  /** Купити наступний рівень пропуску (або всі, що лишились) — за геми */
+  buyPassTier: (all: boolean) => api.post<{ profile: ServerProfile; tier: number; price: number }>('/pass/buy-tier', { all }),
 
   friends: () => api.get<FriendsView>('/friends'),
   friendsPing: () => api.get<{ ok: boolean; partyInvites?: number }>('/friends/ping'),

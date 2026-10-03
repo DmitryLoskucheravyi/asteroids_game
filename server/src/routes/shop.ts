@@ -6,7 +6,8 @@ import { ensureQuestSlots, incrementQuestProgress, ensureSeason } from '../progr
 import { getItemDef } from '../content/items.js';
 import { getWeaponDef } from '../content/weapons.js';
 import { isPlaneId, PLANE_PRICES } from '../content/planes.js';
-import { CRATE_ONLY_PLANES, CRATE_PRICES, GEM_PACKS, PREMIUM_PASS_GEMS, SEASON_PLANE } from '../shared/store.js';
+import { CRATE_ONLY_PLANES, CRATE_PRICES, GEM_PACKS, PASS_TIER_GEMS, PREMIUM_PASS_GEMS, SEASON_PLANE, passAllPrice } from '../shared/store.js';
+import { PASS_TIERS } from '../content/pass.js';
 import { isCrateType } from '../content/crates.js';
 import { grantReward } from '../progress.js';
 import { MAX_GEAR_LEVEL, itemUpgradeCost, weaponUpgradeCost } from '../shared/gear.js';
@@ -233,4 +234,34 @@ shopRouter.post('/shop/buy-gems', async (req: AuthedRequest, res) => {
   user.crystals += pack.gems;
   await user.save();
   res.json({ profile: serializeProfile(user) });
+});
+
+/**
+ * Купити рівні бойового пропуску за геми: наступний рівень (all=false) або всі, що лишились (all=true, зі знижкою).
+ * Додає рівно стільки BP, скільки бракує до потрібного рівня.
+ */
+shopRouter.post('/pass/buy-tier', async (req: AuthedRequest, res) => {
+  const all = !!req.body?.all;
+  const user = await User.findById(req.userId);
+  if (!user) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  ensureSeason(user);
+  const bp = user.passBpPoints ?? 0;
+  const remaining = PASS_TIERS.filter((t) => t.bpRequired > bp);
+  if (!remaining.length) {
+    res.status(409).json({ error: 'maxed' });
+    return;
+  }
+  const target = all ? remaining[remaining.length - 1] : remaining[0];
+  const price = all ? passAllPrice(remaining.length) : PASS_TIER_GEMS;
+  if (user.crystals < price) {
+    res.status(402).json({ error: 'not_enough_gems' });
+    return;
+  }
+  user.crystals -= price;
+  user.passBpPoints = target.bpRequired;
+  await user.save();
+  res.json({ profile: serializeProfile(user), tier: target.tier, price });
 });

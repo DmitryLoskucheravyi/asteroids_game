@@ -28,6 +28,13 @@ export const GEM_PACKS: readonly GemPack[] = [
   { id: 'gems_l', gems: 300, coins: 7800, best: true },
 ];
 
+/** Купівля рівнів пропуску — лише за геми: наступний рівень і "усі рівні" зі знижкою */
+export const PASS_TIER_GEMS = 25;
+export const PASS_ALL_DISCOUNT = 0.2;
+
+/** Ціна всіх рівнів, що лишились (зі знижкою). */
+export const passAllPrice = (remaining: number): number => Math.round(remaining * PASS_TIER_GEMS * (1 - PASS_ALL_DISCOUNT));
+
 /** Преміум бойового пропуску — лише за геми */
 export const PREMIUM_PASS_GEMS = 400;
 

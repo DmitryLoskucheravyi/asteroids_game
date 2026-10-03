@@ -11,6 +11,7 @@ import { type TKey } from '../../core/i18n';
 import { Save } from '../../core/storage';
 import { Icons, button, coinBadge, crystalBadge, h, icon } from '../dom';
 import { focusFirst } from '../nav';
+import { PASS_ALL_DISCOUNT, PASS_TIER_GEMS, passAllPrice } from '../../../server/src/shared/store';
 import { Screen } from '../Screen';
 import { screenHeader } from './LevelSelectScreen';
 import { MainMenuScreen } from './MainMenuScreen';
@@ -120,6 +121,22 @@ export class BattlePassScreen extends Screen {
     }
   }
 
+  /** Купити наступний рівень або всі рівні за геми, потім оновити пропуск з сервера. */
+  private async buyTiers(all: boolean, btn: HTMLButtonElement): Promise<void> {
+    btn.setAttribute('aria-disabled', 'true');
+    try {
+      const { profile, tier } = await Server.buyPassTier(all);
+      Save.applyProfile(profile);
+      Sfx.rareReward();
+      toast(t('pass.tierBought', { n: tier }));
+      await this.load();
+    } catch {
+      Sfx.warning();
+      toast(t('pass.needGems'));
+      btn.removeAttribute('aria-disabled');
+    }
+  }
+
   private async claim(tier: number, track: Track, btn: HTMLButtonElement): Promise<void> {
     btn.setAttribute('aria-disabled', 'true');
     try {
@@ -210,9 +227,28 @@ export class BattlePassScreen extends Screen {
         h('div', { class: 'bp-level-row' }, h('b', { class: 'bp-tier-big' }, String(idx)), h('span', {}, t('pass.tierOf', { n: this.tiers.length }))),
         h('div', { class: 'bp-progress' }, h('i', { style: `width:${pct}%` })),
         h('small', { class: 'muted' }, next ? t('pass.toNext', { bp, need: next.bpRequired, left: next.bpRequired - bp, tier: next.tier }) : t('pass.maxed')),
+        next
+          ? (() => {
+              const btn: HTMLButtonElement = button(h('span', { class: 'buy-label' }, t('pass.buyNext'), crystalBadge(PASS_TIER_GEMS, 'coin-badge small crystal-badge')), () => void this.buyTiers(false, btn), `btn small bp-buy-next${Save.data.crystals >= PASS_TIER_GEMS ? '' : ' locked'}`);
+              return btn;
+            })()
+          : null,
       ),
       h('div', { class: 'bp-side' }, premiumCard, claimAllBtn),
     );
+  }
+
+  /** «Купити всі рівні» — усі рівні, що лишились, зі знижкою (лише за геми). */
+  private buyAllButton(bp: number): HTMLElement | null {
+    const remaining = this.tiers.filter((d) => d.bpRequired > bp).length;
+    if (!remaining) return null;
+    const price = passAllPrice(remaining);
+    const btn: HTMLButtonElement = button(
+      h('span', { class: 'buy-label' }, icon(Icons.star, 'ico'), t('pass.buyAll', { n: remaining }), crystalBadge(price, 'coin-badge small crystal-badge'), h('span', { class: 'bp-discount' }, `−${Math.round(PASS_ALL_DISCOUNT * 100)}%`)),
+      () => void this.buyTiers(true, btn),
+      `btn small primary bp-buy-all${Save.data.crystals >= price ? '' : ' locked'}`,
+    );
+    return btn;
   }
 
   protected build(): HTMLElement {
@@ -256,7 +292,7 @@ export class BattlePassScreen extends Screen {
     return h(
       'div',
       { class: 'page battlepass' },
-      screenHeader(t('pass.title'), () => this.onBack(), h('div', { class: 'bp-head-right' }, button(t('pass.toCurrent'), () => this.scrollToCurrent(true), 'btn small'), h('span', { class: 'bp-badge' }, icon(Icons.bolt, 'ico'), `${bp} BP`))),
+      screenHeader(t('pass.title'), () => this.onBack(), h('div', { class: 'bp-head-right' }, this.buyAllButton(bp), button(t('pass.toCurrent'), () => this.scrollToCurrent(true), 'btn small'), h('span', { class: 'bp-badge' }, icon(Icons.bolt, 'ico'), `${bp} BP`))),
       h('p', { class: 'page-sub' }, t('pass.subtitle')),
       ready ? this.hero(bp, pass.premium) : h('p', { class: 'muted' }, t('common.loading')),
       board,
