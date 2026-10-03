@@ -21,6 +21,7 @@ type Track = 'free' | 'premium';
 export class BattlePassScreen extends Screen {
   private tiers: PassTierView[] = [];
   private premiumPrice = 0;
+  private seasonEndsAt = '';
   private loading = true;
 
   onShow(): void {
@@ -34,6 +35,7 @@ export class BattlePassScreen extends Screen {
       const { season, bpPoints, premium, claimedFree, claimedPremium } = await Server.pass();
       this.tiers = season.tiers;
       this.premiumPrice = season.premiumPrice;
+      this.seasonEndsAt = season.endsAt;
       Save.data.pass = { seasonId: season.id, bpPoints, premium, claimedFree, claimedPremium, claimable: this.countClaimable(season.tiers, bpPoints, premium, claimedFree, claimedPremium) };
       Save.save();
     } finally {
@@ -90,8 +92,18 @@ export class BattlePassScreen extends Screen {
     return null;
   }
 
-  private scrollToCurrent(): void {
-    requestAnimationFrame(() => this.el.querySelector('.tier-col.current')?.scrollIntoView({ inline: 'center', block: 'nearest' }));
+  private scrollToCurrent(smooth = false): void {
+    requestAnimationFrame(() => {
+      const scroller = this.el.querySelector<HTMLElement>('.bp-scroll');
+      const col = this.el.querySelector<HTMLElement>('.bp-col.current');
+      if (!scroller || !col) return;
+      scroller.scrollTo({ left: col.offsetLeft - scroller.clientWidth / 2 + col.clientWidth / 2, behavior: smooth ? 'smooth' : 'auto' });
+    });
+  }
+
+  private scrollBy(dir: 1 | -1): void {
+    const scroller = this.el.querySelector<HTMLElement>('.bp-scroll');
+    scroller?.scrollBy({ left: dir * scroller.clientWidth * 0.7, behavior: 'smooth' });
   }
 
   private async buyPremium(btn: HTMLButtonElement): Promise<void> {
@@ -125,80 +137,128 @@ export class BattlePassScreen extends Screen {
     const reward = track === 'premium' ? def.premiumReward : def.reward;
     const bpUnlocked = bp >= def.bpRequired;
     const trackUnlocked = track === 'free' || premiumOwned;
-    const unlocked = bpUnlocked && trackUnlocked;
     const done = claimed.includes(def.tier);
-    const claimBtn = unlocked && !done ? button(t('pass.claim'), () => void this.claim(def.tier, track, claimBtn!), 'btn primary tiny') : null;
+    const ready = bpUnlocked && trackUnlocked && !done;
+    const special = !!(reward.plane || reward.weapon || reward.item);
 
-    let status: HTMLElement;
-    if (done) status = icon(Icons.star, 'ico tier-done');
-    else if (!trackUnlocked) status = icon(Icons.lock, 'ico tier-lock premium-lock');
-    else if (!bpUnlocked) status = icon(Icons.lock, 'ico tier-lock');
-    else status = claimBtn!;
+    // низ картки: кнопка, «отримано» або що потрібно, щоб відкрити
+    let foot: HTMLElement;
+    if (done) foot = h('span', { class: 'bp-state done' }, icon(Icons.check, 'ico'), t('pass.claimed'));
+    else if (ready) {
+      const btn: HTMLButtonElement = button(t('pass.claim'), () => void this.claim(def.tier, track, btn), 'btn primary tiny bp-claim');
+      foot = btn;
+    } else if (!trackUnlocked) foot = h('span', { class: 'bp-state premium' }, icon(Icons.lock, 'ico'), t('pass.premium'));
+    else foot = h('span', { class: 'bp-state' }, icon(Icons.lock, 'ico'), `${def.bpRequired} BP`);
 
-    const special = reward.plane || reward.weapon || reward.item;
-    const name = this.rewardName(reward);
     return h(
       'div',
-      { class: `tier-cell ${track}${unlocked ? ' unlocked' : ' locked'}${done ? ' done' : ''}${unlocked && !done ? ' ready' : ''}${special ? ' special' : ''}` },
+      { class: `bp-cell ${track}${done ? ' done' : ''}${ready ? ' ready' : ''}${!bpUnlocked || !trackUnlocked ? ' locked' : ''}${special ? ' special' : ''}` },
+      h('span', { class: 'bp-visual' }, this.rewardVisual(reward)),
+      h('span', { class: 'bp-name' }, this.rewardName(reward) ?? (reward.crystals ? t('pass.crystalsReward') : t('pass.coinsReward'))),
       h(
-        'div',
-        { class: 'tier-reward' },
-        h('span', { class: 'tier-visual' }, this.rewardVisual(reward)),
-        name ? h('span', { class: 'tier-name' }, name) : null,
-        h(
-          'span',
-          { class: 'tier-amounts' },
-          coinBadge(reward.coins, 'coin-badge small'),
-          reward.crystals ? crystalBadge(reward.crystals, 'coin-badge small crystal-badge') : null,
-          h('span', { class: 'xp-badge small' }, `+${reward.xp}`),
-        ),
+        'span',
+        { class: 'bp-amounts' },
+        coinBadge(reward.coins, 'coin-badge small'),
+        reward.crystals ? crystalBadge(reward.crystals, 'coin-badge small crystal-badge') : null,
+        h('span', { class: 'bp-xp' }, `+${reward.xp} XP`),
       ),
-      status,
+      foot,
     );
   }
 
-  private tierColumn(def: PassTierView, bp: number, premiumOwned: boolean, claimedFree: number[], claimedPremium: number[], currentTier: number): HTMLElement {
+  /** Стовпчик тьєра: преміум зверху, вузол доріжки з номером, безкоштовна знизу. */
+  private tierColumn(def: PassTierView, index: number, bp: number, premiumOwned: boolean, claimedFree: number[], claimedPremium: number[], currentTier: number): HTMLElement {
+    const prevReq = this.tiers[index - 1]?.bpRequired ?? 0;
+    // заповнення доріжки в цьому стовпчику — від попереднього тьєра до цього
+    const fill = bp >= def.bpRequired ? 1 : bp <= prevReq ? 0 : (bp - prevReq) / Math.max(1, def.bpRequired - prevReq);
     return h(
       'div',
-      { class: `tier-col${def.tier === currentTier ? ' current' : ''}` },
+      { class: `bp-col${def.tier === currentTier ? ' current' : ''}${bp >= def.bpRequired ? ' reached' : ''}` },
       this.rewardCell(def, 'premium', bp, premiumOwned, claimedPremium),
-      h('span', { class: 'tier-n' }, String(def.tier)),
+      h('div', { class: 'bp-rail' }, h('i', { class: 'bp-rail-fill', style: `width:${Math.round(fill * 100)}%` }), h('span', { class: 'bp-node' }, String(def.tier))),
       this.rewardCell(def, 'free', bp, premiumOwned, claimedFree),
+    );
+  }
+
+  /** Шапка: досягнутий тьєр, прогрес до наступного, кінець сезону, преміум і «Зібрати все». */
+  private hero(bp: number, premium: boolean): HTMLElement {
+    const next = this.tiers.find((d) => bp < d.bpRequired);
+    const idx = next ? this.tiers.indexOf(next) : this.tiers.length;
+    const prevReq = this.tiers[idx - 1]?.bpRequired ?? 0;
+    const pct = next ? Math.min(100, ((bp - prevReq) / Math.max(1, next.bpRequired - prevReq)) * 100) : 100;
+    const days = this.seasonEndsAt ? Math.max(0, Math.ceil((new Date(this.seasonEndsAt).getTime() - Date.now()) / 86_400_000)) : null;
+
+    const claimable = Save.data.pass.claimable ?? 0;
+    const claimAllBtn: HTMLButtonElement | null = claimable > 0 ? button(h('span', { class: 'buy-label' }, icon(Icons.gift, 'ico'), t('pass.claimAll'), h('span', { class: 'rail-badge inline' }, String(claimable))), () => void this.claimAll(claimAllBtn!), 'btn primary claim-all-btn', { 'data-autofocus': true }) : null;
+
+    const specials = this.tiers.filter((d) => d.premiumReward.plane || d.premiumReward.weapon || d.premiumReward.item).length;
+    let premiumCard: HTMLElement;
+    if (premium) premiumCard = h('div', { class: 'bp-premium owned' }, icon(Icons.star, 'ico'), h('div', {}, h('b', {}, t('pass.premiumOwned')), h('small', {}, t('pass.premiumOwnedSub'))));
+    else {
+      const buyBtn: HTMLButtonElement = button(h('span', { class: 'buy-label' }, coinBadge(this.premiumPrice, 'coin-badge small')), () => void this.buyPremium(buyBtn), 'btn primary');
+      premiumCard = h('div', { class: 'bp-premium' }, icon(Icons.star, 'ico'), h('div', {}, h('b', {}, t('pass.buyPremium')), h('small', {}, t('pass.premiumPitch', { n: this.tiers.length, s: specials }))), buyBtn);
+    }
+
+    return h(
+      'section',
+      { class: 'bp-hero' },
+      h(
+        'div',
+        { class: 'bp-level' },
+        h('small', {}, days !== null ? t('pass.endsIn', { d: days }) : t('pass.title')),
+        h('div', { class: 'bp-level-row' }, h('b', { class: 'bp-tier-big' }, String(idx)), h('span', {}, t('pass.tierOf', { n: this.tiers.length }))),
+        h('div', { class: 'bp-progress' }, h('i', { style: `width:${pct}%` })),
+        h('small', { class: 'muted' }, next ? t('pass.toNext', { bp, need: next.bpRequired, left: next.bpRequired - bp, tier: next.tier }) : t('pass.maxed')),
+      ),
+      h('div', { class: 'bp-side' }, premiumCard, claimAllBtn),
     );
   }
 
   protected build(): HTMLElement {
     const pass = Save.data.pass;
     const bp = pass.bpPoints;
-    const next = this.tiers.find((tdef) => bp < tdef.bpRequired);
-    const prevReq = next ? (this.tiers[this.tiers.indexOf(next) - 1]?.bpRequired ?? 0) : 0;
-    const pct = next ? Math.min(100, Math.round(((bp - prevReq) / Math.max(1, next.bpRequired - prevReq)) * 100)) : 100;
+    const next = this.tiers.find((d) => bp < d.bpRequired);
     const currentTier = next ? next.tier : this.tiers.length;
+    const ready = !this.loading || this.tiers.length > 0;
 
-    const claimable = Save.data.pass.claimable ?? 0;
-    const claimAllBtn: HTMLButtonElement | null = claimable > 0 ? button(h('span', { class: 'buy-label' }, icon(Icons.gift, 'ico'), t('pass.claimAll'), h('span', { class: 'rail-badge inline' }, String(claimable))), () => void this.claimAll(claimAllBtn!), 'btn primary claim-all-btn', { 'data-autofocus': true }) : null;
-    let premiumBanner: HTMLElement;
-    if (pass.premium) {
-      premiumBanner = h('div', { class: 'premium-banner owned' }, icon(Icons.star, 'ico gold'), t('pass.premiumOwned'));
-    } else {
-      const buyBtn = button(h('span', { class: 'buy-label' }, coinBadge(this.premiumPrice, 'coin-badge small')), () => void this.buyPremium(buyBtn), 'btn primary small');
-      premiumBanner = h('div', { class: 'premium-banner' }, icon(Icons.star, 'ico'), h('span', {}, t('pass.buyPremium')), buyBtn);
+    let board: HTMLElement | null = null;
+    if (ready) {
+      const scroller = h(
+        'div',
+        { class: 'bp-scroll' },
+        h('div', { class: 'bp-grid' }, ...this.tiers.map((d, i) => this.tierColumn(d, i, bp, pass.premium, pass.claimedFree, pass.claimedPremium, currentTier))),
+      );
+      // колесо миші гортає доріжку вбік
+      scroller.addEventListener(
+        'wheel',
+        (e) => {
+          if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+          e.preventDefault();
+          scroller.scrollLeft += e.deltaY;
+        },
+        { passive: false },
+      );
+      board = h(
+        'section',
+        { class: 'bp-board' },
+        h(
+          'div',
+          { class: 'bp-labels' },
+          h('div', { class: `bp-label premium${pass.premium ? '' : ' locked'}` }, icon(pass.premium ? Icons.star : Icons.lock, 'ico'), h('b', {}, t('pass.premium'))),
+          h('div', { class: 'bp-label rail' }, icon(Icons.bolt, 'ico'), h('b', {}, t('pass.tierShort'))),
+          h('div', { class: 'bp-label free' }, icon(Icons.gift, 'ico'), h('b', {}, t('pass.free'))),
+        ),
+        h('div', { class: 'bp-scroll-wrap' }, scroller, button(icon(Icons.chevronLeft), () => this.scrollBy(-1), 'bp-arrow left', { 'aria-label': t('pass.scrollLeft') }), button(icon(Icons.chevronRight), () => this.scrollBy(1), 'bp-arrow right', { 'aria-label': t('pass.scrollRight') })),
+      );
     }
 
     return h(
       'div',
       { class: 'page battlepass' },
-      screenHeader(t('pass.title'), () => this.onBack(), h('span', { class: 'bp-badge' }, icon(Icons.bolt, 'ico'), `${bp} BP`)),
+      screenHeader(t('pass.title'), () => this.onBack(), h('div', { class: 'bp-head-right' }, button(t('pass.toCurrent'), () => this.scrollToCurrent(true), 'btn small'), h('span', { class: 'bp-badge' }, icon(Icons.bolt, 'ico'), `${bp} BP`))),
       h('p', { class: 'page-sub' }, t('pass.subtitle')),
-      this.loading && !this.tiers.length ? null : h('div', { class: 'pass-actions' }, premiumBanner, claimAllBtn),
-      next ? h('div', { class: 'pass-progress' }, h('div', { class: 'quest-bar' }, h('i', { style: `width:${pct}%` })), h('span', {}, `${bp} / ${next.bpRequired} BP`)) : h('p', { class: 'muted' }, t('pass.maxed')),
-      this.loading && !this.tiers.length
-        ? h('p', { class: 'muted' }, t('common.loading'))
-        : h(
-            'div',
-            { class: 'tier-track-wrap' },
-            h('div', { class: 'tier-track' }, ...this.tiers.map((d) => this.tierColumn(d, bp, pass.premium, pass.claimedFree, pass.claimedPremium, currentTier))),
-          ),
+      ready ? this.hero(bp, pass.premium) : h('p', { class: 'muted' }, t('common.loading')),
+      board,
     );
   }
 
