@@ -195,7 +195,8 @@ export interface PassTierView {
 
 export const Server = {
   register: (nickname: string, email: string, password: string) => api.post<{ token: string; profile: ServerProfile }>('/auth/register', { nickname, email, password }),
-  login: (email: string, password: string) => api.post<{ token: string; profile: ServerProfile }>('/auth/login', { email, password }),
+  /** login — нікнейм або email */
+  login: (login: string, password: string) => api.post<{ token: string; profile: ServerProfile }>('/auth/login', { login, password }),
 
   profile: () => api.get<{ profile: ServerProfile }>('/profile'),
   selectPlane: (planeId: PlaneId) => api.post<{ profile: ServerProfile }>('/profile/select-plane', { planeId }),

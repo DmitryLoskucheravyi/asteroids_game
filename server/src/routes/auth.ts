@@ -45,12 +45,15 @@ authRouter.post('/register', async (req, res) => {
 });
 
 authRouter.post('/login', async (req, res) => {
-  const { email, password } = req.body ?? {};
-  if (typeof email !== 'string' || typeof password !== 'string') {
+  // вхід за нікнеймом або email (старі клієнти шлють поле email)
+  const { login, email, password } = req.body ?? {};
+  const id = typeof login === 'string' ? login.trim() : typeof email === 'string' ? email.trim() : '';
+  if (!id || typeof password !== 'string') {
     res.status(400).json({ error: 'bad_request' });
     return;
   }
-  const user = await User.findOne({ email: email.toLowerCase() });
+  const lower = id.toLowerCase();
+  const user = await User.findOne(lower.includes('@') ? { email: lower } : { nicknameLower: lower });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     res.status(401).json({ error: 'invalid_credentials' });
     return;

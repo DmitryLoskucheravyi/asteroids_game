@@ -1,4 +1,6 @@
 import express, { type Express, type NextFunction, type Request, type Response } from 'express';
+// помилки в async-обробниках ідуть в обробник помилок Express, а не валять процес
+import 'express-async-errors';
 import cors from 'cors';
 import type { Server } from 'node:http';
 import { env } from '../env.js';
@@ -55,8 +57,16 @@ export function createApp(name: string): Express {
 }
 
 export function listen(app: Express, name: string, port: number): Server {
+  // останній рубіж: помилка запиту → 500 і запис у лог; сервіс продовжує працювати
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    console.error(`[${name}] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
+    if (!res.headersSent) res.status(500).json({ error: 'internal' });
+  });
   return app.listen(port, () => console.log(`[${name}] слухає на :${port}`));
 }
+
+// непередбачене поза запитами — пишемо в лог замість падіння всього сервісу
+process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err instanceof Error ? err.message : err));
 
 /** Стандартний старт сервісу з базою. */
 export async function startDbService(name: ServiceName, mount: (app: Express) => void): Promise<void> {

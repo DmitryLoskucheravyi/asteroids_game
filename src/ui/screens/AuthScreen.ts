@@ -39,7 +39,9 @@ export class AuthScreen extends Screen {
     this.errorEl = h('p', { class: 'auth-error' });
 
     const nickname = h('input', { type: 'text', placeholder: t('auth.nickname'), autocomplete: 'username', maxlength: 20, 'data-nav': true }) as HTMLInputElement;
-    const email = h('input', { type: 'email', placeholder: t('auth.email'), autocomplete: 'email', 'data-nav': true }) as HTMLInputElement;
+    // на вході — нікнейм або email, на реєстрації — саме email
+    const login = this.tab === 'login';
+    const email = h('input', { type: login ? 'text' : 'email', placeholder: t(login ? 'auth.loginField' : 'auth.email'), autocomplete: login ? 'username' : 'email', autocapitalize: 'off', spellcheck: 'false', 'aria-label': t(login ? 'auth.loginField' : 'auth.email'), 'data-nav': true }) as HTMLInputElement;
     const password = h('input', { type: 'password', placeholder: t('auth.password'), autocomplete: this.tab === 'login' ? 'current-password' : 'new-password', 'data-nav': true }) as HTMLInputElement;
 
     const submit = async (): Promise<void> => {

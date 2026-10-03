@@ -4,13 +4,11 @@ import { formatTime } from '../../core/math';
 import { Save, type PlayMode } from '../../core/storage';
 import { dailyState } from '../../game/economy';
 import { getItemDef, loadoutDamageBonus } from '../../game/items';
-import { itemSvg, weaponSvg } from '../../game/ItemArt';
 import { MAX_LEVEL } from '../../game/levels';
 import { planeIconUrl, TIER_COLORS } from '../../game/PlaneArt';
 import { getPlane, MAX_LEVEL_IN_TIER, PLANES, planeCombat } from '../../game/planes';
 import { xpToNext } from '../../game/progression';
 import { rankEmblem, rankInfo } from '../../game/ranks';
-import { getWeaponDef, DEFAULT_WEAPON_ID } from '../../game/weapons';
 import { toggleFullscreen } from '../../app/App';
 import { APP_VERSION } from '../../core/version';
 import { openDailyModal } from '../DailyModal';
@@ -25,6 +23,7 @@ import { HowToScreen } from './HowToScreen';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { FriendsScreen } from './FriendsScreen';
 import { ItemsScreen } from './ItemsScreen';
+import { gearSlots } from '../GearSlots';
 import { LevelSelectScreen, starsRow } from './LevelSelectScreen';
 import { OnlineScreen } from './OnlineScreen';
 import { PlaneScreen } from './PlaneScreen';
@@ -51,6 +50,28 @@ const MODES: Record<PlayMode, { name: TKey; desc: TKey; icon: string }> = {
  * ліворуч усе про літак і спорядження, праворуч завдання й нагороди,
  * по центру обраний літак, унизу праворуч — запуск гри.
  */
+/**
+ * Посадковий майданчик ангара під літаком: шестикутна платформа в перспективі з боковою гранню,
+ * кільце кольору тіру, зовнішнє пунктирне кільце, що повільно обертається, шкала й посадкові вогні.
+ * Колір задає CSS-змінна --pad (колір тіру).
+ */
+const PAD_SVG = `<svg viewBox="0 0 400 150" aria-hidden="true">
+  <defs>
+    <radialGradient id="padGlow" cx="50%" cy="50%" r="50%"><stop offset="0" style="stop-color:var(--pad);stop-opacity:.32"/><stop offset="1" style="stop-color:var(--pad);stop-opacity:0"/></radialGradient>
+    <linearGradient id="padTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2850"/><stop offset="1" stop-color="#141330"/></linearGradient>
+    <linearGradient id="padSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d0c22"/><stop offset="1" stop-color="#06050f"/></linearGradient>
+  </defs>
+  <ellipse cx="200" cy="72" rx="196" ry="66" fill="url(#padGlow)"/>
+  <ellipse class="pad-ring" cx="200" cy="72" rx="186" ry="60" fill="none" stroke="var(--pad)" stroke-opacity=".55" stroke-width="2" stroke-dasharray="10 14"/>
+  <ellipse cx="200" cy="72" rx="166" ry="52" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="7" stroke-dasharray="2 13"/>
+  <polygon points="70,72 135,112 265,112 330,72 330,84 265,124 135,124 70,84" fill="url(#padSide)" stroke="var(--pad)" stroke-opacity=".35"/>
+  <polygon points="70,72 135,32 265,32 330,72 265,112 135,112" fill="url(#padTop)" stroke="var(--pad)" stroke-opacity=".7" stroke-width="2"/>
+  <polygon points="112,72 156,46 244,46 288,72 244,98 156,98" fill="none" stroke="#fff" stroke-opacity=".08" stroke-width="1.5"/>
+  <ellipse class="pad-core" cx="200" cy="72" rx="62" ry="19" fill="none" stroke="var(--pad)" stroke-width="3"/>
+  <ellipse cx="200" cy="72" rx="34" ry="10" fill="var(--pad)" fill-opacity=".18"/>
+  <g class="pad-lights" fill="var(--pad)"><circle cx="70" cy="72" r="3.5"/><circle cx="330" cy="72" r="3.5"/><circle cx="135" cy="32" r="3"/><circle cx="265" cy="32" r="3"/><circle cx="135" cy="112" r="3.5"/><circle cx="265" cy="112" r="3.5"/></g>
+</svg>`;
+
 export class MainMenuScreen extends Screen {
   onShow(): void {
     super.onShow();
@@ -105,27 +126,35 @@ export class MainMenuScreen extends Screen {
     const loadout = Save.loadoutFor(plane.id);
     const activeDef = getItemDef(Save.itemById(loadout.active)?.defId ?? '');
     const passiveDef = getItemDef(Save.itemById(loadout.passive)?.defId ?? '');
-    const weapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
     const combat = planeCombat(plane, progress);
     const tierColor = TIER_COLORS[progress.tier] || undefined;
     const openPlane = () => this.app.show(new PlaneScreen(this.app, plane));
 
-    const gear = (svg: string | null, title: string, rarity?: string) =>
-      h('span', { class: `stage-gear${svg ? '' : ' empty'}${rarity ? ` rarity-frame-${rarity}` : ' rarity-frame-weapon'}`, title, html: svg ?? '' });
-
+    const padColor = tierColor ?? '#58d2ff';
     return h(
       'div',
-      { class: 'lobby-stage' },
-      button(h('span', { class: 'stage-pad' }, h('img', { class: 'stage-plane', src: planeIconUrl(plane.id, progress.tier, progress.level), alt: t(`plane.${plane.id}` as TKey) })), openPlane, 'stage-pic', { 'aria-label': t(`plane.${plane.id}` as TKey) }),
-      h('div', { class: 'stage-name' }, h('h2', {}, t(`plane.${plane.id}` as TKey)), h('span', { class: 'tier-chip', style: tierColor ? `color:${tierColor};border-color:${tierColor}` : undefined }, `${t('planes.tier')} ${progress.tier}`), starsRow(progress.level, MAX_LEVEL_IN_TIER, tierColor)),
+      { class: 'lobby-stage', style: `--pad:${padColor}` },
+      button(
+        h('span', { class: 'stage-pad' }, h('span', { class: 'stage-beam' }), h('span', { class: 'stage-base', html: PAD_SVG }), h('img', { class: 'stage-plane', src: planeIconUrl(plane.id, progress.tier, progress.level), alt: t(`plane.${plane.id}` as TKey) })),
+        openPlane,
+        'stage-pic',
+        { 'aria-label': t(`plane.${plane.id}` as TKey) },
+      ),
       h(
         'div',
-        { class: 'stage-meta' },
-        h('span', { class: 'stage-stat' }, icon(Icons.heart, 'ico'), String(combat.hp + (passiveDef?.combat?.hp ?? 0))),
-        h('span', { class: 'stage-stat' }, icon(Icons.bolt, 'ico'), `×${(combat.damageMul * (1 + loadoutDamageBonus(activeDef, passiveDef))).toFixed(2)}`),
-        h('span', { class: 'stage-gears' }, gear(weaponSvg(weapon.id), t(weapon.nameKey)), gear(activeDef ? itemSvg(activeDef.id) : null, activeDef ? t(activeDef.nameKey) : t('items.slotActive'), activeDef?.rarity), gear(passiveDef ? itemSvg(passiveDef.id) : null, passiveDef ? t(passiveDef.nameKey) : t('items.slotPassive'), passiveDef?.rarity)),
+        { class: 'stage-panel' },
+        h('div', { class: 'stage-name' }, h('h2', {}, t(`plane.${plane.id}` as TKey)), h('span', { class: 'tier-chip', style: tierColor ? `color:${tierColor};border-color:${tierColor}` : undefined }, `${t('planes.tier')} ${progress.tier}`), starsRow(progress.level, MAX_LEVEL_IN_TIER, tierColor)),
+        h(
+          'div',
+          { class: 'stage-meta' },
+          h('span', { class: 'stage-stat', title: t('stat.hp') }, icon(Icons.heart, 'ico'), String(combat.hp + (passiveDef?.combat?.hp ?? 0))),
+          h('span', { class: 'stage-stat', title: t('stat.damage') }, icon(Icons.bolt, 'ico'), `×${(combat.damageMul * (1 + loadoutDamageBonus(activeDef, passiveDef))).toFixed(2)}`),
+          h('span', { class: 'stage-sep' }),
+          // слоти клікабельні: вибір зброї й предметів прямо з лобі
+          gearSlots(plane.id, () => this.render(), () => this.app.show(new ItemsScreen(this.app))),
+        ),
+        button(t('menu.setup'), openPlane, 'btn small stage-setup'),
       ),
-      button(t('menu.setup'), openPlane, 'btn small stage-setup'),
     );
   }
 

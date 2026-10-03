@@ -14,8 +14,8 @@ class AuthStoreClass {
     await this.migrateLegacyProgress();
   }
 
-  async login(email: string, password: string): Promise<void> {
-    const { token, profile } = await Server.login(email, password);
+  async login(login: string, password: string): Promise<void> {
+    const { token, profile } = await Server.login(login, password);
     setToken(token);
     Save.applyProfile(profile);
     await this.migrateLegacyProgress();

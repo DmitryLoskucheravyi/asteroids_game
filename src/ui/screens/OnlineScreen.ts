@@ -1,15 +1,14 @@
 import type { App } from '../../app/App';
 import { t, type TKey } from '../../core/i18n';
 import { Save } from '../../core/storage';
-import { getItemDef } from '../../game/items';
-import { itemSvg, weaponSvg } from '../../game/ItemArt';
 import { planeIconUrl } from '../../game/PlaneArt';
 import { getPlane } from '../../game/planes';
 import { DIVISIONS, RANK_IDS, RANK_MODES, RP_PER_DIVISION, TEAM_SIZE, rankEmblem, rankInfo, type RankMode } from '../../game/ranks';
-import { getWeaponDef } from '../../game/weapons';
 import { getSocket } from '../../net/socket';
 import { GameLink } from '../../net/gameLink';
 import { profileLink } from '../PlayerProfile';
+import { gearSlots } from '../GearSlots';
+import { ItemsScreen } from './ItemsScreen';
 import { Sfx } from '../../core/audio';
 import { Server, type PartyMember, type PartyView } from '../../core/server';
 import { toast } from '../Modal';
@@ -127,11 +126,6 @@ export class OnlineScreen extends Screen {
   private loadoutCard(): HTMLElement {
     const plane = getPlane(Save.owns(Save.data.plane) ? Save.data.plane : 'falcon');
     const progress = Save.progressFor(plane.id);
-    const loadout = Save.loadoutFor(plane.id);
-    const weapon = getWeaponDef(loadout.weapon ?? undefined) ?? getWeaponDef('machine_gun')!;
-    const activeDef = getItemDef(Save.itemById(loadout.active)?.defId ?? '');
-    const passiveDef = getItemDef(Save.itemById(loadout.passive)?.defId ?? '');
-    const gear = (svg: string | null, title: string, rarity?: string) => h('span', { class: `stage-gear${svg ? '' : ' empty'} rarity-frame-${rarity ?? 'weapon'}`, title, html: svg ?? '' });
     return h(
       'section',
       { class: 'card online-loadout' },
@@ -140,7 +134,7 @@ export class OnlineScreen extends Screen {
         'div',
         {},
         h('h3', {}, t(`plane.${plane.id}` as TKey)),
-        h('div', { class: 'stage-gears' }, gear(weaponSvg(weapon.id), t(weapon.nameKey)), gear(activeDef ? itemSvg(activeDef.id) : null, activeDef ? t(activeDef.nameKey) : t('items.slotActive'), activeDef?.rarity), gear(passiveDef ? itemSvg(passiveDef.id) : null, passiveDef ? t(passiveDef.nameKey) : t('items.slotPassive'), passiveDef?.rarity)),
+        gearSlots(plane.id, () => this.render(), () => this.app.show(new ItemsScreen(this.app))),
       ),
     );
   }

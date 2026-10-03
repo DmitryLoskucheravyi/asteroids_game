@@ -117,20 +117,25 @@ export class PlaneScreen extends Screen {
     const weapon = getWeaponDef(loadout.weapon) ?? getWeaponDef(DEFAULT_WEAPON_ID)!;
     const dmg = weapon.damage * damageMul;
 
-    const bar = (label: string, value: string, v: number) =>
-      h('div', { class: 'stat-line' }, h('span', { class: 'stat-name' }, label), h('div', { class: 'bar' }, h('i', { style: `width:${Math.round(Math.max(0.06, Math.min(1, v)) * 100)}%` })), h('b', {}, value));
+    // смуга з квадратних сегментів свого кольору; останній сегмент заповнюється частково
+    const SEGS = 12;
+    const bar = (label: string, value: string, v: number, color: string) => {
+      const fill = Math.max(0.04, Math.min(1, v)) * SEGS;
+      const cells = Array.from({ length: SEGS }, (_, i) => h('i', { style: `--f:${Math.max(0, Math.min(1, fill - i))}` }));
+      return h('div', { class: 'stat-line' }, h('span', { class: 'stat-name' }, label), h('div', { class: 'segbar', style: `--c:${color}`, role: 'meter', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round((fill / SEGS) * 100), 'aria-label': label }, ...cells), h('b', {}, value));
+    };
 
     const cdMul = 1 - (passiveDef?.combat?.cooldown ?? 0);
     return h(
       'section',
       { class: 'card plane-stats' },
       h('h3', {}, icon(Icons.bolt, 'ico'), t('planePage.stats')),
-      bar(t('stat.hp'), String(hp), hp / 220),
-      bar(t('stat.damage'), `×${damageMul.toFixed(2)}`, (damageMul - 0.6) / 1.2),
-      bar(t('planes.speed'), String(Math.round(spec.maxSpeed)), (spec.maxSpeed - 300) / 320),
-      bar(t('planes.accelStat'), String(Math.round(spec.accel)), spec.accel / 5000),
-      bar(t('stat.handling'), spec.drag.toFixed(1), spec.drag / 10),
-      bar(t('stat.hitbox'), String(spec.radius), 1 - (spec.radius - 8) / 12),
+      bar(t('stat.hp'), String(hp), hp / 220, '#4fe08a'),
+      bar(t('stat.damage'), `×${damageMul.toFixed(2)}`, (damageMul - 0.6) / 1.2, '#ff4a5a'),
+      bar(t('planes.speed'), String(Math.round(spec.maxSpeed)), (spec.maxSpeed - 300) / 320, '#58d2ff'),
+      bar(t('planes.accelStat'), String(Math.round(spec.accel)), spec.accel / 5000, '#ffd24a'),
+      bar(t('stat.handling'), spec.drag.toFixed(1), spec.drag / 10, '#b77bff'),
+      bar(t('stat.hitbox'), String(spec.radius), 1 - (spec.radius - 8) / 12, '#ff9a3a'),
       h('h4', { class: 'sub-title' }, t('planePage.firepower'), ' · ', t(weapon.nameKey)),
       statList([
         { key: 'stat.damage', value: dmg.toFixed(1) },

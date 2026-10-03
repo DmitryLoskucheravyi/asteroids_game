@@ -8817,3 +8817,213 @@ input[type='range'] {
     display: none;
   }
 }
+
+/* ===================== слоти спорядження (лобі, пошук) ===================== */
+
+.stage-gear.gear-slot {
+  width: 44px;
+  height: 44px;
+  padding: 5px;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+/* кути зрізані clip-path, тож підсвічуємо рамку й світіння фільтром, а не box-shadow */
+.stage-gear.gear-slot:hover,
+.stage-gear.gear-slot:focus-visible {
+  --rc: var(--burn-2);
+  transform: translateY(-2px);
+  outline: none;
+  filter: drop-shadow(0 0 8px rgba(255, 150, 40, 0.55));
+}
+
+.gear-slot-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.gear-slot-art svg {
+  width: 80%;
+  height: 80%;
+}
+
+.gear-modal .modal-panel {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.gear-none {
+  grid-column: 1 / -1;
+}
+
+/* ===================== пошук матчу: кнопка в правому нижньому куті ===================== */
+
+.online-action {
+  position: fixed;
+  right: 28px;
+  bottom: 24px;
+  margin: 0;
+  max-width: none;
+  z-index: 5;
+}
+
+.page.online {
+  padding-bottom: 110px;
+}
+
+.online-action .searching {
+  flex-direction: row;
+  gap: 14px;
+  padding: 12px 18px;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px var(--plate-edge);
+  clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut));
+}
+
+/* ===================== лобі: посадковий майданчик і панель літака ===================== */
+
+.stage-pad::before {
+  content: none;
+}
+
+.stage-base {
+  position: absolute;
+  left: -2%;
+  right: -2%;
+  bottom: -4%;
+  height: 40%;
+  pointer-events: none;
+}
+
+.stage-base svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
+}
+
+.stage-base .pad-ring {
+  animation: pad-spin 18s linear infinite;
+}
+
+.stage-base .pad-core {
+  filter: drop-shadow(0 0 6px var(--pad));
+  animation: pad-pulse 2.8s ease-in-out infinite;
+}
+
+.stage-base .pad-lights circle {
+  animation: pad-blink 1.6s steps(2, jump-none) infinite;
+}
+
+.stage-base .pad-lights circle:nth-child(2n) {
+  animation-delay: 0.8s;
+}
+
+/* промінь від майданчика до літака */
+.stage-beam {
+  position: absolute;
+  left: 34%;
+  right: 34%;
+  bottom: 14%;
+  height: 62%;
+  background: linear-gradient(to top, color-mix(in srgb, var(--pad) 32%, transparent), transparent 85%);
+  clip-path: polygon(22% 100%, 78% 100%, 100% 0, 0 0);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  animation: pad-beam 3.2s ease-in-out infinite;
+}
+
+.stage-pic:hover .pad-ring,
+.stage-pic:focus-visible .pad-ring {
+  stroke-opacity: 1;
+}
+
+@keyframes pad-spin {
+  to {
+    stroke-dashoffset: -240;
+  }
+}
+
+@keyframes pad-pulse {
+  50% {
+    stroke-opacity: 0.45;
+  }
+}
+
+@keyframes pad-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes pad-beam {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* панель під літаком: ім'я, тір, характеристики, слоти */
+.stage-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px 16px;
+  background: linear-gradient(180deg, rgba(20, 19, 48, 0.82), rgba(12, 11, 30, 0.82));
+  box-shadow:
+    inset 0 0 0 1px var(--plate-edge),
+    inset 0 2px 0 color-mix(in srgb, var(--pad) 55%, transparent);
+  clip-path: polygon(var(--cut) 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%, 0 var(--cut));
+  backdrop-filter: blur(4px);
+}
+
+.stage-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--line);
+}
+
+.stage-panel .stage-setup {
+  margin-top: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-base .pad-ring,
+  .stage-base .pad-core,
+  .stage-base .pad-lights circle,
+  .stage-beam {
+    animation: none;
+  }
+}
+
+/* ===================== характеристики літака: сегментні смуги ===================== */
+
+.segbar {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+  height: 14px;
+}
+
+.segbar i {
+  position: relative;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+/* заповнена частина сегмента: колір характеристики з відблиском зверху */
+.segbar i::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: calc(var(--f) * 100%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--c) 70%, #fff) 0 28%, var(--c) 28% 100%);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--c) 55%, transparent);
+}
